@@ -1,0 +1,17 @@
+node_modules/
+.DS_Store
+*.log
+
+# Local databases and secrets
+.data/
+.env*
+!.env.example
+
+# Prototype deploy links and backups
+prototype/deploy/*/.vercel/
+*.bak*
+
+# Personal Claude Code settings
+.claude/settings.local.json
+prototype/deploy/*/index.html
+prototype/deploy-test/

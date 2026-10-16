@@ -1,0 +1,218 @@
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
+import type { DB } from "@/db/client";
+import { accountTokens, sessions, userFacilities, users, type User } from "@/db/schema";
+import { decrypt, encrypt, randomToken, sha256 } from "@/lib/crypto";
+import { checkPasswordPolicy, hashPassword, verifyPassword } from "@/lib/password";
+import { checkTotp, newTotpSecret, totpUri } from "@/lib/totp";
+import { audit, sendMail } from "./audit";
+
+export const SESSION_IDLE_MINUTES = Number(process.env.SESSION_IDLE_MINUTES ?? 15);
+export const SESSION_MAX_HOURS = 12;
+const PENDING_MINUTES = 10;
+const MAX_FAILED = 5;
+const LOCK_MINUTES = 15;
+const RESET_MINUTES = 30;
+export const INVITE_DAYS = 7;
+
+const minutes = (n: number) => new Date(Date.now() + n * 60_000);
+const GENERIC_FAIL = "That email and password don't match.";
+
+export type SignInResult =
+  | { ok: true; token: string; next: "mfa" | "enroll"; expiresAt: Date }
+  | { ok: false; error: string };
+
+// A real hash to compare against when the email is unknown, so timing doesn't reveal accounts.
+let decoyHash: Promise<string> | null = null;
+
+async function findActiveByEmail(db: DB, email: string): Promise<User | null> {
+  const rows = await db.select().from(users).where(sql`lower(${users.email}) = ${email.trim().toLowerCase()}`);
+  const active = rows.filter((u) => u.status === "active");
+  return active.length === 1 ? active[0] : null;
+}
+
+async function recordFailure(db: DB, user: User, reason: string): Promise<string> {
+  const failed = user.failedLogins + 1;
+  const lock = failed >= MAX_FAILED;
+  await db
+    .update(users)
+    .set({ failedLogins: lock ? 0 : failed, lockedUntil: lock ? minutes(LOCK_MINUTES) : user.lockedUntil })
+    .where(eq(users.id, user.id));
+  await audit(db, { orgId: user.orgId, actorId: user.id, action: lock ? "account_locked" : "sign_in_failed", entity: "user", entityId: user.id, details: { reason } });
+  return lock ? `Too many attempts. Try again in ${LOCK_MINUTES} minutes.` : reason === "password" ? GENERIC_FAIL : "That code isn't right. Try again.";
+}
+
+/** Step 1: email and password. Creates a pending session that still needs two-step verification. */
+export async function signIn(db: DB, input: { email: string; password: string; userAgent?: string }): Promise<SignInResult> {
+  const user = await findActiveByEmail(db, input.email);
+  if (!user || !user.passwordHash) {
+    decoyHash ??= hashPassword(randomToken());
+    await verifyPassword(await decoyHash, input.password);
+    return { ok: false, error: GENERIC_FAIL };
+  }
+  if (user.lockedUntil && user.lockedUntil > new Date()) {
+    const mins = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60_000);
+    return { ok: false, error: `Too many attempts. Try again in ${mins} minute${mins === 1 ? "" : "s"}.` };
+  }
+  if (!(await verifyPassword(user.passwordHash, input.password))) {
+    return { ok: false, error: await recordFailure(db, user, "password") };
+  }
+  await db.update(users).set({ failedLogins: 0, lockedUntil: null }).where(eq(users.id, user.id));
+  const token = randomToken();
+  const expiresAt = minutes(PENDING_MINUTES);
+  await db.insert(sessions).values({ orgId: user.orgId, userId: user.id, tokenHash: sha256(token), mfaPassed: false, expiresAt, userAgent: input.userAgent?.slice(0, 300) });
+  return { ok: true, token, next: user.mfaEnabled ? "mfa" : "enroll", expiresAt };
+}
+
+async function pendingSession(db: DB, token: string) {
+  const [row] = await db
+    .select({ session: sessions, user: users })
+    .from(sessions)
+    .innerJoin(users, eq(users.id, sessions.userId))
+    .where(and(eq(sessions.tokenHash, sha256(token)), isNull(sessions.revokedAt), gt(sessions.expiresAt, new Date())));
+  if (!row || row.session.mfaPassed || row.user.status !== "active") return null;
+  return row;
+}
+
+async function completeSession(db: DB, sessionId: string, user: User, action: string) {
+  const expiresAt = new Date(Date.now() + SESSION_MAX_HOURS * 3_600_000);
+  await db.update(sessions).set({ mfaPassed: true, expiresAt, lastSeenAt: new Date() }).where(eq(sessions.id, sessionId));
+  await db.update(users).set({ lastSignInAt: new Date(), failedLogins: 0 }).where(eq(users.id, user.id));
+  await audit(db, { orgId: user.orgId, actorId: user.id, action, entity: "user", entityId: user.id });
+  return expiresAt;
+}
+
+/** Step 2 for enrolled users: the 6-digit code from their authenticator app. */
+export async function verifyMfa(db: DB, token: string, code: string): Promise<{ ok: true; expiresAt: Date } | { ok: false; error: string; restart?: boolean }> {
+  const row = await pendingSession(db, token);
+  if (!row || !row.user.mfaEnabled || !row.user.mfaSecretEnc) return { ok: false, error: "Your sign-in timed out. Start again.", restart: true };
+  if (!(await checkTotp(decrypt(row.user.mfaSecretEnc), code))) {
+    const msg = await recordFailure(db, row.user, "mfa");
+    const locked = msg.startsWith("Too many");
+    if (locked) await db.update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.id, row.session.id));
+    return { ok: false, error: msg, restart: locked };
+  }
+  return { ok: true, expiresAt: await completeSession(db, row.session.id, row.user, "sign_in") };
+}
+
+/** First sign-in: create (or reuse) the user's authenticator secret and return the setup link. */
+export async function beginEnrollment(db: DB, token: string): Promise<{ secret: string; uri: string } | null> {
+  const row = await pendingSession(db, token);
+  if (!row || row.user.mfaEnabled) return null;
+  let secret = row.user.mfaSecretEnc ? decrypt(row.user.mfaSecretEnc) : null;
+  if (!secret) {
+    secret = newTotpSecret();
+    await db.update(users).set({ mfaSecretEnc: encrypt(secret) }).where(eq(users.id, row.user.id));
+  }
+  return { secret, uri: totpUri(secret, row.user.email) };
+}
+
+export async function confirmEnrollment(db: DB, token: string, code: string): Promise<{ ok: true; expiresAt: Date } | { ok: false; error: string; restart?: boolean }> {
+  const row = await pendingSession(db, token);
+  if (!row || row.user.mfaEnabled || !row.user.mfaSecretEnc) return { ok: false, error: "Your sign-in timed out. Start again.", restart: true };
+  if (!(await checkTotp(decrypt(row.user.mfaSecretEnc), code))) return { ok: false, error: "That code isn't right. Check the time on your phone and try the newest code." };
+  await db.update(users).set({ mfaEnabled: true }).where(eq(users.id, row.user.id));
+  await audit(db, { orgId: row.user.orgId, actorId: row.user.id, action: "mfa_enrolled", entity: "user", entityId: row.user.id });
+  return { ok: true, expiresAt: await completeSession(db, row.session.id, row.user, "sign_in") };
+}
+
+export interface SessionUser {
+  sessionId: string;
+  id: string;
+  orgId: string;
+  name: string;
+  email: string;
+  role: User["role"];
+  facilityIds: string[];
+}
+
+/** Returns the signed-in user for a full session, enforcing the idle timeout. */
+export async function getSessionUser(db: DB, token: string): Promise<SessionUser | null> {
+  const [row] = await db
+    .select({ session: sessions, user: users })
+    .from(sessions)
+    .innerJoin(users, eq(users.id, sessions.userId))
+    .where(and(eq(sessions.tokenHash, sha256(token)), isNull(sessions.revokedAt), gt(sessions.expiresAt, new Date()), eq(sessions.mfaPassed, true)));
+  if (!row || row.user.status !== "active") return null;
+  const idleMs = Date.now() - row.session.lastSeenAt.getTime();
+  if (idleMs > SESSION_IDLE_MINUTES * 60_000) {
+    await db.update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.id, row.session.id));
+    return null;
+  }
+  if (idleMs > 60_000) await db.update(sessions).set({ lastSeenAt: new Date() }).where(eq(sessions.id, row.session.id));
+  const facs = await db.select({ id: userFacilities.facilityId }).from(userFacilities).where(eq(userFacilities.userId, row.user.id));
+  const u = row.user;
+  return { sessionId: row.session.id, id: u.id, orgId: u.orgId, name: u.name, email: u.email, role: u.role, facilityIds: facs.map((f) => f.id) };
+}
+
+export async function signOut(db: DB, token: string): Promise<void> {
+  await db.update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.tokenHash, sha256(token)));
+}
+
+export async function revokeAllSessions(db: DB, userId: string): Promise<void> {
+  await db.update(sessions).set({ revokedAt: new Date() }).where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)));
+}
+
+/** Always reports success, so the form can't be used to discover which emails have accounts. */
+export async function requestPasswordReset(db: DB, email: string, appUrl: string): Promise<void> {
+  const user = await findActiveByEmail(db, email);
+  if (!user) return;
+  const token = randomToken();
+  await db.insert(accountTokens).values({ orgId: user.orgId, userId: user.id, purpose: "reset", tokenHash: sha256(token), expiresAt: minutes(RESET_MINUTES) });
+  await sendMail(db, {
+    orgId: user.orgId,
+    to: user.email,
+    subject: "Reset your CareHouse One password",
+    body: `Use this link to choose a new password. It works once and expires in ${RESET_MINUTES} minutes.\n\n${appUrl}/reset/${token}\n\nIf you didn't ask for this, you can ignore this email.`,
+  });
+  await audit(db, { orgId: user.orgId, actorId: user.id, action: "password_reset_requested", entity: "user", entityId: user.id });
+}
+
+async function liveToken(db: DB, token: string, purposes: Array<"invite" | "reset" | "reactivate">) {
+  const [row] = await db
+    .select({ t: accountTokens, user: users })
+    .from(accountTokens)
+    .innerJoin(users, eq(users.id, accountTokens.userId))
+    .where(and(eq(accountTokens.tokenHash, sha256(token)), isNull(accountTokens.usedAt), isNull(accountTokens.cancelledAt), gt(accountTokens.expiresAt, new Date())));
+  if (!row || !purposes.includes(row.t.purpose)) return null;
+  return row;
+}
+
+/** For the reset and invitation pages: is this link still usable, and for whom? */
+export async function describeToken(db: DB, token: string, purposes: Array<"invite" | "reset" | "reactivate">) {
+  const row = await liveToken(db, token, purposes);
+  return row ? { name: row.user.name, email: row.user.email, purpose: row.t.purpose } : null;
+}
+
+export async function resetPassword(db: DB, token: string, password: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const row = await liveToken(db, token, ["reset"]);
+  if (!row || row.user.status !== "active") return { ok: false, error: "This link has expired or was already used. Ask for a new one." };
+  const problem = checkPasswordPolicy(password, row.user.email);
+  if (problem) return { ok: false, error: problem };
+  await db.update(users).set({ passwordHash: await hashPassword(password), failedLogins: 0, lockedUntil: null }).where(eq(users.id, row.user.id));
+  await db.update(accountTokens).set({ usedAt: new Date() }).where(eq(accountTokens.id, row.t.id));
+  await revokeAllSessions(db, row.user.id);
+  await audit(db, { orgId: row.user.orgId, actorId: row.user.id, action: "password_reset", entity: "user", entityId: row.user.id });
+  await sendMail(db, { orgId: row.user.orgId, to: row.user.email, subject: "Your CareHouse One password was changed", body: "Your password was just changed and you were signed out on all devices. If this wasn't you, contact your manager right away." });
+  return { ok: true };
+}
+
+/**
+ * Accepting an invitation or reactivation: set a password, then go straight to setting up
+ * two-step verification with a pending session.
+ */
+export async function acceptInvite(db: DB, token: string, password: string, userAgent?: string): Promise<SignInResult> {
+  const row = await liveToken(db, token, ["invite", "reactivate"]);
+  if (!row || row.user.status !== "invited") return { ok: false, error: "This invitation has expired or was cancelled. Ask your manager to send a new one." };
+  const problem = checkPasswordPolicy(password, row.user.email);
+  if (problem) return { ok: false, error: problem };
+  await db
+    .update(users)
+    .set({ passwordHash: await hashPassword(password), status: "active", mfaEnabled: false, mfaSecretEnc: null, failedLogins: 0, lockedUntil: null, deactivatedAt: null, deactivationReason: null })
+    .where(eq(users.id, row.user.id));
+  await db.update(accountTokens).set({ usedAt: new Date() }).where(eq(accountTokens.id, row.t.id));
+  await audit(db, { orgId: row.user.orgId, actorId: row.user.id, action: row.t.purpose === "invite" ? "invitation_accepted" : "reactivation_accepted", entity: "user", entityId: row.user.id });
+  const session = randomToken();
+  const expiresAt = minutes(PENDING_MINUTES);
+  await db.insert(sessions).values({ orgId: row.user.orgId, userId: row.user.id, tokenHash: sha256(session), mfaPassed: false, expiresAt, userAgent: userAgent?.slice(0, 300) });
+  return { ok: true, token: session, next: "enroll", expiresAt };
+}

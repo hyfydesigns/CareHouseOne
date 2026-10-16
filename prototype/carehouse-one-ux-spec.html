@@ -1,0 +1,1180 @@
+<title>CareHouse One UX Specification</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Lexend:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky contents rail + single reading column; screen mockups sit in framed, horizontally scrollable "shots" */
+:root{
+  --bg:#EDF3F4; --surface:#FFFFFF; --surface-2:#F5F9FA; --ink:#13303A; --ink-2:#4B6770; --line:#D3E0E3;
+  --accent:#1D6884; --accent-soft:#DAECF2; --on-accent:#FFFFFF; --sage:#3C7C60; --sage-soft:#DFEFE6;
+  --ok:#25744A; --ok-soft:#DCF0E3; --warn:#8C6200; --warn-soft:#FAEDC8; --crit:#B23D17; --crit-soft:#FAE1D6;
+  --iso-c:#9C5D00; --iso-d:#1E5BAA; --iso-a:#B02219; --iso-e:#6A43AC;
+  --side-bg:#113642; --side-ink:#C9DFE6; --side-on:#24566A;
+  --shadow:0 1px 2px rgba(19,48,58,.06),0 6px 20px rgba(19,48,58,.07);
+  --f-display:"Lexend","Segoe UI",system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible","Segoe UI",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0D191E; --surface:#14242B; --surface-2:#1A2D35; --ink:#E3EDF0; --ink-2:#9BB3BB; --line:#2A3F48;
+  --accent:#6DB6D1; --accent-soft:#183946; --on-accent:#0D191E; --sage:#7AC19E; --sage-soft:#16392B;
+  --ok:#6BCA91; --ok-soft:#133628; --warn:#E6BA50; --warn-soft:#382D10; --crit:#F0896A; --crit-soft:#40231A;
+  --iso-c:#E3A040; --iso-d:#71A9EF; --iso-a:#F07569; --iso-e:#B497EA;
+  --side-bg:#0A1519; --side-ink:#AFC7CF; --side-on:#1C3A46;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.25); color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#0D191E; --surface:#14242B; --surface-2:#1A2D35; --ink:#E3EDF0; --ink-2:#9BB3BB; --line:#2A3F48;
+  --accent:#6DB6D1; --accent-soft:#183946; --on-accent:#0D191E; --sage:#7AC19E; --sage-soft:#16392B;
+  --ok:#6BCA91; --ok-soft:#133628; --warn:#E6BA50; --warn-soft:#382D10; --crit:#F0896A; --crit-soft:#40231A;
+  --iso-c:#E3A040; --iso-d:#71A9EF; --iso-a:#F07569; --iso-e:#B497EA;
+  --side-bg:#0A1519; --side-ink:#AFC7CF; --side-on:#1C3A46;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.25); color-scheme:dark }
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.6}
+.wrap{max-width:1240px;margin:0 auto;padding-inline:20px;padding-block:0 80px;display:grid;grid-template-columns:220px minmax(0,1fr);gap:40px}
+@media (max-width:1060px){.wrap{grid-template-columns:minmax(0,1fr)}.toc{display:none}}
+@media (max-width:480px){.wrap{padding-inline:16px}}
+h1,h2,h3,h4{font-family:var(--f-display);text-wrap:balance;line-height:1.2;margin:0}
+h2{font-size:30px;font-weight:600;letter-spacing:-.01em}
+h3{font-size:22px;font-weight:600}
+h4{font-size:17px;font-weight:600}
+p{margin:0;max-width:68ch}
+a{color:var(--accent)}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.eyebrow{font-family:var(--f-display);font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--sage)}
+.muted{color:var(--ink-2)}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+/* contents rail */
+.toc{position:sticky;top:env(safe-area-inset-top,0px);align-self:start;padding-block:36px;display:flex;flex-direction:column;gap:2px;font-size:14px;max-height:100vh;overflow:auto}
+.toc .eyebrow{margin-bottom:8px}
+.toc a{color:var(--ink-2);text-decoration:none;padding:5px 10px;border-radius:7px;border-left:2px solid transparent}
+.toc a:hover{color:var(--ink);background:var(--surface)}
+.toc a.sub{padding-left:22px;font-size:13px}
+.toc .sep{height:1px;background:var(--line);margin:8px 0}
+@media (max-width:1060px){.toc{display:none}}
+
+/* masthead */
+header.mast{padding-block:40px 28px;display:grid;gap:18px;border-bottom:1px solid var(--line)}
+.brandline{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.mark{width:40px;height:40px;border-radius:11px;background:var(--accent);display:grid;place-items:center;flex:none}
+.mark svg{width:24px;height:24px}
+.mast h1{font-size:clamp(32px,5vw,48px);font-weight:600;letter-spacing:-.02em}
+.mast .lede{font-size:19px;color:var(--ink-2);max-width:60ch}
+.meta{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:13px;color:var(--ink-2)}
+.meta b{color:var(--ink);font-weight:700}
+.themebtn{margin-left:auto;font:inherit;font-size:13px;font-weight:700;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:6px 14px;cursor:pointer}
+
+section{padding-block:56px 8px;display:grid;gap:22px;scroll-margin-top:12px}
+section>header{display:grid;gap:8px}
+.screen{display:grid;gap:18px;padding-top:28px;border-top:1px dashed var(--line);scroll-margin-top:12px}
+.screen:first-of-type{border-top:0;padding-top:0}
+.screenhead{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 14px}
+.roles{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:12px;font-weight:700;padding:2px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
+
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:18px 28px}
+.cols>*{min-width:0}
+.notes{margin:0;padding:0;list-style:none;display:grid;gap:10px;counter-reset:n}
+.notes li{display:grid;grid-template-columns:24px 1fr;gap:10px;font-size:15px}
+.notes li::before{counter-increment:n;content:counter(n);width:22px;height:22px;border-radius:50%;background:var(--accent);color:var(--on-accent);font:700 12px/22px var(--f-display);text-align:center;margin-top:2px}
+.bul{margin:0;padding-left:20px;display:grid;gap:6px;font-size:15px}
+.bul li::marker{color:var(--sage)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px 22px;display:grid;gap:12px;align-content:start;min-width:0}
+.panel h4{display:flex;align-items:center;gap:8px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:16px}
+
+/* status system */
+.pill{display:inline-flex;align-items:center;gap:6px;padding:1px 9px 1px 7px;border-radius:999px;font-size:12px;font-weight:700;line-height:20px;white-space:nowrap;font-family:var(--f-body)}
+.pill i{width:8px;height:8px;display:inline-block;background:currentColor;flex:none}
+.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.ok i{border-radius:50%}
+.pill.warn{background:var(--warn-soft);color:var(--warn)} .pill.warn i{width:7px;height:7px;transform:rotate(45deg)}
+.pill.crit{background:var(--crit-soft);color:var(--crit)} .pill.crit i{width:10px;height:9px;clip-path:polygon(50% 0,100% 100%,0 100%)}
+.pill.info{background:var(--accent-soft);color:var(--accent)} .pill.info i{border-radius:2px}
+.pill.mute{background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line)} .pill.mute i{background:transparent;border:1.5px solid currentColor;border-radius:50%}
+.iso{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 5px;border-radius:6px;font:700 12px/1 var(--f-display);border:2px solid currentColor;background:var(--surface)}
+.iso.c{color:var(--iso-c)} .iso.d{color:var(--iso-d)} .iso.a{color:var(--iso-a)} .iso.e{color:var(--iso-e)}
+.iso.c{border-style:solid} .iso.d{border-style:dashed} .iso.a{border-style:double;border-width:3px} .iso.e{border-style:dotted}
+
+/* tokens table */
+.swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.sw{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface);font-size:13px}
+.sw span{display:block;height:44px}
+.sw div{padding:8px 10px;line-height:1.35}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+table.t{border-collapse:collapse;width:100%;font-size:14px;min-width:640px}
+table.t th,table.t td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+table.t th{font-family:var(--f-display);font-weight:600;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-2);background:var(--surface-2)}
+table.t tr:last-child td{border-bottom:0}
+table.t td.c{text-align:center}
+
+/* information architecture tree */
+.tree{display:grid;gap:10px;font-size:14px}
+.tier{display:grid;grid-template-columns:130px 1fr;gap:12px;align-items:start}
+.tier>b{font-family:var(--f-display);font-weight:600;font-size:13px;color:var(--sage);padding-top:6px}
+.nodes{display:flex;flex-wrap:wrap;gap:8px}
+.node{background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:6px 12px}
+.node.k{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:700}
+@media (max-width:560px){.tier{grid-template-columns:1fr;gap:4px}}
+
+/* ---------- mockups ---------- */
+.shot{overflow-x:auto;border:1px solid var(--line);border-radius:16px;background:var(--surface-2);box-shadow:var(--shadow)}
+.scrollhint{display:none;font-size:12px;color:var(--ink-2)}
+@media (max-width:1000px){.scrollhint{display:block}}
+.app{min-width:1000px;display:grid;grid-template-columns:188px minmax(0,1fr);font-size:13px;line-height:1.4;font-family:var(--f-body)}
+.side{background:var(--side-bg);color:var(--side-ink);padding:14px 10px;display:flex;flex-direction:column;gap:1px;border-radius:15px 0 0 15px}
+.side .brand{display:flex;align-items:center;gap:8px;font:600 14px var(--f-display);color:#fff;padding:2px 6px 10px}
+.side .brand .mark{width:24px;height:24px;border-radius:7px;background:#3E93B2}
+.side .brand .mark svg{width:15px;height:15px}
+.side .org{font-size:11px;letter-spacing:.06em;text-transform:uppercase;opacity:.7;padding:8px 8px 4px}
+.side .nv{padding:6px 8px;border-radius:7px;display:flex;align-items:center;gap:8px}
+.side .nv::before{content:"";width:6px;height:6px;border-radius:2px;background:currentColor;opacity:.45}
+.side .nv.on{background:var(--side-on);color:#fff;font-weight:700}
+.side .nv.on::before{opacity:1;background:#7FD0B0}
+.side .nv em{margin-left:auto;font-style:normal;font-size:11px;font-weight:700;background:#C2491E;color:#fff;border-radius:999px;padding:0 6px}
+.topb{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--surface);border-radius:0 15px 0 0}
+.scope{border:1px solid var(--line);border-radius:8px;padding:5px 10px;font-weight:700;background:var(--surface-2);display:flex;gap:6px;align-items:center}
+.scope small{font-weight:400;color:var(--ink-2)}
+.search{flex:1;max-width:360px;border:1px solid var(--line);border-radius:8px;padding:5px 10px;color:var(--ink-2);background:var(--surface-2)}
+.sp{flex:1}
+.bell{font-weight:700;display:flex;gap:6px;align-items:center}
+.bell b{background:var(--crit);color:var(--surface);border-radius:999px;padding:0 6px;font-size:11px}
+.av{width:28px;height:28px;border-radius:50%;background:var(--sage-soft);color:var(--sage);display:grid;place-items:center;font-weight:700;font-size:11px;flex:none}
+.mn{padding:16px;display:grid;gap:12px;align-content:start}
+.hrow{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.hrow h5{font:600 18px var(--f-display);margin:0}
+.k6{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+.k5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.kp{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;gap:2px}
+.kp small{color:var(--ink-2);font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:700}
+.kp b{font:600 22px var(--f-display);font-variant-numeric:tabular-nums}
+.kp span{font-size:12px;color:var(--ink-2)}
+.kp.alert{border-color:var(--crit);box-shadow:inset 3px 0 0 var(--crit)}
+.cd{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;display:grid;gap:8px;align-content:start;min-width:0}
+.cd h6{margin:0;font:600 12px var(--f-display);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);display:flex;align-items:center;gap:8px}
+.cd h6 .r{margin-left:auto;text-transform:none;letter-spacing:0;font-family:var(--f-body);font-weight:700;color:var(--accent)}
+.g21{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(0,1fr);gap:12px}
+.g12{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:12px}
+.g111{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.mt{border-collapse:collapse;width:100%;font-size:12.5px}
+.mt th{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-2);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);font-weight:700}
+.mt td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:middle;font-variant-numeric:tabular-nums}
+.mt tr:last-child td{border-bottom:0}
+.mt td b{font-weight:700}
+.bar{height:6px;border-radius:3px;background:var(--surface-2);border:1px solid var(--line);overflow:hidden;min-width:60px}
+.bar span{display:block;height:100%;background:var(--sage)}
+.feed{display:grid;gap:7px}
+.fi{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:start;padding:7px 8px;border-radius:8px;background:var(--surface-2)}
+.fi small{color:var(--ink-2);font-size:11px}
+.heat{display:grid;grid-template-columns:90px repeat(5,minmax(0,1fr));gap:3px;font-size:11.5px;font-variant-numeric:tabular-nums}
+.heat div{padding:5px 4px;text-align:center;border-radius:4px}
+.heat .hd{color:var(--ink-2);font-weight:700;font-size:10px;text-transform:uppercase}
+.heat .fn{text-align:left;font-weight:700}
+.h-ok{background:var(--ok-soft);color:var(--ok);font-weight:700}
+.h-warn{background:var(--warn-soft);color:var(--warn);font-weight:700}
+.h-crit{background:var(--crit-soft);color:var(--crit);font-weight:700}
+.co{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--accent);color:var(--on-accent);font:700 10.5px/1 var(--f-display);flex:none;vertical-align:middle;box-shadow:0 0 0 3px var(--accent-soft)}
+.banner{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;background:var(--crit-soft);color:var(--crit);border:1px solid var(--crit);font-weight:700;flex-wrap:wrap}
+.banner span{font-weight:400;color:var(--ink)}
+.banner .act{margin-left:auto;background:var(--crit);color:var(--surface);border-radius:7px;padding:3px 10px;font-size:12px}
+.btn{display:inline-flex;align-items:center;gap:6px;border-radius:8px;padding:5px 11px;font-weight:700;font-size:12px;border:1px solid var(--line);background:var(--surface)}
+.btn.p{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.fab{position:absolute;right:18px;bottom:18px;display:flex;align-items:center;gap:8px;background:var(--accent);color:var(--on-accent);border-radius:999px;padding:10px 16px 10px 12px;font-weight:700;box-shadow:var(--shadow)}
+.fab b{width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.22);display:grid;place-items:center;font-size:16px}
+.rel{position:relative}
+
+/* floor plan */
+.plan{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:8px}
+.rm{border:1.5px solid var(--line);background:var(--surface);border-radius:7px;padding:6px 7px;min-height:58px;display:grid;gap:3px;align-content:start;font-size:11.5px}
+.rm .no{display:flex;justify-content:space-between;align-items:center;font-family:var(--f-mono);font-size:10.5px;color:var(--ink-2)}
+.rm b{font-size:13px}
+.rm.iso-c{border-color:var(--iso-c);background:color-mix(in srgb,var(--iso-c) 9%,var(--surface))}
+.rm.vac{background:repeating-linear-gradient(135deg,var(--surface),var(--surface) 6px,var(--surface-2) 6px,var(--surface-2) 12px);color:var(--ink-2)}
+.rm.common{grid-column:span 2;background:var(--surface-2);border-style:dashed;color:var(--ink-2)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11.5px;color:var(--ink-2);align-items:center}
+.legend span{display:inline-flex;gap:5px;align-items:center}
+
+/* resident */
+.rhead{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.photo{width:64px;height:64px;border-radius:14px;background:linear-gradient(135deg,var(--accent-soft),var(--sage-soft));display:grid;place-items:center;font:600 22px var(--f-display);color:var(--accent)}
+.rname{font:600 20px var(--f-display)}
+.facts{display:flex;flex-wrap:wrap;gap:4px 14px;color:var(--ink-2);font-size:12.5px}
+.facts b{color:var(--ink)}
+.allergy{display:flex;gap:10px;align-items:center;padding:7px 12px;border-radius:9px;background:var(--crit-soft);color:var(--crit);font-weight:700;font-size:12.5px;flex-wrap:wrap}
+.allergy span{color:var(--ink);font-weight:400}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.tabs span{padding:7px 11px;font-weight:700;color:var(--ink-2);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs span.on{color:var(--accent);border-color:var(--accent)}
+.flags{display:flex;flex-wrap:wrap;gap:6px}
+.tl{display:grid;gap:0}
+.tl div{display:grid;grid-template-columns:48px 1fr auto;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);align-items:center}
+.tl div:last-child{border-bottom:0}
+.tl time{font-family:var(--f-mono);font-size:11.5px;color:var(--ink-2)}
+.goal{display:grid;gap:4px;font-size:12px}
+.goal div{display:flex;justify-content:space-between}
+
+/* eMAR */
+.mar{border-collapse:separate;border-spacing:0;width:100%;font-size:12px}
+.mar th{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-2);padding:6px;border-bottom:1px solid var(--line);text-align:center;font-weight:700}
+.mar th:first-child{text-align:left}
+.mar th.now{color:var(--accent);background:var(--accent-soft);border-radius:6px 6px 0 0}
+.mar td{padding:6px;border-bottom:1px solid var(--line);text-align:center;vertical-align:middle}
+.mar td:first-child{text-align:left}
+.mar td.now{background:var(--accent-soft)}
+.mar .med b{display:block;font-size:12.5px}
+.mar .med small{color:var(--ink-2)}
+.ctl{font:700 10px var(--f-display);color:var(--iso-e);border:1.5px solid var(--iso-e);border-radius:4px;padding:0 4px;margin-left:4px}
+.rlist{display:grid;gap:4px}
+.rl{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;padding:7px 8px;border-radius:8px}
+.rl.on{background:var(--accent-soft)}
+.rl small{color:var(--ink-2);display:block;font-size:11px}
+.phonewrap{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start;justify-content:center;padding:22px 16px}
+.phone{width:100%;max-width:330px;border:10px solid #1B2B31;border-radius:34px;background:var(--bg);overflow:hidden;font-size:13px;line-height:1.4;position:relative;box-shadow:var(--shadow)}
+.ph-top{display:flex;justify-content:space-between;padding:8px 16px 4px;font:600 11px var(--f-display);color:var(--ink-2)}
+.ph-h{padding:6px 14px 10px;display:grid;gap:6px;background:var(--surface);border-bottom:1px solid var(--line)}
+.ph-b{padding:10px 12px 76px;display:grid;gap:8px}
+.step{display:grid;grid-template-columns:26px 1fr auto;gap:8px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px}
+.step .n{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font:700 11px var(--f-display);background:var(--ok-soft);color:var(--ok)}
+.step.cur{border:2px solid var(--accent)}
+.step.cur .n{background:var(--accent);color:var(--on-accent)}
+.step small{display:block;color:var(--ink-2);font-size:11.5px}
+.big{display:block;text-align:center;background:var(--accent);color:var(--on-accent);border-radius:14px;padding:14px;font:600 16px var(--f-display)}
+.botnav{position:absolute;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(5,1fr);background:var(--surface);border-top:1px solid var(--line);padding:6px 0 10px;font-size:10.5px;text-align:center;color:var(--ink-2)}
+.botnav span{display:grid;justify-items:center;gap:3px}
+.botnav span::before{content:"";width:18px;height:18px;border-radius:6px;border:2px solid currentColor}
+.botnav span.on{color:var(--accent);font-weight:700}
+.botnav span.on::before{background:var(--accent-soft)}
+.phfab{position:absolute;right:14px;bottom:66px;width:52px;height:52px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font-size:26px;box-shadow:var(--shadow)}
+.dial{position:absolute;right:14px;bottom:126px;display:grid;gap:6px;justify-items:end}
+.dial span{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-weight:700;box-shadow:var(--shadow)}
+.scrim{position:absolute;inset:0;background:rgba(10,25,30,.42)}
+
+/* infection */
+.cols4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.lane{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:8px;display:grid;gap:6px;align-content:start}
+.lane>b{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-2);display:flex;justify-content:space-between}
+.case{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 8px;display:grid;gap:3px;font-size:12px}
+.case .top{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.case small{color:var(--ink-2)}
+.ppe{display:grid;gap:7px;font-size:12px}
+.ppe div{display:grid;grid-template-columns:90px 1fr 70px;gap:8px;align-items:center}
+.ppe .bar span.lo{background:var(--crit)}
+.ppe .bar span.md{background:var(--warn)}
+svg.chart text{fill:var(--ink-2);font-family:var(--f-body);font-size:10px}
+svg.chart .grid{stroke:var(--line);stroke-width:1}
+svg.chart .res{fill:var(--accent)}
+svg.chart .stf{fill:var(--sage)}
+svg.chart .mark{stroke:var(--crit);stroke-width:1.5;stroke-dasharray:4 3}
+svg.chart text.mk{fill:var(--crit);font-weight:700}
+svg.spark polyline{fill:none;stroke:var(--accent);stroke-width:2}
+svg.spark .band{fill:var(--ok-soft)}
+svg.spark circle{fill:var(--accent)}
+
+/* reports */
+.lib{display:grid;gap:2px;font-size:12.5px}
+.lib b{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-2);padding:8px 6px 3px}
+.lib span{padding:5px 8px;border-radius:7px;display:flex;justify-content:space-between}
+.lib span.on{background:var(--accent-soft);color:var(--accent);font-weight:700}
+.filters{display:flex;flex-wrap:wrap;gap:6px}
+.filt{border:1px solid var(--line);border-radius:999px;padding:3px 10px;background:var(--surface-2);font-size:12px}
+.filt b{color:var(--ink-2);font-weight:400}
+.filt.add{border-style:dashed;color:var(--accent);font-weight:700}
+.hbar{display:grid;grid-template-columns:96px 1fr 46px;gap:8px;align-items:center;font-size:12px;font-variant-numeric:tabular-nums}
+.hbar .bar{height:14px;border-radius:4px}
+.hbar .bar span{background:var(--accent)}
+.audit{font-family:var(--f-mono);font-size:11px;display:grid;gap:4px;color:var(--ink-2)}
+.audit div{display:grid;grid-template-columns:44px 1fr;gap:6px}
+
+/* flows */
+.flow{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 20px;display:grid;gap:12px;align-content:start;min-width:0}
+.flow header{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 10px}
+.flow header .tag{font-family:var(--f-mono);font-size:12px;color:var(--sage);font-weight:500}
+.flow ol{margin:0;padding:0;list-style:none;display:grid;gap:0;counter-reset:s}
+.flow li{display:grid;grid-template-columns:26px 1fr;gap:10px;font-size:14.5px;padding-bottom:10px;position:relative}
+.flow li::before{counter-increment:s;content:counter(s);width:24px;height:24px;border-radius:50%;border:2px solid var(--sage);color:var(--sage);font:700 11px/20px var(--f-display);text-align:center;background:var(--surface);z-index:1}
+.flow li:not(:last-child)::after{content:"";position:absolute;left:11px;top:24px;bottom:0;width:2px;background:var(--line)}
+.flow li b{font-weight:700}
+.flow .out{font-size:13.5px;color:var(--ink-2);border-top:1px solid var(--line);padding-top:10px}
+.flow .out b{color:var(--ink)}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+
+<div class="wrap">
+<nav class="toc" aria-label="Contents">
+  <span class="eyebrow">Contents</span>
+  <a href="#principles">Product principles</a>
+  <a href="#ia">Tenancy &amp; navigation</a>
+  <a href="#system">Visual system</a>
+  <div class="sep"></div>
+  <a href="#screens">Screen layouts</a>
+  <a class="sub" href="#s-org">Organization Dashboard</a>
+  <a class="sub" href="#s-fac">Facility Dashboard</a>
+  <a class="sub" href="#s-res">Resident Profile</a>
+  <a class="sub" href="#s-emar">eMAR</a>
+  <a class="sub" href="#s-ic">Infection Control Board</a>
+  <a class="sub" href="#s-rep">Reports Center</a>
+  <div class="sep"></div>
+  <a href="#flows">Key user flows</a>
+  <a href="#access">Roles &amp; permissions</a>
+  <a href="#alerts">Alerts &amp; escalation</a>
+  <a href="#trust">Security &amp; HIPAA UX</a>
+  <a href="#mobile">Mobile &amp; offline</a>
+</nav>
+
+<main>
+<header class="mast">
+  <div class="brandline">
+    <div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9.5h13V10"/><path d="M12 12.5v5M9.5 15h5"/></svg></div>
+    <span class="eyebrow">Product design specification · v1.0</span>
+    <button class="themebtn" id="themebtn" type="button">Theme: System</button>
+  </div>
+  <h1>CareHouse One</h1>
+  <p class="lede">A multi-tenant platform for organizations that run group homes and residential care. One account covers every facility: residents, medications, staff, infection control, compliance and reporting, from a single home up to the whole organization.</p>
+  <div class="meta">
+    <span><b>Audience</b> Product, design, engineering, compliance</span>
+    <span><b>Platforms</b> Web (desktop, tablet), iOS, Android</span>
+    <span><b>Compliance target</b> HIPAA, state licensing surveys, WCAG 2.2 AA</span>
+    <span><b>Sample tenant</b> Harborview Community Living, 5 homes, 42 licensed beds (fictional)</span>
+  </div>
+</header>
+
+<!-- ============ PRINCIPLES ============ -->
+<section id="principles">
+  <header><span class="eyebrow">Foundations</span><h2>Product principles</h2>
+  <p class="muted">CareHouse One serves two very different users. Direct care staff need to finish a med pass with gloves on and a resident waiting. Executives need to see five homes at once and know which one needs a phone call. Every screen is judged against these six rules.</p></header>
+  <div class="grid3">
+    <div class="panel"><h4>Three taps to chart</h4><p class="muted">Logging a med, a note, a meal or a vital takes no more than three taps from any screen. The quick-action button is always available, and floor-staff screens open on what is due now.</p></div>
+    <div class="panel"><h4>Status never relies on color</h4><p class="muted">Every state pairs color with a shape and a word: circle for done, diamond for pending, triangle for urgent. Isolation types use a letter and a distinct border style, so they still read in grayscale and for color-blind staff.</p></div>
+    <div class="panel"><h4>Scope is always visible</h4><p class="muted">The scope switcher in the top bar always shows whether you are looking at one home or the whole organization. Numbers never change scope without saying so.</p></div>
+    <div class="panel"><h4>Safety stops are hard stops</h4><p class="muted">Allergies, wrong-resident scans, duplicate doses and expired isolation reviews block the action until someone resolves them. Everything else warns and lets the user move on.</p></div>
+    <div class="panel"><h4>Every action leaves a trail</h4><p class="muted">Views, edits, exports and overrides are recorded with who, when, where and why. The trail is searchable by surveyors and never editable by anyone.</p></div>
+    <div class="panel"><h4>Calm by default</h4><p class="muted">Soft blues, greens and warm neutrals keep the screen quiet. Saturated color is reserved for things that need action, so it means something when it appears.</p></div>
+  </div>
+
+  <h3>Personas</h3>
+  <div class="tablewrap"><table class="t">
+    <thead><tr><th>Persona</th><th>Main device</th><th>Home screen</th><th>Top jobs</th></tr></thead>
+    <tbody>
+      <tr><td><b>Joy O., Chief Operating Officer</b><br><span class="muted">Organization executive</span></td><td>Laptop, tablet</td><td>Organization Dashboard</td><td>Compare homes, spot risk, staffing coverage, survey readiness, board reporting</td></tr>
+      <tr><td><b>Daniel R., Facility Manager</b><br><span class="muted">Runs Cedar Ridge</span></td><td>Desktop at the office, phone on the floor</td><td>Facility Dashboard</td><td>Census, schedule gaps, incident follow-up, family communication, audits</td></tr>
+      <tr><td><b>Priya S., RN Clinical Lead</b><br><span class="muted">Covers 3 homes</span></td><td>Tablet</td><td>Clinical worklist</td><td>Care plan review, med orders, PRN follow-ups, vitals trends, infection reviews</td></tr>
+      <tr><td><b>Andre T., Direct Support Professional</b><br><span class="muted">Med-certified, day shift</span></td><td>Shared Android phone</td><td>Today (my shift)</td><td>Med pass, personal care tasks, notes, screening, shift handoff</td></tr>
+      <tr><td><b>Grace M., Infection Preventionist</b><br><span class="muted">Organization-wide</span></td><td>Laptop</td><td>Infection Control Board</td><td>Surveillance, isolation orders, outbreak workflow, PPE, hand hygiene audits</td></tr>
+      <tr><td><b>Linda B., Guardian</b><br><span class="muted">Family portal</span></td><td>Personal phone</td><td>Portal summary</td><td>Read updates, approved documents, appointments, secure messages</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============ IA ============ -->
+<section id="ia">
+  <header><span class="eyebrow">Structure</span><h2>Tenancy, hierarchy &amp; navigation</h2>
+  <p class="muted">Each client organization is a separate tenant. Facilities, residents, staff and documents always belong to exactly one tenant, and nothing is shared across tenants. Inside a tenant, data rolls up from rooms to facilities to the organization.</p></header>
+
+  <div class="panel">
+    <h4>Data hierarchy</h4>
+    <div class="tree">
+      <div class="tier"><b>Tenant</b><div class="nodes"><span class="node k">Organization · Harborview Community Living</span><span class="node">Subscription &amp; billing</span><span class="node">Branding (white-label)</span><span class="node">SSO &amp; security policy</span></div></div>
+      <div class="tier"><b>Org library</b><div class="nodes"><span class="node">Care plan templates</span><span class="node">Forms</span><span class="node">Policies</span><span class="node">Schedule templates</span><span class="node">Roles &amp; permissions</span><span class="node">Report definitions</span></div></div>
+      <div class="tier"><b>Facilities</b><div class="nodes"><span class="node k">Maple House · 6 beds</span><span class="node k">Cedar Ridge · 8</span><span class="node k">Willow Court · 12</span><span class="node k">Birch Lane · 6</span><span class="node k">Oakmont · 10</span></div></div>
+      <div class="tier"><b>Inside a facility</b><div class="nodes"><span class="node">Floor plan → rooms → beds</span><span class="node">Residents</span><span class="node">Shifts &amp; time clock</span><span class="node">eMAR &amp; med cart</span><span class="node">Infection cases</span><span class="node">Incidents</span><span class="node">Facility documents</span></div></div>
+      <div class="tier"><b>Staff</b><div class="nodes"><span class="node">Belongs to the organization</span><span class="node">Assigned to 1 or more facilities</span><span class="node">Role can differ per facility</span><span class="node">Credentials follow the person</span></div></div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="panel">
+      <h4>Scope switcher</h4>
+      <p class="muted">The first control in the top bar. It lists <b>All facilities</b> followed by each facility the user can access, with a live badge for an outbreak or overdue item. Choosing a facility filters every screen. Choosing All shows combined data, and every list adds a Facility column. Users assigned to one facility never see the switcher. Keyboard: <span class="mono">Ctrl/⌘ + Shift + F</span>.</p>
+    </div>
+    <div class="panel">
+      <h4>Desktop left sidebar</h4>
+      <p class="muted">Organization (org scope only) · Dashboard · Residents · eMAR · Daily Living · Staff &amp; Schedules · Infection Control · Incidents · Reports · Templates (org admins) · Documents · Messages · Settings. Items the role can't use are hidden, not greyed out. The sidebar collapses to icons below 1280px.</p>
+    </div>
+    <div class="panel">
+      <h4>Mobile bottom navigation</h4>
+      <p class="muted">Five tabs: <b>Today</b> · <b>Residents</b> · <b>eMAR</b> · <b>Tasks</b> · <b>More</b>. Tabs show counts of items due. Clinical leads see Clinical in place of Tasks. Executives get Dashboard · Facilities · Alerts · Reports · More.</p>
+    </div>
+    <div class="panel">
+      <h4>Quick-action button</h4>
+      <p class="muted">A floating button, bottom right, opens a speed dial: <b>Log Med</b>, <b>Add Note</b>, <b>Report Incident</b>, <b>Start Isolation</b>, <b>Screen Person</b>, <b>Clock In/Out</b>. Actions depend on role. When opened from a resident's page, the resident is filled in automatically.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SYSTEM ============ -->
+<section id="system">
+  <header><span class="eyebrow">Visual language</span><h2>Visual system</h2>
+  <p class="muted">The palette is drawn from clinical calm: deep harbor blue for primary actions and sage green for progress, over cool neutrals. Status colors are tuned to stay distinct for the common forms of color blindness and always come with a shape.</p></header>
+
+  <div class="swatches">
+    <div class="sw"><span style="background:var(--accent)"></span><div><b>Harbor</b><br><span class="muted">Primary actions, links, focus</span></div></div>
+    <div class="sw"><span style="background:var(--sage)"></span><div><b>Sage</b><br><span class="muted">Progress, goals, wellbeing</span></div></div>
+    <div class="sw"><span style="background:var(--bg)"></span><div><b>Mist</b><br><span class="muted">App background</span></div></div>
+    <div class="sw"><span style="background:var(--side-bg)"></span><div><b>Deep water</b><br><span class="muted">Sidebar, headers</span></div></div>
+    <div class="sw"><span style="background:var(--ok)"></span><div><b>Cleared</b> ●<br><span class="muted">Completed, given, resolved</span></div></div>
+    <div class="sw"><span style="background:var(--warn)"></span><div><b>Pending</b> ◆<br><span class="muted">Due, awaiting, review soon</span></div></div>
+    <div class="sw"><span style="background:var(--crit)"></span><div><b>Urgent</b> ▲<br><span class="muted">Late, missed, outbreak</span></div></div>
+  </div>
+
+  <div class="grid2">
+    <div class="panel">
+      <h4>Status tokens</h4>
+      <div class="flags"><span class="pill ok"><i></i>Given</span><span class="pill ok"><i></i>Cleared</span><span class="pill warn"><i></i>Due 08:00</span><span class="pill warn"><i></i>Review in 2d</span><span class="pill crit"><i></i>Late 41 min</span><span class="pill crit"><i></i>Outbreak</span><span class="pill info"><i></i>Scheduled</span><span class="pill mute"><i></i>Held</span><span class="pill mute"><i></i>Refused</span></div>
+      <p class="muted" style="font-size:14px">Shape: circle = done, diamond = waiting, triangle = needs action, square = informational, ring = didn't happen (with a reason).</p>
+    </div>
+    <div class="panel">
+      <h4>Isolation &amp; precaution badges</h4>
+      <div class="flags" style="align-items:center"><span class="iso c">C</span> Contact <span class="iso d">D</span> Droplet <span class="iso a">A</span> Airborne <span class="iso e">E</span> Enhanced barrier</div>
+      <p class="muted" style="font-size:14px">Each type has its own letter, hue and border style (solid, dashed, double, dotted). Badges appear on resident cards, room tiles, task rows, the eMAR, and the room board at the nurses' station. Combined orders stack, for example <span class="iso a">A</span><span class="iso c">C</span>.</p>
+    </div>
+    <div class="panel">
+      <h4>Typography</h4>
+      <p style="font-family:var(--f-display);font-size:22px;font-weight:600;margin:0">Lexend for headings and numbers</p>
+      <p>Atkinson Hyperlegible for body text and data entry. It was designed for low-vision readers and keeps letters like I, l and 1 apart, which matters in med names and doses.</p>
+      <p class="mono" style="font-size:14px">IBM Plex Mono · MRN 0041-2287 · Lot 4H22B · 08:00</p>
+      <p class="muted" style="font-size:14px">Scale: 12 / 14 / 16 (base) / 18 / 22 / 28 / 36. Floor-staff mode raises the base to 18px with 48px touch targets. Dose amounts never go below 16px.</p>
+    </div>
+    <div class="panel">
+      <h4>Components &amp; accessibility</h4>
+      <ul class="bul">
+        <li>Cards: 12px radius, 1px border, shadow only on floating layers (dialogs, quick-action button, toasts).</li>
+        <li>Contrast: text at least 4.5:1 and status icons at least 3:1 in both themes, checked in CI.</li>
+        <li>Touch targets of 44px or more, 48px in floor mode. Swipe actions always have a button alternative.</li>
+        <li>Full keyboard support, visible focus rings, screen-reader labels such as "Late, 41 minutes, Levetiracetam".</li>
+        <li>Dark mode follows the device setting, with a manual override. Night-shift mode dims further and warms the whites.</li>
+        <li>Reduced motion: no animated transitions, and alerts use a static banner in place of a pulse.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SCREENS ============ -->
+<section id="screens">
+  <header><span class="eyebrow">Screen layouts</span><h2>Main screens</h2>
+  <p class="muted">Mockups show the desktop layout with realistic sample data for the fictional tenant. Numbered markers match the notes under each screen. Use the theme button at the top to preview dark mode.</p></header>
+
+  <!-- ORG DASHBOARD -->
+  <div class="screen" id="s-org">
+    <div class="screenhead"><h3>Organization Dashboard</h3><div class="roles"><span class="chip">Executives</span><span class="chip">Org admins</span><span class="chip">Infection preventionist</span></div></div>
+    <p class="muted">Its job is to show, within five seconds, whether every home is safe, staffed and compliant, and which one needs attention first.</p>
+    <span class="scrollhint">Scroll sideways to see the full screen →</span>
+    <div class="shot"><div class="app">
+      <div class="side">
+        <div class="brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9.5h13V10"/></svg></span>CareHouse One</div>
+        <div class="org">Harborview</div>
+        <div class="nv on">Organization</div><div class="nv">Facilities</div><div class="nv">Residents</div><div class="nv">eMAR</div><div class="nv">Staff &amp; Schedules</div><div class="nv">Infection Control <em>1</em></div><div class="nv">Incidents</div><div class="nv">Reports</div><div class="nv">Templates</div><div class="nv">Documents</div><div class="nv">Messages</div><div class="nv">Billing</div><div class="nv">Settings</div>
+      </div>
+      <div>
+        <div class="topb"><span class="co">1</span><div class="scope">All facilities <small>(5)</small> ▾</div><div class="search">Search residents, staff, meds, documents…  Ctrl K</div><span class="sp"></span><span class="bell">Alerts <b>3</b></span><span class="av">JO</span></div>
+        <div class="mn">
+          <div class="hrow"><h5>Good morning, Joy</h5><span class="muted">Tue Oct 13 · 08:41 · Day shift in progress at all homes</span></div>
+          <div class="k6"><span class="co" style="position:absolute;margin:-8px 0 0 -8px">2</span>
+            <div class="kp"><small>Census</small><b>38 / 42</b><span>90% occupied · 2 admissions pending</span></div>
+            <div class="kp"><small>Staffing now</small><b>21 / 22</b><span>1 call-out at Cedar Ridge</span></div>
+            <div class="kp"><small>Med pass on time</small><b>98.2%</b><span>Last 7 days · target 97%</span></div>
+            <div class="kp"><small>Open incidents</small><b>7</b><span>1 high severity</span></div>
+            <div class="kp alert"><small>Active infections</small><b>6</b><span><span class="pill crit"><i></i>1 outbreak</span></span></div>
+            <div class="kp"><small>Compliance score</small><b>92</b><span>Up 2 from September</span></div>
+          </div>
+          <div class="g21">
+            <div class="cd"><h6><span class="co">3</span>Facility status board <span class="r">Cards · Table · Map</span></h6>
+              <table class="mt">
+                <thead><tr><th>Facility</th><th>Census</th><th>Staff</th><th>Meds on time</th><th>Incidents</th><th>Infection</th><th>Score</th></tr></thead>
+                <tbody>
+                  <tr><td><b>Cedar Ridge</b><br><span class="muted">IDD · Daniel R.</span></td><td>7/8<div class="bar"><span style="width:87%"></span></div></td><td><span class="pill crit"><i></i>4/5</span></td><td>96.4%</td><td>2</td><td><span class="pill crit"><i></i>Outbreak · day 3</span></td><td><span class="pill warn"><i></i>84</span></td></tr>
+                  <tr><td><b>Willow Court</b><br><span class="muted">Senior · Ana P.</span></td><td>11/12<div class="bar"><span style="width:92%"></span></div></td><td><span class="pill ok"><i></i>6/6</span></td><td>98.0%</td><td>3 <span class="pill crit"><i></i>1 high</span></td><td><span class="pill warn"><i></i>1 isolation</span></td><td><span class="pill ok"><i></i>92</span></td></tr>
+                  <tr><td><b>Oakmont</b><br><span class="muted">Behavioral · Sam K.</span></td><td>9/10<div class="bar"><span style="width:90%"></span></div></td><td><span class="pill ok"><i></i>5/5</span></td><td>98.7%</td><td>1</td><td><span class="pill ok"><i></i>Clear</span></td><td><span class="pill ok"><i></i>93</span></td></tr>
+                  <tr><td><b>Maple House</b><br><span class="muted">IDD · Rosa L.</span></td><td>6/6<div class="bar"><span style="width:100%"></span></div></td><td><span class="pill ok"><i></i>3/3</span></td><td>99.1%</td><td>1</td><td><span class="pill info"><i></i>1 case, no isolation</span></td><td><span class="pill ok"><i></i>96</span></td></tr>
+                  <tr><td><b>Birch Lane</b><br><span class="muted">IDD · Kofi A.</span></td><td>5/6<div class="bar"><span style="width:83%"></span></div></td><td><span class="pill ok"><i></i>3/3</span></td><td>99.4%</td><td>0</td><td><span class="pill warn"><i></i>1 EBP order</span></td><td><span class="pill ok"><i></i>97</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="cd"><h6><span class="co">4</span>Needs attention <span class="r">See all</span></h6>
+              <div class="feed">
+                <div class="fi"><span class="pill crit"><i></i></span><div><b>Cedar Ridge: 2 new GI cases in 48 h</b><br><small>Norovirus suspected · outbreak declared Oct 11</small></div><small>07:52</small></div>
+                <div class="fi"><span class="pill crit"><i></i></span><div><b>Willow Court: fall with injury</b><br><small>Investigation due in 24 h · assigned Ana P.</small></div><small>06:15</small></div>
+                <div class="fi"><span class="pill warn"><i></i></span><div><b>N95 stock: 4 days on hand</b><br><small>Cedar Ridge · reorder point 7 days</small></div><small>05:00</small></div>
+                <div class="fi"><span class="pill warn"><i></i></span><div><b>6 credentials expire in 30 days</b><br><small>3 CPR · 2 Med Admin · 1 driver's license</small></div><small>Daily</small></div>
+              </div>
+            </div>
+          </div>
+          <div class="g12">
+            <div class="cd"><h6><span class="co">5</span>Compliance heat map</h6>
+              <div class="heat">
+                <div></div><div class="hd">Meds</div><div class="hd">Infect.</div><div class="hd">Training</div><div class="hd">Docs</div><div class="hd">Incid.</div>
+                <div class="fn">Cedar Ridge</div><div class="h-ok">96</div><div class="h-crit">71</div><div class="h-warn">88</div><div class="h-warn">86</div><div class="h-crit">80</div>
+                <div class="fn">Willow Ct</div><div class="h-ok">98</div><div class="h-warn">90</div><div class="h-warn">93</div><div class="h-warn">89</div><div class="h-warn">90</div>
+                <div class="fn">Oakmont</div><div class="h-ok">99</div><div class="h-ok">96</div><div class="h-warn">86</div><div class="h-warn">92</div><div class="h-warn">94</div>
+                <div class="fn">Maple House</div><div class="h-ok">99</div><div class="h-ok">95</div><div class="h-ok">97</div><div class="h-warn">94</div><div class="h-ok">96</div>
+                <div class="fn">Birch Lane</div><div class="h-ok">99</div><div class="h-ok">97</div><div class="h-ok">96</div><div class="h-ok">95</div><div class="h-ok">98</div>
+              </div>
+              <small class="muted">95+ meets · 85–94 watch · under 85 act. Each cell is labeled with its value.</small>
+            </div>
+            <div class="cd"><h6><span class="co">6</span>Trends, last 12 weeks <span class="r">Med pass · Incidents · Infections · Overtime</span></h6>
+              <svg class="chart" viewBox="0 0 440 130" role="img" aria-label="Weekly med pass on-time rate, 12 weeks, between 96.8 and 98.6 percent">
+                <line class="grid" x1="34" y1="15" x2="430" y2="15"/><line class="grid" x1="34" y1="55" x2="430" y2="55"/><line class="grid" x1="34" y1="95" x2="430" y2="95"/>
+                <text x="28" y="18" text-anchor="end">99%</text><text x="28" y="58" text-anchor="end">98%</text><text x="28" y="98" text-anchor="end">97%</text>
+                <polygon points="34,95 70,103 106,79 142,71 178,63 214,59 250,51 286,47 322,43 358,39 394,51 430,47 430,115 34,115" fill="var(--accent-soft)"/>
+                <polyline points="34,95 70,103 106,79 142,71 178,63 214,59 250,51 286,47 322,43 358,39 394,51 430,47" fill="none" stroke="var(--accent)" stroke-width="2"/>
+                <circle cx="430" cy="47" r="4" fill="var(--accent)"/>
+                <text x="34" y="127">Jul 27</text><text x="232" y="127" text-anchor="middle">Sep 7</text><text x="430" y="127" text-anchor="end">Oct 12</text>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <div class="cols">
+      <div><h4>Layout zones</h4><ol class="notes">
+        <li><span><b>Scope switcher.</b> Set to All facilities. Choosing one home changes this view into that home's Facility Dashboard.</span></li>
+        <li><span><b>KPI strip.</b> Six tiles, each with a comparison line underneath. A tile that crosses a threshold gets a red left edge and a triangle pill, and clicking it opens the filtered list behind the number.</span></li>
+        <li><span><b>Facility status board.</b> One row per home, sorted by risk. Switch between table, card grid and map views. Clicking a row enters that facility's scope.</span></li>
+        <li><span><b>Needs attention feed.</b> Ranked by severity, then age. Each item shows its owner and due time. Acknowledge, assign or open from the row.</span></li>
+        <li><span><b>Compliance heat map.</b> Facilities against compliance areas. Each cell shows its number and links to the failing items.</span></li>
+        <li><span><b>Trend panel.</b> Twelve weeks of the selected metric with the latest point highlighted. A toggle overlays each facility as a separate line.</span></li>
+      </ol></div>
+      <div><h4>Behavior</h4><ul class="bul">
+        <li>Live updates arrive by websocket. A changed number flashes softly once (no flash with reduced motion).</li>
+        <li>Executives can pin up to 4 extra KPI tiles from the library, such as overtime hours, hospital transfers or bed-days lost.</li>
+        <li>Organization-wide numbers never include tenants other than the user's own. The scope label is printed on every export.</li>
+        <li><b>Tablet:</b> KPI tiles wrap 3 by 2 and the board switches to cards. <b>Phone:</b> KPI tiles become a horizontal carousel, the attention feed comes first, and the board becomes a list of facility cards.</li>
+      </ul></div>
+    </div>
+  </div>
+
+  <!-- FACILITY DASHBOARD -->
+  <div class="screen" id="s-fac">
+    <div class="screenhead"><h3>Facility Dashboard</h3><div class="roles"><span class="chip">Facility managers</span><span class="chip">Nurses</span><span class="chip">Shift leads</span></div></div>
+    <p class="muted">The operating picture of one home for this shift: who is here, who is isolated, what is due, and what went wrong.</p>
+    <span class="scrollhint">Scroll sideways to see the full screen →</span>
+    <div class="shot"><div class="app rel">
+      <div class="side">
+        <div class="brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9.5h13V10"/></svg></span>CareHouse One</div>
+        <div class="org">Cedar Ridge</div>
+        <div class="nv on">Dashboard</div><div class="nv">Room Map</div><div class="nv">Residents</div><div class="nv">eMAR <em>2</em></div><div class="nv">Daily Living</div><div class="nv">Staff &amp; Schedules</div><div class="nv">Infection Control <em>!</em></div><div class="nv">Incidents</div><div class="nv">Reports</div><div class="nv">Documents</div><div class="nv">Messages</div>
+      </div>
+      <div>
+        <div class="topb"><div class="scope">Cedar Ridge <small>8 beds · IDD</small> ▾</div><div class="search">Search this facility…</div><span class="sp"></span><span class="bell">Alerts <b>2</b></span><span class="av">DR</span></div>
+        <div class="mn">
+          <div class="banner"><span class="co">1</span>▲ Outbreak in progress: Norovirus (suspected) · Day 3 <span>· 4 residents, 2 staff · Contact precautions + bleach cleaning every 4 h · visitors restricted</span><span class="act">Open outbreak</span></div>
+          <div class="k5"><span class="co" style="position:absolute;margin:-8px 0 0 -8px">2</span>
+            <div class="kp"><small>Census</small><b>7 / 8</b><span>Room 103 vacant · held</span></div>
+            <div class="kp"><small>On shift · Day</small><b>4 / 5</b><span>1 call-out · cover requested</span></div>
+            <div class="kp"><small>08:00 med pass</small><b>22 / 24</b><span><span class="pill warn"><i></i>2 due</span></span></div>
+            <div class="kp"><small>Care tasks</small><b>31 / 46</b><span>On pace for 15:00</span></div>
+            <div class="kp"><small>Screening today</small><b>9 / 9</b><span>Staff and visitors cleared</span></div>
+          </div>
+          <div class="g21">
+            <div class="cd"><h6><span class="co">3</span>Room map · Main floor <span class="r">Edit layout</span></h6>
+              <div class="plan">
+                <div class="rm iso-c"><div class="no">101 <span class="iso c">C</span></div><b>D. Reyes</b><span class="muted">Day 4 · review today</span></div>
+                <div class="rm iso-c"><div class="no">102 <span class="iso c">C</span></div><b>M. Bell</b><span class="muted">Day 3 · PRN due</span></div>
+                <div class="rm vac"><div class="no">103</div><b>Vacant</b><span>Held for outbreak</span></div>
+                <div class="rm"><div class="no">104</div><b>A. Turner</b><span class="pill ok"><i></i>Meds done</span></div>
+                <div class="rm iso-c"><div class="no">105 <span class="iso c">C</span></div><b>J. Park</b><span class="muted">Day 2</span></div>
+                <div class="rm"><div class="no">106</div><b>L. Kim</b><span class="pill warn"><i></i>Meds due</span></div>
+                <div class="rm iso-c"><div class="no">107 <span class="iso c">C</span></div><b>S. Walsh</b><span class="muted">Day 1 · new</span></div>
+                <div class="rm"><div class="no">108</div><b>R. Nguyen</b><span class="pill info"><i></i>Out · day program</span></div>
+                <div class="rm common"><div class="no">Kitchen / dining</div>Closed to group meals · tray service</div>
+                <div class="rm common"><div class="no">Living room</div>Cleaning due 10:00</div>
+              </div>
+              <div class="legend"><span><span class="iso c">C</span> Contact precautions</span><span><span class="pill ok"><i></i></span>Complete</span><span><span class="pill warn"><i></i></span>Due</span><span>Striped = vacant</span></div>
+            </div>
+            <div style="display:grid;gap:12px;align-content:start">
+              <div class="cd"><h6><span class="co">4</span>Due next</h6>
+                <div class="feed">
+                  <div class="fi"><span class="pill crit"><i></i></span><div><b>Isolation review: D. Reyes</b><br><small>48 h symptom-free check · RN sign-off</small></div><small>09:00</small></div>
+                  <div class="fi"><span class="pill warn"><i></i></span><div><b>PRN follow-up: M. Bell</b><br><small>Ondansetron given 07:55 · rate effectiveness</small></div><small>08:55</small></div>
+                  <div class="fi"><span class="pill warn"><i></i></span><div><b>Meds: L. Kim (2)</b><br><small>08:00 pass · window ends 09:00</small></div><small>09:00</small></div>
+                  <div class="fi"><span class="pill info"><i></i></span><div><b>Bleach clean, high-touch surfaces</b><br><small>Rooms 101, 102, 105, 107 and common areas</small></div><small>10:00</small></div>
+                </div>
+              </div>
+              <div class="cd"><h6><span class="co">5</span>Shift handoff · Night → Day</h6>
+                <p style="margin:0;font-size:12.5px">"S. Walsh vomited twice at 03:10. Isolation started, IP notified. M. Bell slept poorly, fluids encouraged. Med cart count correct."</p>
+                <small class="muted">Kezia W. · 06:58 · read by 4 of 4 day staff</small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="fab"><span class="co" style="box-shadow:none">6</span><b>+</b>Quick action</div>
+    </div></div>
+    <div class="cols">
+      <div><h4>Layout zones</h4><ol class="notes">
+        <li><span><b>Situation banner.</b> Shown only during an outbreak, a facility lockdown or a missed survey deadline. Stays at the top on every screen in this facility until the condition clears.</span></li>
+        <li><span><b>Shift KPIs.</b> Scoped to the current shift: census, staffing, the current med pass, care tasks and screening.</span></li>
+        <li><span><b>Room map.</b> Drawn in the onboarding floor-plan builder. Tiles show occupant, isolation badge and the most urgent status. Tap a tile for a resident quick view. Drag a resident to another room to transfer, which asks for confirmation.</span></li>
+        <li><span><b>Due next.</b> The facility's combined queue of meds, reviews, follow-ups and cleaning, ordered by deadline.</span></li>
+        <li><span><b>Handoff note.</b> The latest note from the outgoing shift. Each incoming staff member confirms they read it, and the read count shows here.</span></li>
+        <li><span><b>Quick action.</b> Opens the speed dial. Start Isolation and Report Incident are pinned during an outbreak.</span></li>
+      </ol></div>
+      <div><h4>Behavior</h4><ul class="bul">
+        <li>A <b>Room Board</b> display mode turns the map into a full-screen wall view for a station TV. It shows initials only, so no full names appear on a public screen.</li>
+        <li>Multi-floor homes get floor tabs above the map. Room tiles can be colored by isolation, acuity, fall risk or task status.</li>
+        <li>Managers can add widgets from a library: census forecast, open work orders, upcoming appointments, family messages.</li>
+        <li><b>Phone:</b> the banner shrinks to a pill, KPIs become a carousel, the room map becomes a scrollable list grouped by isolation status, and Due next comes first.</li>
+      </ul></div>
+    </div>
+  </div>
+
+  <!-- RESIDENT PROFILE -->
+  <div class="screen" id="s-res">
+    <div class="screenhead"><h3>Resident Profile</h3><div class="roles"><span class="chip">All care staff</span><span class="chip">Nurses</span><span class="chip">Managers</span></div></div>
+    <p class="muted">A single record for the person. The header holds everything that must never be missed, and tabs hold everything else.</p>
+    <span class="scrollhint">Scroll sideways to see the full screen →</span>
+    <div class="shot"><div class="app">
+      <div class="side">
+        <div class="brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9.5h13V10"/></svg></span>CareHouse One</div>
+        <div class="org">Cedar Ridge</div>
+        <div class="nv">Dashboard</div><div class="nv">Room Map</div><div class="nv on">Residents</div><div class="nv">eMAR</div><div class="nv">Daily Living</div><div class="nv">Staff &amp; Schedules</div><div class="nv">Infection Control</div><div class="nv">Incidents</div><div class="nv">Reports</div><div class="nv">Documents</div>
+      </div>
+      <div>
+        <div class="topb"><div class="scope">Cedar Ridge ▾</div><span class="muted">Residents / Marcus Bell</span><span class="sp"></span><span class="btn">Message team</span><span class="btn p">+ Add note</span></div>
+        <div class="mn">
+          <div class="rhead"><div class="photo">MB</div>
+            <div style="display:grid;gap:4px"><div class="hrow"><span class="co">1</span><span class="rname">Marcus Bell</span><span class="iso c">C</span><span class="pill warn"><i></i>Contact precautions · review Oct 14</span></div>
+              <div class="facts"><span><b>34 y</b> · He/him</span><span>Room <b>102</b></span><span>MRN <b class="mono">0041-2287</b></span><span>Admitted <b>Mar 2, 2021</b></span><span>Acuity <b>Level 3 of 4</b></span><span>Guardian <b>Linda Bell</b></span><span>Code status <b>Full code</b></span></div></div>
+            <div style="display:grid;gap:6px;justify-items:end"><span class="btn p">Log med</span><span class="btn">Face sheet</span></div>
+          </div>
+          <div class="allergy"><span class="co">2</span>▲ ALLERGIES: Penicillin (anaphylaxis) · Latex <span>| Diet: IDDSI Level 5 minced &amp; moist, diabetic, thin liquids</span></div>
+          <div class="tabs"><span class="on">Overview</span><span>Care plan</span><span>eMAR</span><span>Daily living</span><span>Notes</span><span>Vitals</span><span>Infection</span><span>Incidents</span><span>Documents</span><span>Contacts</span></div>
+          <div class="g111">
+            <div class="cd"><h6><span class="co">3</span>Risk flags</h6>
+              <div class="flags"><span class="pill crit"><i></i>Seizure disorder</span><span class="pill crit"><i></i>Choking risk</span><span class="pill warn"><i></i>Fall risk · moderate</span><span class="pill warn"><i></i>Diabetes</span><span class="pill info"><i></i>Non-verbal cues</span></div>
+              <small class="muted">Seizure protocol: time it, call RN at 2 min, give diazepam nasal at 5 min, call 911 at 5 min or if a second seizure follows.</small>
+              <h6 style="margin-top:6px">Diagnoses</h6>
+              <div style="font-size:12.5px;display:grid;gap:3px"><span><span class="mono">G40.909</span> Epilepsy, unspecified</span><span><span class="mono">F70</span> Mild intellectual disability</span><span><span class="mono">E11.9</span> Type 2 diabetes</span><span><span class="mono">A08.11</span> Norovirus enteritis (suspected)</span></div>
+            </div>
+            <div class="cd"><h6><span class="co">4</span>Today <span class="r">Full timeline</span></h6>
+              <div class="tl">
+                <div><time>07:55</time><span>Ondansetron 4 mg PRN</span><span class="pill ok"><i></i>Given</span></div>
+                <div><time>08:00</time><span>Levetiracetam, Metformin</span><span class="pill ok"><i></i>Given</span></div>
+                <div><time>08:55</time><span>PRN effectiveness check</span><span class="pill warn"><i></i>Due</span></div>
+                <div><time>10:00</time><span>OT session · moved in-room</span><span class="pill info"><i></i>Planned</span></div>
+                <div><time>11:30</time><span>Fingerstick glucose</span><span class="pill info"><i></i>Planned</span></div>
+                <div><time>12:00</time><span>Lunch · tray, minced &amp; moist</span><span class="pill info"><i></i>Planned</span></div>
+              </div>
+            </div>
+            <div class="cd"><h6><span class="co">5</span>Vitals &amp; goals</h6>
+              <div style="font-size:12px;display:flex;justify-content:space-between"><b>Glucose, 7 days</b><span class="mono">142 mg/dL today</span></div>
+              <svg class="spark" viewBox="0 0 220 56" role="img" aria-label="Glucose readings over 7 days, 118 to 162, within target band 80 to 180 except none">
+                <rect class="band" x="0" y="10" width="220" height="40"/>
+                <polyline points="6,34 40,28 74,38 108,22 142,18 176,30 214,26"/>
+                <circle cx="214" cy="26" r="3.5"/>
+              </svg>
+              <small class="muted">Shaded band is the target range set in the care plan.</small>
+              <div class="goal"><div><b>Make own breakfast, 3 steps</b><span>70%</span></div><div class="bar"><span style="width:70%"></span></div></div>
+              <div class="goal"><div><b>Community outing weekly</b><span>Paused</span></div><div class="bar"><span style="width:40%;background:var(--ink-2)"></span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <div class="cols">
+      <div><h4>Layout zones</h4><ol class="notes">
+        <li><span><b>Identity header.</b> Photo, name, pronouns, room, MRN, acuity, guardian and code status. The isolation badge and review date sit next to the name. The header stays at the top while scrolling.</span></li>
+        <li><span><b>Safety strip.</b> Allergies and diet texture always show and can't be collapsed. The same strip appears on every med and meal screen for this resident.</span></li>
+        <li><span><b>Risk flags.</b> Generated from assessments (fall, choking, elopement, skin) and linked to the protocol that applies. Each flag shows its source assessment and when it was last reviewed.</span></li>
+        <li><span><b>Today timeline.</b> Meds, care tasks, appointments and therapies in time order with status, all chartable from here.</span></li>
+        <li><span><b>Vitals and goals.</b> Trends drawn against the care plan's target range, plus progress toward personal goals.</span></li>
+      </ol></div>
+      <div><h4>Tabs</h4><ul class="bul">
+        <li><b>Care plan:</b> goals, interventions and responsible roles, built from org templates. Versioned, with e-signatures from the resident or guardian and the clinician.</li>
+        <li><b>eMAR:</b> this resident's MAR grid, orders, allergies, and pharmacy refill status.</li>
+        <li><b>Daily living:</b> ADL records for hygiene, meals with percent eaten, mobility and toileting, plus activity attendance.</li>
+        <li><b>Notes:</b> progress, behavior and handoff notes. Filter by author role or tag. Smart phrases speed up common entries.</li>
+        <li><b>Infection:</b> case history, isolation orders, vaccinations and immunity, lab results.</li>
+        <li><b>Documents:</b> intake packet, consents, assessments, ID scans and guardianship papers, each with an expiry date and a family-portal visibility setting.</li>
+        <li><b>Phone:</b> the header shrinks to name, room and badges. The safety strip stays. Tabs become a scrollable chip row, and "Today" is the default tab.</li>
+      </ul></div>
+    </div>
+  </div>
+
+  <!-- eMAR -->
+  <div class="screen" id="s-emar">
+    <div class="screenhead"><h3>eMAR</h3><div class="roles"><span class="chip">Med-certified staff</span><span class="chip">Nurses</span><span class="chip">Pharmacy liaison</span></div></div>
+    <p class="muted">Two layouts for one record. The desktop grid is for review and reconciliation. The phone med pass is a guided, scan-first sequence built around the five rights: right resident, drug, dose, route and time.</p>
+    <span class="scrollhint">Scroll sideways to see the full screen →</span>
+    <div class="shot"><div class="app">
+      <div class="side">
+        <div class="brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9.5h13V10"/></svg></span>CareHouse One</div>
+        <div class="org">Cedar Ridge</div>
+        <div class="nv">Dashboard</div><div class="nv">Room Map</div><div class="nv">Residents</div><div class="nv on">eMAR <em>2</em></div><div class="nv">Daily Living</div><div class="nv">Staff &amp; Schedules</div><div class="nv">Infection Control</div><div class="nv">Incidents</div><div class="nv">Reports</div>
+      </div>
+      <div>
+        <div class="topb"><div class="scope">Cedar Ridge ▾</div><span class="btn p">08:00 pass</span><span class="btn">12:00</span><span class="btn">17:00</span><span class="btn">20:00</span><span class="btn">PRN</span><span class="sp"></span><span class="btn">Controlled count</span><span class="btn">Refills (3)</span></div>
+        <div class="mn">
+          <div class="g12" style="grid-template-columns:220px minmax(0,1fr)">
+            <div class="cd"><h6><span class="co">1</span>Residents · 08:00</h6>
+              <div class="rlist">
+                <div class="rl"><span class="iso c">C</span><div><b>D. Reyes</b><small>101 · 4 of 4</small></div><span class="pill ok"><i></i></span></div>
+                <div class="rl on"><span class="iso c">C</span><div><b>M. Bell</b><small>102 · 2 of 2 + PRN</small></div><span class="pill ok"><i></i></span></div>
+                <div class="rl"><span class="av">AT</span><div><b>A. Turner</b><small>104 · 3 of 3</small></div><span class="pill ok"><i></i></span></div>
+                <div class="rl"><span class="iso c">C</span><div><b>J. Park</b><small>105 · 5 of 5</small></div><span class="pill ok"><i></i></span></div>
+                <div class="rl"><span class="av">LK</span><div><b>L. Kim</b><small>106 · 2 of 4</small></div><span class="pill warn"><i></i></span></div>
+                <div class="rl"><span class="iso c">C</span><div><b>S. Walsh</b><small>107 · 3 of 3</small></div><span class="pill ok"><i></i></span></div>
+                <div class="rl"><span class="av">RN</span><div><b>R. Nguyen</b><small>108 · 3 of 3 · early</small></div><span class="pill ok"><i></i></span></div>
+              </div>
+            </div>
+            <div class="cd"><h6><span class="co">2</span>Marcus Bell · MAR · Tue Oct 13 <span class="r">Week view</span></h6>
+              <div class="allergy" style="padding:5px 10px">▲ Penicillin (anaphylaxis) · Latex <span>| Swallow: minced &amp; moist, crush only where the order allows</span></div>
+              <table class="mar">
+                <thead><tr><th>Medication</th><th>06:00</th><th class="now">08:00</th><th>12:00</th><th>17:00</th><th>20:00</th></tr></thead>
+                <tbody>
+                  <tr><td class="med"><b>Levetiracetam 500 mg tab</b><small>PO · BID · seizures</small></td><td></td><td class="now"><span class="pill ok"><i></i>08:04 AT</span></td><td></td><td></td><td><span class="pill info"><i></i>Due</span></td></tr>
+                  <tr><td class="med"><b>Metformin 500 mg tab</b><small>PO · BID with meals · hold if not eating</small></td><td></td><td class="now"><span class="pill ok"><i></i>08:04 AT</span></td><td></td><td><span class="pill info"><i></i>Due</span></td><td></td></tr>
+                  <tr><td class="med"><b>Risperidone 1 mg tab</b><small>PO · QHS · behavior plan</small></td><td></td><td class="now"></td><td></td><td></td><td><span class="pill info"><i></i>Due</span></td></tr>
+                  <tr><td class="med"><b>Polyethylene glycol 17 g</b><small>PO · daily · held during GI illness per RN</small></td><td></td><td class="now"><span class="pill mute"><i></i>Held · RN order</span></td><td></td><td></td><td></td></tr>
+                  <tr><td class="med"><b>Ondansetron 4 mg ODT</b> <small>PRN q8h · nausea/vomiting · max 3 per day</small></td><td colspan="5" style="text-align:left"><span class="pill ok"><i></i>07:55 AT · reason: vomited ×1</span> <span class="pill warn"><i></i>Effectiveness due 08:55</span> <span class="muted">Next allowed 15:55</span></td></tr>
+                  <tr><td class="med"><b>Diazepam nasal 10 mg</b><span class="ctl">C-IV</span><small>PRN · seizure longer than 5 min · witness required</small></td><td colspan="5" style="text-align:left"><span class="muted">Not given in 41 days · count 2 of 2 · last verified 06:45 by AT and KW</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+
+    <div class="shot"><div class="phonewrap">
+      <div class="phone">
+        <div class="ph-top"><span>08:52</span><span>Offline-ready ●</span></div>
+        <div class="ph-h"><div class="hrow"><b style="font:600 16px var(--f-display)">L. Kim · Room 106</b><span class="pill warn"><i></i>08:00 pass</span></div>
+          <div class="allergy" style="padding:5px 8px;font-size:11.5px">▲ NKDA · Diet regular · Swallows whole</div></div>
+        <div class="ph-b">
+          <div class="step"><span class="n">✓</span><div><b>Resident verified</b><small>Wristband scan · photo matched</small></div><span></span></div>
+          <div class="step"><span class="n">✓</span><div><b>Sertraline 50 mg</b><small>Scanned NDC · 1 tab PO · 08:47</small></div><span></span></div>
+          <div class="step"><span class="n">✓</span><div><b>Vitamin D3 1000 IU</b><small>Scanned · 1 tab PO · 08:47</small></div><span></span></div>
+          <div class="step cur"><span class="n">4</span><div><b>Lisinopril 10 mg</b><small>Check BP first: hold if SBP under 100</small></div><span class="pill warn"><i></i>Scan</span></div>
+          <div class="step"><span class="n">5</span><div><b>Omeprazole 20 mg</b><small>Before breakfast · late window</small></div><span class="pill crit"><i></i>Late</span></div>
+          <span class="big">Enter BP · 118/76 ✓ then scan</span>
+        </div>
+        <div class="botnav"><span>Today</span><span>Residents</span><span class="on">eMAR</span><span>Tasks</span><span>More</span></div>
+      </div>
+      <div class="phone">
+        <div class="ph-top"><span>08:53</span><span>Cedar Ridge</span></div>
+        <div class="ph-h"><b style="font:600 16px var(--f-display)">Today · Andre</b><span class="muted" style="font-size:12px">Day shift · 07:00–15:00 · clocked in 06:52 (on site)</span></div>
+        <div class="ph-b">
+          <div class="step"><span class="n" style="background:var(--warn-soft);color:var(--warn)">◆</span><div><b>Meds due · 2</b><small>L. Kim · window ends 09:00</small></div><span></span></div>
+          <div class="step"><span class="n" style="background:var(--crit-soft);color:var(--crit)">▲</span><div><b>Isolation review</b><small>D. Reyes · RN sign-off</small></div><span></span></div>
+          <div class="step"><span class="n" style="background:var(--accent-soft);color:var(--accent)">■</span><div><b>Showers · 3</b><small>104, 106, 108</small></div><span></span></div>
+        </div>
+        <div class="scrim"></div>
+        <div class="dial"><span>Log Med</span><span>Add Note</span><span>Report Incident</span><span>Start Isolation</span><span>Screen Person</span><span>Clock Out</span></div>
+        <div class="phfab">×</div>
+        <div class="botnav"><span class="on">Today</span><span>Residents</span><span>eMAR</span><span>Tasks</span><span>More</span></div>
+      </div>
+    </div></div>
+
+    <div class="cols">
+      <div><h4>Layout zones</h4><ol class="notes">
+        <li><span><b>Resident rail.</b> Everyone in the selected pass with progress counts and isolation badges. Isolated residents can be sorted last so the cart visits them at the end of the pass.</span></li>
+        <li><span><b>MAR grid.</b> Medications against administration times. The current pass column is highlighted. Each cell shows the time given and staff initials, or why a dose was held or refused. PRN and controlled meds get their own rows showing the effectiveness clock, the next allowed dose, and the count.</span></li>
+      </ol>
+      <h4 style="margin-top:16px">Phone med pass (left phone)</h4>
+      <ul class="bul">
+        <li>Scan the wristband or the room QR, then a face-photo check. A wrong-resident scan is a hard stop.</li>
+        <li>Each med is scanned from its blister pack. A wrong drug, wrong dose, duplicate dose or allergy match is a hard stop that needs an RN override with a reason.</li>
+        <li>Vitals required by the order, such as BP before an antihypertensive, are asked for inline. Values outside the order's limits suggest a hold.</li>
+        <li>Swipe left on a med to mark Refused, Held or Not available, with a reason picker and an automatic RN notification.</li>
+      </ul></div>
+      <div><h4>Rules &amp; integrations</h4><ul class="bul">
+        <li><b>Time windows:</b> set per facility, defaulting to 60 minutes either side. Doses become Due at the window start and Late at its end, and a missed-dose alert goes to the shift lead after 30 minutes and the RN after 60.</li>
+        <li><b>Controlled substances:</b> a witness (a second user) signs on the same device with their own PIN. Shift-change counts are blind double counts, and any discrepancy creates an incident automatically.</li>
+        <li><b>Double-check:</b> configurable per drug class, such as insulin and anticoagulants.</li>
+        <li><b>PRN:</b> requires a reason. The effectiveness check is scheduled automatically (default 60 min). Max-dose and minimum-interval limits are enforced.</li>
+        <li><b>Pharmacy:</b> orders arrive by e-prescribing or an HL7/FHIR pharmacy feed, and an RN must verify them before they appear on the MAR. Refill requests trigger at 7 days on hand. Deliveries are checked in by scan.</li>
+        <li><b>Quick action (right phone):</b> the speed dial is open over the Today screen. It gives one-tap access from any screen, and the backdrop dims everything else.</li>
+      </ul></div>
+    </div>
+  </div>
+
+  <!-- INFECTION CONTROL -->
+  <div class="screen" id="s-ic">
+    <div class="screenhead"><h3>Infection Control Board</h3><div class="roles"><span class="chip">Infection preventionist</span><span class="chip">Nurses</span><span class="chip">Managers</span></div></div>
+    <p class="muted">Surveillance and response in one place: case tracking from suspected to cleared, isolation orders with review clocks, the outbreak picture, and the supplies and audits that keep it contained.</p>
+    <span class="scrollhint">Scroll sideways to see the full screen →</span>
+    <div class="shot"><div class="app">
+      <div class="side">
+        <div class="brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9.5h13V10"/></svg></span>CareHouse One</div>
+        <div class="org">Harborview</div>
+        <div class="nv">Organization</div><div class="nv">Facilities</div><div class="nv">Residents</div><div class="nv">eMAR</div><div class="nv">Staff &amp; Schedules</div><div class="nv on">Infection Control <em>1</em></div><div class="nv">Incidents</div><div class="nv">Reports</div>
+      </div>
+      <div>
+        <div class="topb"><span class="co">1</span><div class="scope">All facilities ▾</div><span class="btn p">Surveillance</span><span class="btn">Outbreaks</span><span class="btn">Screening</span><span class="btn">Audits</span><span class="btn">PPE</span><span class="btn">Vaccinations</span><span class="sp"></span><span class="btn">+ New case</span></div>
+        <div class="mn">
+          <div class="k5">
+            <div class="kp alert"><small>Active cases</small><b>8</b><span>6 residents · 2 staff</span></div>
+            <div class="kp"><small>Isolation orders</small><b>6</b><span>4 C · 1 A+C · 1 EBP</span></div>
+            <div class="kp"><small>Reviews overdue</small><b>0</b><span>1 due today, 09:00</span></div>
+            <div class="kp"><small>Hand hygiene, 30 d</small><b>91%</b><span>Target 90% · 214 observations</span></div>
+            <div class="kp"><small>Screening today</small><b>96%</b><span>52 of 54 staff and visitors</span></div>
+          </div>
+          <div class="cd"><h6><span class="co">2</span>Case board <span class="r">Line list view</span></h6>
+            <div class="cols4">
+              <div class="lane"><b>Suspected <span>2</span></b>
+                <div class="case"><div class="top"><b>S. Walsh</b><span class="iso c">C</span></div><small>Cedar Ridge 107 · GI · onset Oct 13 03:10</small><span class="pill warn"><i></i>Stool sample pending</span></div>
+                <div class="case"><div class="top"><b>Staff: T. Osei</b><span class="pill mute"><i></i>Off work</span></div><small>Cedar Ridge · GI · onset Oct 12</small><small>Return after 48 h symptom-free</small></div>
+              </div>
+              <div class="lane"><b>Confirmed <span>4</span></b>
+                <div class="case"><div class="top"><b>M. Bell</b><span class="iso c">C</span></div><small>Cedar Ridge 102 · Norovirus GII PCR+</small><span class="pill warn"><i></i>Review Oct 14</span></div>
+                <div class="case"><div class="top"><b>J. Park</b><span class="iso c">C</span></div><small>Cedar Ridge 105 · Norovirus · day 2</small></div>
+                <div class="case"><div class="top"><b>H. Adeyemi</b><span><span class="iso a">A</span><span class="iso c">C</span></span></div><small>Willow Court 9 · COVID-19 antigen+ · day 5</small><span class="pill warn"><i></i>Review in 2 d</span></div>
+                <div class="case"><div class="top"><b>E. Soto</b><span class="pill info"><i></i>No isolation</span></div><small>Maple House 3 · UTI · cefalexin day 3 of 7</small></div>
+              </div>
+              <div class="lane"><b>Recovering <span>2</span></b>
+                <div class="case"><div class="top"><b>D. Reyes</b><span class="iso c">C</span></div><small>Cedar Ridge 101 · symptom-free 46 h</small><span class="pill crit"><i></i>Clearance review 09:00</span></div>
+                <div class="case"><div class="top"><b>Staff: B. Hale</b><span class="pill mute"><i></i>Off work</span></div><small>Cedar Ridge · symptom-free 30 h</small></div>
+              </div>
+              <div class="lane"><b>Colonized / EBP <span>1</span></b>
+                <div class="case"><div class="top"><b>P. Grant</b><span class="iso e">E</span></div><small>Birch Lane 4 · MRSA, chronic wound</small><small>Gown and gloves for high-contact care</small></div>
+              </div>
+            </div>
+          </div>
+          <div class="g111">
+            <div class="cd"><h6><span class="co">3</span>Epi curve · Cedar Ridge</h6>
+              <svg class="chart" viewBox="0 0 420 160" role="img" aria-label="New cases by onset date, Sep 30 to Oct 13: 1 resident Oct 9, 1 staff Oct 10, 1 resident Oct 11, 1 resident and 1 staff Oct 12">
+                <line class="grid" x1="34" y1="130" x2="410" y2="130"/><line class="grid" x1="34" y1="90" x2="410" y2="90"/><line class="grid" x1="34" y1="50" x2="410" y2="50"/><line class="grid" x1="34" y1="10" x2="410" y2="10"/>
+                <text x="28" y="133" text-anchor="end">0</text><text x="28" y="93" text-anchor="end">1</text><text x="28" y="53" text-anchor="end">2</text><text x="28" y="13" text-anchor="end">3</text>
+                <rect class="res" x="280" y="90" width="18" height="40" rx="2"/>
+                <rect class="stf" x="307" y="90" width="18" height="40" rx="2"/>
+                <rect class="res" x="334" y="90" width="18" height="40" rx="2"/>
+                <rect class="res" x="361" y="90" width="18" height="40" rx="2"/><rect class="stf" x="361" y="51" width="18" height="38" rx="2"/>
+                <line class="mark" x1="331" y1="18" x2="331" y2="130"/>
+                <text class="mk" x="326" y="28" text-anchor="end">Declared Oct 11</text>
+                <text x="47" y="146" text-anchor="middle">Sep 30</text><text x="101" y="146" text-anchor="middle">Oct 2</text><text x="155" y="146" text-anchor="middle">Oct 4</text><text x="209" y="146" text-anchor="middle">Oct 6</text><text x="262" y="146" text-anchor="middle">Oct 8</text><text x="316" y="146" text-anchor="middle">Oct 10</text><text x="370" y="146" text-anchor="middle">Oct 12</text>
+              </svg>
+              <div class="legend"><span><span style="width:10px;height:10px;background:var(--accent);border-radius:2px;display:inline-block"></span>Residents</span><span><span style="width:10px;height:10px;background:var(--sage);border-radius:2px;display:inline-block"></span>Staff</span><span>Onset date. Today's suspected case is not plotted until confirmed.</span></div>
+            </div>
+            <div class="cd"><h6><span class="co">4</span>PPE days on hand</h6>
+              <div class="ppe">
+                <div><b>N95, Cedar R.</b><div class="bar"><span class="lo" style="width:27%"></span></div><span class="pill crit"><i></i>4 d</span></div>
+                <div><b>Gowns, Cedar R.</b><div class="bar"><span class="md" style="width:47%"></span></div><span class="pill warn"><i></i>7 d</span></div>
+                <div><b>Gloves, all</b><div class="bar"><span style="width:88%"></span></div><span class="pill ok"><i></i>26 d</span></div>
+                <div><b>Bleach wipes</b><div class="bar"><span class="md" style="width:40%"></span></div><span class="pill warn"><i></i>6 d</span></div>
+                <div><b>N95, Willow</b><div class="bar"><span style="width:73%"></span></div><span class="pill ok"><i></i>22 d</span></div>
+              </div>
+              <small class="muted">Days on hand = stock ÷ 7-day average use. Turns red below the reorder point.</small>
+            </div>
+            <div class="cd"><h6><span class="co">5</span>Outbreak: Cedar Ridge</h6>
+              <div style="display:grid;gap:5px;font-size:12px">
+                <span><span class="pill ok"><i></i></span> Declared · Grace M. · Oct 11 14:20</span>
+                <span><span class="pill ok"><i></i></span> Health department notified · case #CR-1011</span>
+                <span><span class="pill ok"><i></i></span> Families and guardians notified (7 of 7)</span>
+                <span><span class="pill ok"><i></i></span> Staff cohorted: isolation wing has 2 dedicated staff</span>
+                <span><span class="pill warn"><i></i></span> Bleach cleaning every 4 h · next 10:00</span>
+                <span><span class="pill warn"><i></i></span> Admissions paused · day program attendance on hold</span>
+                <span><span class="pill info"><i></i></span> Can close Oct 17 if no new cases after the last onset (2 incubation periods)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <div class="cols">
+      <div><h4>Layout zones</h4><ol class="notes">
+        <li><span><b>Scope and sub-tabs.</b> Organization-wide by default for the infection preventionist and facility-scoped for everyone else. Sub-tabs cover the whole program: surveillance, outbreaks, screening, audits, PPE and vaccinations.</span></li>
+        <li><span><b>Case board.</b> Cases move from Suspected to Confirmed to Recovering to Cleared. Each card shows isolation badges, the review clock and lab status. The line list view gives the same data as a sortable table that can be exported for public health.</span></li>
+        <li><span><b>Epi curve.</b> Cases by onset date, residents stacked with staff, with the outbreak declaration marked. Filter by facility, organism or symptom group.</span></li>
+        <li><span><b>PPE inventory.</b> Days of supply calculated from recent use. Alerts fire below the reorder point, and inventory can be moved between facilities in a few taps.</span></li>
+        <li><span><b>Outbreak checklist.</b> The steps of the declaration workflow with who did what and when, plus the projected close date.</span></li>
+      </ol></div>
+      <div><h4>Isolation order behavior</h4><ul class="bul">
+        <li>Starting an order (precaution type, reason, start time, review interval) adds the badge everywhere the resident appears, posts PPE steps to every task for that resident, and adds a door-sign printout to the queue.</li>
+        <li>Review clocks count down on the resident header. When a review is overdue, the order turns red and the RN and infection preventionist are alerted until it is extended or discontinued.</li>
+        <li><b>Contact tracing:</b> the system builds a 72-hour exposure list from shared rooms, care tasks, med passes and group activities. It suggests who to notify and which staff to monitor.</li>
+        <li><b>Screening:</b> a kiosk-mode tablet at the entrance for visitors, and in-app screening before staff can clock in. A failed screen blocks the clock-in and notifies the manager.</li>
+        <li><b>Hand hygiene audits:</b> a quick observation form (5 moments, role, outcome) feeds the compliance KPI and the facility heat map.</li>
+      </ul></div>
+    </div>
+  </div>
+
+  <!-- REPORTS -->
+  <div class="screen" id="s-rep">
+    <div class="screenhead"><h3>Reports Center</h3><div class="roles"><span class="chip">Executives</span><span class="chip">Managers</span><span class="chip">Compliance officers</span><span class="chip">Auditors (read-only)</span></div></div>
+    <p class="muted">A library of ready-made reports, a builder for custom ones, and scheduled delivery. Every run and export is recorded.</p>
+    <span class="scrollhint">Scroll sideways to see the full screen →</span>
+    <div class="shot"><div class="app">
+      <div class="side">
+        <div class="brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9.5h13V10"/></svg></span>CareHouse One</div>
+        <div class="org">Harborview</div>
+        <div class="nv">Organization</div><div class="nv">Facilities</div><div class="nv">Residents</div><div class="nv">eMAR</div><div class="nv">Staff &amp; Schedules</div><div class="nv">Infection Control</div><div class="nv">Incidents</div><div class="nv on">Reports</div><div class="nv">Templates</div>
+      </div>
+      <div>
+        <div class="topb"><div class="scope">All facilities ▾</div><span class="muted">Reports / Builder / Psychotropic administration, monthly</span><span class="sp"></span><span class="btn">Save</span><span class="btn">Export ▾</span><span class="btn p">Schedule</span></div>
+        <div class="mn">
+          <div class="g12" style="grid-template-columns:190px minmax(0,1fr) 230px">
+            <div class="cd"><h6><span class="co">1</span>Library</h6>
+              <div class="lib">
+                <b>Operational</b><span>Census &amp; occupancy</span><span>Staff attendance</span><span>Activity participation</span><span>Incident summary</span>
+                <b>Clinical</b><span class="on">Medication compliance <em style="font-style:normal">›</em></span><span>Care plan progress</span><span>Infection trends</span><span>Falls &amp; hospitalizations</span><span>Vital trends</span>
+                <b>Survey &amp; compliance</b><span>State survey packet</span><span>Licensing renewal</span><span>Training &amp; credentials</span>
+                <b>Mine</b><span>Saved (8)</span><span>Scheduled (5)</span>
+              </div>
+            </div>
+            <div class="cd"><h6><span class="co">2</span>Builder</h6>
+              <div class="filters"><span class="filt"><b>Source</b> Med administrations</span><span class="filt"><b>Dates</b> Sep 1–30, 2026</span><span class="filt"><b>Facility</b> All (5)</span><span class="filt"><b>Drug class</b> Antipsychotics, anxiolytics</span><span class="filt"><b>Group by</b> Facility</span><span class="filt add">+ Filter</span></div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="btn p">Bar</span><span class="btn">Line</span><span class="btn">Table</span><span class="btn">Heat map</span><span class="btn">Scorecard</span></div>
+              <div style="display:grid;gap:7px;padding:6px 0"><b style="font-size:12px">On-time administration, psychotropics, September</b>
+                <div class="hbar"><span>Birch Lane</span><div class="bar"><span style="width:99.6%"></span></div><span>99.6%</span></div>
+                <div class="hbar"><span>Maple House</span><div class="bar"><span style="width:99.2%"></span></div><span>99.2%</span></div>
+                <div class="hbar"><span>Oakmont</span><div class="bar"><span style="width:98.5%"></span></div><span>98.5%</span></div>
+                <div class="hbar"><span>Willow Court</span><div class="bar"><span style="width:97.9%"></span></div><span>97.9%</span></div>
+                <div class="hbar"><span>Cedar Ridge</span><div class="bar"><span style="width:96.1%;background:var(--warn)"></span></div><span>96.1%</span></div>
+              </div>
+              <table class="mt"><thead><tr><th>Facility</th><th>Doses</th><th>On time</th><th>Late</th><th>Refused</th><th>PRN uses</th><th>Behavior plan linked</th></tr></thead>
+              <tbody><tr><td>Cedar Ridge</td><td>612</td><td>588</td><td>17</td><td>7</td><td>9</td><td><span class="pill ok"><i></i>100%</span></td></tr><tr><td>Willow Court</td><td>1,044</td><td>1,022</td><td>15</td><td>7</td><td>21</td><td><span class="pill warn"><i></i>94%</span></td></tr></tbody></table>
+              <small class="muted">The axis starts at 90% so the differences are visible. The axis start is printed on exports.</small>
+            </div>
+            <div style="display:grid;gap:12px;align-content:start">
+              <div class="cd"><h6><span class="co">3</span>Schedule</h6>
+                <div style="font-size:12px;display:grid;gap:5px"><span><b>Every month</b> on the 1st, 06:00 ET</span><span><b>Format</b> PDF + Excel</span><span><b>Deliver to</b> secure portal; email sends a link only</span><span><b>Recipients</b> Clinical leadership (4)</span><span><b>Next run</b> Nov 1, 2026</span></div>
+              </div>
+              <div class="cd"><h6><span class="co">4</span>Activity log</h6>
+                <div class="audit"><div><span>10:05</span><span>J. Okafor exported Excel</span></div><div><span>10:02</span><span>J. Okafor ran report · 5 facilities</span></div><div><span>Oct 1</span><span>Scheduled run delivered to 4 recipients</span></div><div><span>Oct 1</span><span>P. Shah opened PDF in portal</span></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <div class="cols">
+      <div><h4>Layout zones</h4><ol class="notes">
+        <li><span><b>Report library.</b> Grouped as operational, clinical, survey and compliance, and the user's own reports. Org admins can publish reports to every facility, or restrict them to certain roles.</span></li>
+        <li><span><b>Builder.</b> Filter chips for date range, facility, resident, staff, diagnosis and drug class, plus grouping and chart type. The preview updates live, and the matching table sits below the chart.</span></li>
+        <li><span><b>Scheduling.</b> Frequency, format (PDF, Excel, CSV), recipients and delivery method. Email always carries a link that requires sign-in, never a file containing health information.</span></li>
+        <li><span><b>Activity log.</b> Who ran, viewed, exported or received this report. The full history lives in the organization audit log.</span></li>
+      </ol></div>
+      <div><h4>Survey readiness</h4><ul class="bul">
+        <li><b>State survey packet:</b> one click assembles census, MAR exceptions, incident logs, training records, fire drill logs, infection logs and care plan reviews for a chosen period. The packet is bookmarked and watermarked.</li>
+        <li><b>Auditor access:</b> a time-limited, read-only role scoped to chosen facilities and dates. It is logged in detail and expires automatically.</li>
+        <li><b>Executive scorecards:</b> KPI cards, trends, heat maps and ranked facilities, ready to present or export as a board deck PDF.</li>
+        <li>Large exports run in the background with a progress toast. Files are encrypted, expire after 7 days, and carry the user's name and time in the footer.</li>
+      </ul></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FLOWS ============ -->
+<section id="flows">
+  <header><span class="eyebrow">Behavior</span><h2>Key user flows</h2>
+  <p class="muted">Each flow lists the steps in order, the actor, and what the system does. Steps marked as a hard stop cannot be skipped.</p></header>
+  <div class="grid2">
+
+    <article class="flow"><header><h4>Organization &amp; facility onboarding</h4><span class="tag">Org owner · 20–40 min</span></header>
+      <ol>
+        <li><span><b>Create organization.</b> Legal name, timezone, care types (IDD, senior, behavioral). Sign the BAA electronically. Owner sets up MFA, which is required.</span></li>
+        <li><span><b>Choose plan.</b> Pricing per facility and per licensed bed. The estimate updates as homes are added. Large clients can enable white-label (logo, colors, custom domain).</span></li>
+        <li><span><b>Add facility.</b> Address, license number and expiry, licensed bed count, and the geofence radius for the time clock, drawn on a map.</span></li>
+        <li><span><b>Build floor plan.</b> Drag rooms onto a grid, name them, and set beds per room. Copy the layout from another facility if it matches.</span></li>
+        <li><span><b>Bring in people.</b> Upload staff and residents from CSV or the previous system's export. A mapping screen matches columns, then staff are invited by SMS or email.</span></li>
+        <li><span><b>Apply templates.</b> Choose org care plans, forms, schedules and policies to copy into the facility.</span></li>
+        <li><span><b>Go-live checklist.</b> MAR imported and RN-verified, first schedule published, devices registered. A progress bar shows readiness, and the facility goes live when everything is checked.</span></li>
+      </ol>
+      <div class="out"><b>Result:</b> the facility appears on the Organization Dashboard and billing updates for the next cycle.</div>
+    </article>
+
+    <article class="flow"><header><h4>Resident intake &amp; admission</h4><span class="tag">Manager + RN · tablet</span></header>
+      <ol>
+        <li><span><b>Start intake</b> from Residents → Admit, or turn a pending referral into a resident. A duplicate check runs on name, date of birth and Medicaid ID.</span></li>
+        <li><span><b>Demographics and photo.</b> Take a photo with the camera. Scan the ID and insurance card, and OCR fills in the fields.</span></li>
+        <li><span><b>Clinical.</b> Diagnoses (ICD-10 search), allergies (coded, with severity), diet and swallow level, behavioral notes, physician and pharmacy.</span></li>
+        <li><span><b>Legal and contacts.</b> Guardianship documents, emergency contacts, consent forms. E-signatures captured on screen or sent to the guardian by secure link.</span></li>
+        <li><span><b>Acuity scoring.</b> A guided assessment produces a care level of 1–4 and suggests a care plan template and staffing ratio.</span></li>
+        <li><span><b>Assign room</b> on the room map. The admission checklist (TB test, physical, med reconciliation) creates tasks with due dates.</span></li>
+      </ol>
+      <div class="out"><b>Result:</b> resident profile goes live. A draft care plan goes to the RN for approval. Census and billing update.</div>
+    </article>
+
+    <article class="flow"><header><h4>Scheduled med pass</h4><span class="tag">Med-certified DSP · phone</span></header>
+      <ol>
+        <li><span><b>Open eMAR → 08:00 pass.</b> Residents are sorted by room, with isolated residents last. Allergies and swallow level appear on each card.</span></li>
+        <li><span><b>Verify the resident.</b> Scan the wristband or room QR and confirm the photo. A mismatch is a hard stop.</span></li>
+        <li><span><b>Scan each med.</b> The system checks drug, dose, route, time window, allergies and duplicates. Any failure is a hard stop and requires an RN override with a reason.</span></li>
+        <li><span><b>Pre-checks.</b> Vitals or blood sugar requested by the order. A value outside the order's limits suggests a hold.</span></li>
+        <li><span><b>Confirm administration.</b> One button signs all scanned meds. Refused or held meds need a reason and notify the RN.</span></li>
+        <li><span><b>Pass complete.</b> A summary shows any exceptions. Anything not given by the end of the window becomes a missed-dose alert.</span></li>
+      </ol>
+      <div class="out"><b>Result:</b> MAR updated, compliance metrics recalculated, and pharmacy refills counted down.</div>
+    </article>
+
+    <article class="flow"><header><h4>PRN or controlled substance</h4><span class="tag">DSP + witness · phone</span></header>
+      <ol>
+        <li><span><b>Quick action → Log Med → PRN</b>, or from the resident's page. Only PRN meds that are allowed right now are listed. Locked meds show when they unlock next.</span></li>
+        <li><span><b>Choose a reason</b> from the order's indications, plus a pain or symptom score where applicable.</span></li>
+        <li><span><b>Scan the med.</b> For a controlled med, the count before and after is shown.</span></li>
+        <li><span><b>Witness signs.</b> A second user enters their PIN on the same device. The witness must be a different person with the right credential.</span></li>
+        <li><span><b>Effectiveness check scheduled.</b> A reminder fires at the configured interval (default 60 min) to whoever is assigned to the resident.</span></li>
+        <li><span><b>Rate effectiveness.</b> Effective, partly effective or not effective. If not effective, the RN is notified and a note prompt appears.</span></li>
+      </ol>
+      <div class="out"><b>Result:</b> controlled count updated. A count discrepancy at shift change creates an incident automatically.</div>
+    </article>
+
+    <article class="flow"><header><h4>Start an isolation order</h4><span class="tag">RN or IP · any device</span></header>
+      <ol>
+        <li><span><b>Quick action → Start Isolation</b>, or Resident → Infection → New order. A symptom picker suggests the precaution type based on CDC guidance.</span></li>
+        <li><span><b>Set the order.</b> Type (Contact, Droplet, Airborne, Enhanced barrier, or combined), suspected organism, start time and review interval.</span></li>
+        <li><span><b>Link or create a case</b> with onset date, symptoms and labs ordered.</span></li>
+        <li><span><b>Spread the order.</b> Badge added to the profile, room tile, eMAR and task rows. Task checklists gain PPE steps. A door sign is ready to print.</span></li>
+        <li><span><b>Exposure review.</b> A 72-hour contact list is built from care tasks, roommates and activities. Confirm who to notify or monitor.</span></li>
+        <li><span><b>Review and clear.</b> When the review is due, the RN extends or discontinues the order with criteria met. Clearing removes the badges and triggers a terminal room clean.</span></li>
+      </ol>
+      <div class="out"><b>Result:</b> the order counts on the Infection Board, and the review clock is tracked until it clears.</div>
+    </article>
+
+    <article class="flow"><header><h4>Outbreak declaration</h4><span class="tag">Infection preventionist</span></header>
+      <ol>
+        <li><span><b>Threshold alert.</b> The system flags a possible cluster, for example 2 or more residents with similar symptoms in 72 hours in one facility.</span></li>
+        <li><span><b>Review cluster.</b> The IP sees the line list and epi curve and either dismisses the alert with a reason or starts a declaration.</span></li>
+        <li><span><b>Declare.</b> Pick the organism and affected area. A checklist template for that organism loads.</span></li>
+        <li><span><b>Response actions.</b> Cohorting suggestions for rooms and staff, a stepped-up cleaning schedule with the right disinfectant, paused admissions and group activities, visitor restrictions.</span></li>
+        <li><span><b>Notify.</b> Health department report generated, families and guardians messaged through the portal, staff alerted. Each is logged as done.</span></li>
+        <li><span><b>Monitor daily.</b> New cases, staff off work, PPE burn rate. The situation banner shows at the facility.</span></li>
+        <li><span><b>Close.</b> Available after two incubation periods with no new onset. Generates an after-action report.</span></li>
+      </ol>
+      <div class="out"><b>Result:</b> a complete outbreak record for surveyors and public health, with a timestamp on every step.</div>
+    </article>
+
+    <article class="flow"><header><h4>Incident report &amp; investigation</h4><span class="tag">Any staff → manager</span></header>
+      <ol>
+        <li><span><b>Quick action → Report Incident.</b> Pick the type (fall, behavior, injury, med error, elopement, property) and the resident(s) and staff involved.</span></li>
+        <li><span><b>Describe.</b> What happened, where and when, with photos and immediate actions. Voice-to-text available. Takes about 2 minutes.</span></li>
+        <li><span><b>Severity triage.</b> High severity (injury, abuse allegation, hospital transfer) pages the manager and RN at once and starts the reporting clock for state notification.</span></li>
+        <li><span><b>Investigation.</b> The manager assigns an investigator. A root-cause template, witness statements and a timeline are added.</span></li>
+        <li><span><b>Follow-up.</b> Corrective actions with owners and due dates, care plan updates, and staff supervision notes if needed.</span></li>
+        <li><span><b>Close and notify.</b> Guardian notification logged. The state report is generated if required.</span></li>
+      </ol>
+      <div class="out"><b>Result:</b> the incident is linked to the resident, staff and facility records and feeds the incident KPIs and heat map.</div>
+    </article>
+
+    <article class="flow"><header><h4>Clock in, handoff, clock out</h4><span class="tag">Floor staff · phone</span></header>
+      <ol>
+        <li><span><b>Clock in.</b> The geofence confirms the user is on site (optional per facility). The health screening must pass first.</span></li>
+        <li><span><b>Read handoff.</b> The previous shift's note and any open items appear. Tapping to confirm records that it was read.</span></li>
+        <li><span><b>Work the shift.</b> Today lists assigned residents and tasks. The manager sees workload live and can reassign by dragging.</span></li>
+        <li><span><b>Write handoff.</b> The draft is pre-filled with exceptions: refused meds, incidents, new isolation, PRNs given. Staff add free text.</span></li>
+        <li><span><b>Clock out.</b> Blocked until required items are done or handed off (for example, a controlled count). Overtime warnings appear at the 8- and 12-hour marks.</span></li>
+      </ol>
+      <div class="out"><b>Result:</b> timesheet ready for payroll export and the handoff passed to the next shift.</div>
+    </article>
+
+    <article class="flow"><header><h4>Push a template to facilities</h4><span class="tag">Org admin · desktop</span></header>
+      <ol>
+        <li><span><b>Edit in Templates.</b> For example, update the Fall Prevention care plan to v3. Changes are tracked against v2.</span></li>
+        <li><span><b>Choose targets.</b> Pick facilities and choose a mode: <i>required</i> (locked fields), <i>recommended</i> (facility can accept or adjust), or <i>new residents only</i>.</span></li>
+        <li><span><b>Preview impact.</b> Shows how many active care plans use v2 and which facilities have local changes that would conflict.</span></li>
+        <li><span><b>Publish.</b> Facility managers get a review task. Required changes apply on the effective date.</span></li>
+        <li><span><b>Track adoption.</b> A status grid shows each facility as adopted, pending or adjusted, with the reason for any local adjustment.</span></li>
+      </ol>
+      <div class="out"><b>Result:</b> consistent standards across homes, with version history for surveyors.</div>
+    </article>
+
+    <article class="flow"><header><h4>Family &amp; guardian portal access</h4><span class="tag">Manager → guardian</span></header>
+      <ol>
+        <li><span><b>Invite.</b> From Resident → Contacts. The relationship and legal authority are checked against documents on file.</span></li>
+        <li><span><b>Set visibility.</b> Choose what the guardian can see: daily summary, appointments, selected documents, photos, incident notifications. Medical details are hidden by default.</span></li>
+        <li><span><b>Guardian joins.</b> Identity is verified by a one-time code to a phone number on file, then they set up MFA and accept the portal terms.</span></li>
+        <li><span><b>Use the portal.</b> Read-only updates, document downloads, secure messages to the house team, and e-signatures for consents.</span></li>
+      </ol>
+      <div class="out"><b>Result:</b> every view and download is recorded in the resident's access log.</div>
+    </article>
+  </div>
+</section>
+
+<!-- ============ ACCESS ============ -->
+<section id="access">
+  <header><span class="eyebrow">Governance</span><h2>Roles &amp; permissions</h2>
+  <p class="muted">Permissions combine a role with a scope (organization, or specific facilities). Org admins can clone a role and adjust about 120 individual permissions. The default roles are below.</p></header>
+  <div class="tablewrap"><table class="t">
+    <thead><tr><th>Role</th><th>View health info</th><th>Give meds</th><th>Approve care plans</th><th>Isolation / outbreak</th><th>Schedules &amp; staff</th><th>Org-wide reports</th><th>Export data</th><th>Billing &amp; tenant settings</th></tr></thead>
+    <tbody>
+      <tr><td><b>Org owner</b></td><td class="c">●</td><td class="c">—</td><td class="c">—</td><td class="c">◐ view</td><td class="c">●</td><td class="c">●</td><td class="c">●</td><td class="c">●</td></tr>
+      <tr><td><b>Org admin</b></td><td class="c">●</td><td class="c">—</td><td class="c">—</td><td class="c">◐ view</td><td class="c">●</td><td class="c">●</td><td class="c">●</td><td class="c">◐ no billing</td></tr>
+      <tr><td><b>Facility manager</b></td><td class="c">◐ own homes</td><td class="c">—</td><td class="c">◐ co-sign</td><td class="c">◐ start</td><td class="c">◐ own homes</td><td class="c">—</td><td class="c">◐ own homes</td><td class="c">—</td></tr>
+      <tr><td><b>RN / clinical lead</b></td><td class="c">◐ assigned</td><td class="c">●</td><td class="c">●</td><td class="c">◐ start, clear</td><td class="c">—</td><td class="c">—</td><td class="c">◐ clinical</td><td class="c">—</td></tr>
+      <tr><td><b>Infection preventionist</b></td><td class="c">◐ infection data</td><td class="c">—</td><td class="c">—</td><td class="c">● declare</td><td class="c">—</td><td class="c">◐ infection</td><td class="c">◐ line lists</td><td class="c">—</td></tr>
+      <tr><td><b>Med-certified DSP</b></td><td class="c">◐ assigned</td><td class="c">●</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td></tr>
+      <tr><td><b>DSP</b></td><td class="c">◐ care info</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td></tr>
+      <tr><td><b>Auditor</b></td><td class="c">◐ read, time-limited</td><td class="c">—</td><td class="c">—</td><td class="c">◐ view</td><td class="c">—</td><td class="c">◐ granted</td><td class="c">—</td><td class="c">—</td></tr>
+      <tr><td><b>Guardian (portal)</b></td><td class="c">◐ shared items</td><td class="c">—</td><td class="c">◐ e-sign</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">◐ shared docs</td><td class="c">—</td></tr>
+    </tbody>
+  </table></div>
+  <p class="muted" style="font-size:14px">● full · ◐ limited as noted · — none. Every role sees only its own tenant. "Assigned" means residents in facilities the user is scheduled for or assigned to.</p>
+</section>
+
+<!-- ============ ALERTS ============ -->
+<section id="alerts">
+  <header><span class="eyebrow">Signals</span><h2>Alerts &amp; escalation</h2>
+  <p class="muted">Alerts are tiered so that urgent ones stand out. Push notifications never include a resident's name, only the room and the event type.</p></header>
+  <div class="tablewrap"><table class="t">
+    <thead><tr><th>Event</th><th>Tier</th><th>First recipient</th><th>Escalates to</th><th>Channels</th></tr></thead>
+    <tbody>
+      <tr><td>Wrong-resident or allergy scan</td><td><span class="pill crit"><i></i>Hard stop</span></td><td>Person scanning</td><td>RN for override</td><td>In-app block</td></tr>
+      <tr><td>Missed dose (window ended)</td><td><span class="pill crit"><i></i>Urgent</span></td><td>Assigned med staff</td><td>Shift lead at 30 min, RN at 60 min</td><td>Push, in-app</td></tr>
+      <tr><td>New infection case / possible cluster</td><td><span class="pill crit"><i></i>Urgent</span></td><td>RN, infection preventionist</td><td>Facility manager, org IP</td><td>Push, in-app, email</td></tr>
+      <tr><td>High-severity incident</td><td><span class="pill crit"><i></i>Urgent</span></td><td>Facility manager, RN</td><td>Org admin after 1 h unacknowledged</td><td>Push, SMS, in-app</td></tr>
+      <tr><td>Isolation review due / overdue</td><td><span class="pill warn"><i></i>Due · then urgent</span></td><td>RN</td><td>IP when overdue</td><td>In-app, push</td></tr>
+      <tr><td>PPE below reorder point</td><td><span class="pill warn"><i></i>Pending</span></td><td>Facility manager</td><td>Org operations at 3 days left</td><td>In-app, email</td></tr>
+      <tr><td>Credential expiring (30 / 14 / 0 days)</td><td><span class="pill warn"><i></i>Pending</span></td><td>Staff member</td><td>Manager; scheduling blocked at 0</td><td>Email, in-app</td></tr>
+      <tr><td>Refill due (7 days on hand)</td><td><span class="pill info"><i></i>Info</span></td><td>Pharmacy liaison</td><td>RN at 3 days</td><td>In-app, pharmacy feed</td></tr>
+    </tbody>
+  </table></div>
+  <p class="muted" style="font-size:14px">Users can snooze info and pending alerts for up to 2 hours. Urgent alerts and hard stops can't be snoozed. Quiet hours apply to email only.</p>
+</section>
+
+<!-- ============ TRUST ============ -->
+<section id="trust">
+  <header><span class="eyebrow">Trust</span><h2>Security, tenancy &amp; HIPAA in the interface</h2>
+  <p class="muted">Most security work happens in the architecture. The items below are the parts users see and touch.</p></header>
+  <div class="grid2">
+    <div class="panel"><h4>Tenant isolation</h4><ul class="bul">
+      <li>Each organization signs in on its own subdomain or white-label domain, with its branding on the sign-in page.</li>
+      <li>Every record carries a tenant ID, enforced by database row-level security, and each tenant has its own encryption key.</li>
+      <li>Support staff can't see tenant data unless the client grants time-limited access, which the client can watch in the audit log.</li>
+      <li>Search, exports and integrations are scoped to one tenant at the API layer, and cross-tenant tests run in CI.</li>
+    </ul></div>
+    <div class="panel"><h4>Sign-in &amp; sessions</h4><ul class="bul">
+      <li>SSO (SAML or OIDC) for enterprise clients. MFA required for admins and anyone who can export.</li>
+      <li>Shared floor devices: a full sign-in at the start of the shift, then a 4–6 digit PIN to resume after the screen locks (default 5 minutes).</li>
+      <li>The lock screen and app switcher hide all health information.</li>
+      <li>Devices are registered per facility and can be wiped remotely.</li>
+    </ul></div>
+    <div class="panel"><h4>Minimum necessary &amp; break-the-glass</h4><ul class="bul">
+      <li>Lists show only the fields the role needs. Sensitive items such as behavioral health and HIV status are hidden until revealed with one tap, and each reveal is logged.</li>
+      <li>Opening a resident outside the user's assignment asks for a reason (emergency, covering a shift) and alerts the privacy officer.</li>
+      <li>Exports carry a watermark with the user's name and time.</li>
+    </ul></div>
+    <div class="panel"><h4>Audit trail</h4><ul class="bul">
+      <li>Append-only log of every view, create, update, delete, print, export and permission change, with the user, device, IP, facility and before/after values.</li>
+      <li>Shown on each record as a History drawer, and organization-wide in Settings → Audit with filters and export.</li>
+      <li>Retained for at least 6 years, matching HIPAA documentation retention.</li>
+    </ul></div>
+  </div>
+</section>
+
+<!-- ============ MOBILE ============ -->
+<section id="mobile">
+  <header><span class="eyebrow">Field conditions</span><h2>Mobile &amp; offline</h2>
+  <p class="muted">Group homes often have weak Wi-Fi in back bedrooms and basements, so floor workflows must keep working when the connection drops.</p></header>
+  <div class="grid3">
+    <div class="panel"><h4>What works offline</h4><p class="muted">Med pass (scheduled and PRN), care tasks, notes, vitals, incident drafts, screening, clock in and out (with device time and a GPS fix), and reading handoff notes. Each facility's shift data is cached encrypted on the device at clock-in.</p></div>
+    <div class="panel"><h4>What stays online only</h4><p class="muted">Controlled-substance counts at shift change, isolation order changes, outbreak declarations, care plan approvals, and exports. These need the latest data from the server so two devices can't conflict.</p></div>
+    <div class="panel"><h4>Sync &amp; conflicts</h4><p class="muted">A header chip shows Online, Offline, or how many items are waiting to sync. Records sync in order with device timestamps. If two people gave the same dose offline, a duplicate-dose conflict is flagged to the RN and is never merged silently.</p></div>
+    <div class="panel"><h4>Device patterns</h4><p class="muted">Phone: bottom nav, quick-action button, swipe actions, camera barcode scanning. Tablet: two-pane views (list and detail), works with a Bluetooth scanner. Desktop: left sidebar, data-dense grids, keyboard shortcuts.</p></div>
+    <div class="panel"><h4>Floor mode</h4><p class="muted">A per-user setting that raises the base font to 18px, uses 48px targets, simplifies the Today view, and turns on glove-friendly large buttons for confirming meds.</p></div>
+    <div class="panel"><h4>Performance targets</h4><p class="muted">Today screen interactive in under 2 seconds on a mid-range Android over 3G. A scan confirms in under 300 ms. Offline actions save locally in under 100 ms.</p></div>
+  </div>
+</section>
+</main>
+</div>
+
+<script>
+(function(){
+  var btn=document.getElementById('themebtn'), root=document.documentElement;
+  var modes=['system','light','dark'], names={system:'System',light:'Light',dark:'Dark'}, i=0;
+  try{var s=localStorage.getItem('ch1-theme'); if(s&&modes.indexOf(s)>-1){i=modes.indexOf(s);}}catch(e){}
+  function apply(){var m=modes[i]; if(m==='system'){root.removeAttribute('data-theme');}else{root.setAttribute('data-theme',m);} btn.textContent='Theme: '+names[m];}
+  apply();
+  btn.addEventListener('click',function(){i=(i+1)%modes.length; apply(); try{localStorage.setItem('ch1-theme',modes[i]);}catch(e){}});
+})();
+</script>
