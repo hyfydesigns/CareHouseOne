@@ -46,7 +46,7 @@ export default async function DashboardPage() {
           </table>
         </div>
       </section>
-      <p className="muted small">Residents, medications, vitals and notes arrive in the next build stages.</p>
+      <p className="muted small">Vitals, progress notes, shift sign-in and diagnoses arrive in the next build stage.</p>
     </>
   );
 }

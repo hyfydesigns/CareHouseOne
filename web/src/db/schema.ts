@@ -142,6 +142,120 @@ export const outbox = pgTable("outbox", {
   createdAt: createdAt(),
 });
 
+// ---------------------------------------------------------------- residents and medications
+
+export const residentStatusEnum = pgEnum("resident_status", ["active", "discharged"]);
+
+export const residents = pgTable(
+  "residents",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    facilityId: uuid("facility_id").notNull().references(() => facilities.id),
+    firstName: text("first_name").notNull(),
+    lastName: text("last_name").notNull(),
+    room: text("room").notNull().default(""),
+    dateOfBirth: text("date_of_birth"),
+    /** Printed on the wristband and the room card; scanned to confirm the right person. */
+    wristbandCode: text("wristband_code").notNull(),
+    allergies: text("allergies").array().notNull().default(sql`'{}'::text[]`),
+    diet: text("diet").notNull().default("Regular"),
+    codeStatus: text("code_status").notNull().default("Full code"),
+    guardian: text("guardian"),
+    admittedOn: text("admitted_on"),
+    status: residentStatusEnum("status").notNull().default("active"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("residents_facility_idx").on(t.facilityId), uniqueIndex("residents_wristband_uq").on(t.orgId, t.wristbandCode)],
+);
+
+export const orderTypeEnum = pgEnum("order_type", ["scheduled", "prn"]);
+export const orderStatusEnum = pgEnum("order_status", ["active", "stopped"]);
+
+export const medicationOrders = pgTable(
+  "medication_orders",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    residentId: uuid("resident_id").notNull().references(() => residents.id),
+    name: text("name").notNull(),
+    strength: text("strength").notNull(),
+    route: text("route").notNull(),
+    purpose: text("purpose").notNull(),
+    type: orderTypeEnum("type").notNull(),
+    /** Local times of day ("08:00") for scheduled orders, in the home's time zone. */
+    times: text("times").array().notNull().default(sql`'{}'::text[]`),
+    /** Hold if the top blood pressure number is under 100. */
+    bpCheck: boolean("bp_check").notNull().default(false),
+    prnReasons: text("prn_reasons").array().notNull().default(sql`'{}'::text[]`),
+    prnMinIntervalMinutes: integer("prn_min_interval_minutes"),
+    prnMaxPerDay: integer("prn_max_per_day"),
+    instructions: text("instructions"),
+    prescriber: text("prescriber"),
+    /** Barcode on the pharmacy package, if known; scanned during the medication pass. */
+    packageCode: text("package_code"),
+    startDate: text("start_date").notNull(),
+    stopDate: text("stop_date"),
+    status: orderStatusEnum("status").notNull().default("active"),
+    createdBy: uuid("created_by").references(() => users.id),
+    createdAt: createdAt(),
+    stoppedBy: uuid("stopped_by").references(() => users.id),
+    stoppedAt: timestamp("stopped_at", { withTimezone: true }),
+    stopReason: text("stop_reason"),
+  },
+  (t) => [index("orders_resident_idx").on(t.residentId)],
+);
+
+export const doseOutcomeEnum = pgEnum("dose_outcome", ["given", "refused", "held"]);
+
+/** One row per dose event. Scheduled doses are unique per order and time slot. */
+export const administrations = pgTable(
+  "administrations",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    residentId: uuid("resident_id").notNull().references(() => residents.id),
+    orderId: uuid("order_id").notNull().references(() => medicationOrders.id),
+    /** The scheduled slot; null for as-needed doses. */
+    scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
+    outcome: doseOutcomeEnum("outcome").notNull(),
+    reason: text("reason"),
+    note: text("note"),
+    bpSystolic: integer("bp_systolic"),
+    bpDiastolic: integer("bp_diastolic"),
+    late: boolean("late").notNull().default(false),
+    residentScanned: boolean("resident_scanned").notNull(),
+    packageScanned: boolean("package_scanned").notNull(),
+    recordedBy: uuid("recorded_by").notNull().references(() => users.id),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("administrations_slot_uq").on(t.orderId, t.scheduledFor).where(sql`${t.scheduledFor} is not null`),
+    index("administrations_resident_idx").on(t.residentId, t.recordedAt),
+  ],
+);
+
+export const followupResultEnum = pgEnum("followup_result", ["effective", "partly_effective", "not_effective"]);
+
+export const prnFollowups = pgTable(
+  "prn_followups",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    administrationId: uuid("administration_id").notNull().references(() => administrations.id),
+    residentId: uuid("resident_id").notNull().references(() => residents.id),
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+    result: followupResultEnum("result"),
+    note: text("note"),
+    recordedBy: uuid("recorded_by").references(() => users.id),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }),
+  },
+  (t) => [index("followups_resident_idx").on(t.residentId)],
+);
+
 export type Role = (typeof roleEnum.enumValues)[number];
+export type Resident = typeof residents.$inferSelect;
+export type MedicationOrder = typeof medicationOrders.$inferSelect;
+export type Administration = typeof administrations.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type Facility = typeof facilities.$inferSelect;

@@ -48,3 +48,18 @@ export function canViewAudit(actor: Pick<Actor, "role">): boolean {
 export function canViewStaff(actor: Pick<Actor, "role">): boolean {
   return isOrgAdmin(actor as Actor) || actor.role === "manager" || actor.role === "nurse";
 }
+
+/** Owners and admins see every home; everyone else only the homes they're assigned to. */
+export function canSeeFacility(actor: Actor, facilityId: string): boolean {
+  return isOrgAdmin(actor) || actor.facilityIds.includes(facilityId);
+}
+
+/** Add, edit and discharge residents; enter and stop medication orders. The nurse's job; managers can stand in. */
+export function canManageCare(actor: Pick<Actor, "role">): boolean {
+  return ["owner", "admin", "manager", "nurse"].includes(actor.role);
+}
+
+/** Giving medications: nurses and med-certified caregivers only. */
+export function canGiveMeds(actor: Pick<Actor, "role">): boolean {
+  return actor.role === "nurse" || actor.role === "med_caregiver";
+}

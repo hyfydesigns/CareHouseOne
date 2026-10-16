@@ -119,3 +119,24 @@ td { padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: to
   .main { padding: 16px; }
 }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* Stage 2: residents and medications */
+.stopbox { font-size: 16px; font-weight: 700; border-width: 2px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip { display: inline-flex; align-items: center; min-height: 40px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); text-decoration: none; font-weight: 700; }
+.chip[aria-current="page"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.dose { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.dose:last-child { border-bottom: 0; }
+.allergy { background: var(--crit-soft); color: var(--crit); border-radius: 8px; padding: 6px 10px; font-weight: 700; }
+.grid-mar { font-size: 12.5px; }
+.grid-mar th.d, .grid-mar td.d { text-align: center; min-width: 28px; padding: 6px 2px; }
+.grid-mar th:first-child, .grid-mar td:first-child { position: sticky; left: 0; background: var(--surface); min-width: 170px; z-index: 1; }
+.grid-mar .given { color: var(--ok); font-weight: 700; }
+.grid-mar .refused { color: var(--crit); font-weight: 700; }
+.grid-mar .held { color: var(--warn); font-weight: 700; }
+.grid-mar .missed { background: var(--crit-soft); color: var(--crit); font-weight: 700; }
+.grid-mar .due { background: var(--warn-soft); }
+.grid-mar .today { box-shadow: inset 0 0 0 2px var(--accent); }
+.big { min-height: 52px; font-size: 17px; padding: 10px 22px; }
+.wristband { font-family: ui-monospace, monospace; font-size: 18px; letter-spacing: 0.08em; }

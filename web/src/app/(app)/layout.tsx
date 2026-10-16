@@ -12,6 +12,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <span className="mark" aria-hidden="true">C1</span>CareHouse One
         </div>
         <NavLink href="/dashboard">Home</NavLink>
+        <NavLink href="/meds">Medication pass</NavLink>
+        <NavLink href="/residents">Residents</NavLink>
         {canViewStaff(me) && <NavLink href="/staff">Staff</NavLink>}
         {canViewAudit(me) && <NavLink href="/audit">Audit log</NavLink>}
         <div className="foot">
