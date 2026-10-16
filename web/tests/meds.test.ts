@@ -7,6 +7,7 @@ import type { Actor } from "@/lib/permissions";
 import { zonedToUtc } from "@/lib/time";
 import { createOrder, medicationPass, monthRecord, recordFollowup, recordPrnDose, recordScheduledDose, stopOrder } from "@/server/meds";
 import { createResident, getResident } from "@/server/residents";
+import { setResidentCheck } from "@/server/org";
 import { seedCare, seedDemo, type Seeded, type SeededCare } from "@/server/seed";
 
 const TZ = "America/New_York";
@@ -212,6 +213,36 @@ describe("stopping orders and the monthly record", () => {
     expect(row("Sertraline", "08:00").cells[15]).toMatchObject({ outcome: "given", late: true });
     expect(row("Sertraline", "20:00").cells[15]).toMatchObject({ outcome: "missed" });
     expect(row("Lisinopril", "08:00").cells[16]).toBeNull();
+  });
+});
+
+describe("resident check setting", () => {
+  const amlo = () => ({ orderId: c.orders.amlodipine, scheduledFor: slot8, packageConfirmed: true, outcome: "given" });
+  const owner = (): Actor => ({ id: s.users.owner.id, role: "owner", facilityIds: [s.facilities.cedarRidge, s.facilities.mapleHouse] });
+
+  it("defaults to two identifiers: no wristband needed, but the caregiver must confirm", async () => {
+    const unconfirmed = await inOrg((tx) => recordScheduledDose(tx, medCaregiver, amlo(), at("08:05")));
+    expect(!unconfirmed.ok && unconfirmed.error).toMatch(/name and date of birth/);
+    const ok = await inOrg((tx) => recordScheduledDose(tx, medCaregiver, { ...amlo(), residentConfirmed: true }, at("08:05")));
+    expect(ok.ok).toBe(true);
+    const [dose] = await db.select().from(administrations).where(eq(administrations.orderId, c.orders.amlodipine));
+    expect(dose.residentScanned).toBe(false);
+  });
+
+  it("only lets owners and admins change it, and logs the change", async () => {
+    expect((await inOrg((tx) => setResidentCheck(tx, nurse, s.orgId, "wristband"))).ok).toBe(false);
+    expect((await inOrg((tx) => setResidentCheck(tx, owner(), s.orgId, "wristband"))).ok).toBe(true);
+    const logged = await db.select().from(auditLog).where(eq(auditLog.action, "setting_changed"));
+    expect(logged[0]?.details).toMatchObject({ from: "two_identifiers", to: "wristband" });
+  });
+
+  it("in wristband mode, requires a scan even if the caregiver ticks the confirmation", async () => {
+    const met = { orderId: c.orders.metformin, scheduledFor: at("17:00").toISOString(), packageConfirmed: true, outcome: "given", residentConfirmed: true };
+    const noScan = await inOrg((tx) => recordScheduledDose(tx, medCaregiver, met, at("17:05")));
+    expect(!noScan.ok && noScan.error).toMatch(/Scan the resident's wristband/);
+    const scanned = await inOrg((tx) => recordScheduledDose(tx, medCaregiver, { ...met, residentCode: c.residents.marcus.wristbandCode }, at("17:05")));
+    expect(scanned.ok).toBe(true);
+    await inOrg((tx) => setResidentCheck(tx, owner(), s.orgId, "two_identifiers"));
   });
 });
 

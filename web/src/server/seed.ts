@@ -90,17 +90,17 @@ export async function seedDoseHistory(db: DB, s: Seeded, now: Date, days = 14): 
 export async function seedCare(db: DB, s: Seeded): Promise<SeededCare> {
   const cr = s.facilities.cedarRidge;
   const mh = s.facilities.mapleHouse;
-  const people: Array<[keyof SeededCare["residents"], string, string, string, string, string[], string]> = [
-    ["diego", "Diego", "Reyes", "101", cr, ["Sulfa drugs (rash)"], "Regular, low sodium"],
-    ["marcus", "Marcus", "Bell", "102", cr, [], "Diabetic"],
-    ["lena", "Lena", "Kim", "106", cr, [], "Regular"],
-    ["ben", "Ben", "Carver", "1", mh, ["Penicillin (hives)"], "Regular"],
+  const people: Array<[keyof SeededCare["residents"], string, string, string, string, string[], string, string]> = [
+    ["diego", "Diego", "Reyes", "101", cr, ["Sulfa drugs (rash)"], "Regular, low sodium", "1981-04-12"],
+    ["marcus", "Marcus", "Bell", "102", cr, [], "Diabetic", "1990-09-30"],
+    ["lena", "Lena", "Kim", "106", cr, [], "Regular", "1958-01-22"],
+    ["ben", "Ben", "Carver", "1", mh, ["Penicillin (hives)"], "Regular", "1975-06-05"],
   ];
   const residentsOut = {} as SeededCare["residents"];
-  for (const [key, first, last, room, facilityId, allergies, diet] of people) {
+  for (const [key, first, last, room, facilityId, allergies, diet, dateOfBirth] of people) {
     const [r] = await db
       .insert(residents)
-      .values({ orgId: s.orgId, facilityId, firstName: first, lastName: last, room, wristbandCode: newWristbandCode(), allergies, diet, admittedOn: "2024-03-01" })
+      .values({ orgId: s.orgId, facilityId, firstName: first, lastName: last, room, dateOfBirth, wristbandCode: newWristbandCode(), allergies, diet, admittedOn: "2024-03-01" })
       .returning();
     residentsOut[key] = { id: r.id, wristbandCode: r.wristbandCode };
   }

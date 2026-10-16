@@ -123,6 +123,23 @@ function keepValues(formAction: (fd: FormData) => void) {
   };
 }
 
+export type ResidentCheckMode = "two_identifiers" | "wristband";
+export type Who = { name: string; dateOfBirth: string | null; room: string };
+
+/** Step 1 of every dose: confirm the right person, by wristband scan or two identifiers. */
+function ResidentCheck({ mode, who, step }: { mode: ResidentCheckMode; who: Who; step: string }) {
+  if (mode === "wristband") {
+    return <ScanField id="residentCode" name="residentCode" label={`${step}Scan the resident's wristband`} hint="Or the code on their room card." autoFocus />;
+  }
+  const second = who.dateOfBirth ? `date of birth ${who.dateOfBirth}` : `room ${who.room} (no date of birth on file)`;
+  return (
+    <label className="check" style={{ alignItems: "start" }}>
+      <input type="checkbox" name="residentConfirmed" required />
+      <span>{step}I&apos;ve checked two identifiers: this is <b>{who.name}</b>, {second}.</span>
+    </label>
+  );
+}
+
 function useBackOnSuccess(state: FormState, back: string) {
   const router = useRouter();
   useEffect(() => {
@@ -132,7 +149,7 @@ function useBackOnSuccess(state: FormState, back: string) {
   }, [state.message, back, router]);
 }
 
-export function GiveForm({ action, orderId, scheduledFor, hasPackageCode, bpCheck, label, back }: { action: Action; orderId: string; scheduledFor: string; hasPackageCode: boolean; bpCheck: boolean; label: string; back: string }) {
+export function GiveForm({ action, orderId, scheduledFor, hasPackageCode, bpCheck, label, back, mode, who }: { action: Action; orderId: string; scheduledFor: string; hasPackageCode: boolean; bpCheck: boolean; label: string; back: string; mode: ResidentCheckMode; who: Who }) {
   const [state, formAction, pending] = useActionState(action, {});
   const [outcome, setOutcome] = useState<"given" | "refused" | "held">("given");
   useBackOnSuccess(state, back);
@@ -141,7 +158,7 @@ export function GiveForm({ action, orderId, scheduledFor, hasPackageCode, bpChec
     <form onSubmit={keepValues(formAction)} className="stack">
       <input type="hidden" name="orderId" value={orderId} />
       <input type="hidden" name="scheduledFor" value={scheduledFor} />
-      <ScanField id="residentCode" name="residentCode" label="1. Scan the resident's wristband" hint="Or the code on their room card." autoFocus />
+      <ResidentCheck mode={mode} who={who} step="1. " />
       {hasPackageCode ? (
         <ScanField id="packageCode" name="packageCode" label="2. Scan the medication package" />
       ) : (
@@ -184,7 +201,7 @@ export function GiveForm({ action, orderId, scheduledFor, hasPackageCode, bpChec
   );
 }
 
-export function PrnForm({ action, orderId, hasPackageCode, reasons, label, back }: { action: Action; orderId: string; hasPackageCode: boolean; reasons: string[]; label: string; back: string }) {
+export function PrnForm({ action, orderId, hasPackageCode, reasons, label, back, mode, who }: { action: Action; orderId: string; hasPackageCode: boolean; reasons: string[]; label: string; back: string; mode: ResidentCheckMode; who: Who }) {
   const [state, formAction, pending] = useActionState(action, {});
   useBackOnSuccess(state, back);
   if (state.message) return <Status state={state} />;
@@ -195,7 +212,7 @@ export function PrnForm({ action, orderId, hasPackageCode, reasons, label, back 
         <legend>Why are you giving it?</legend>
         {reasons.map((r) => <label key={r} className="check"><input type="radio" name="reason" value={r} required /> {r}</label>)}
       </fieldset>
-      <ScanField id="residentCode" name="residentCode" label="Scan the resident's wristband" />
+      <ResidentCheck mode={mode} who={who} step="" />
       {hasPackageCode ? (
         <ScanField id="packageCode" name="packageCode" label="Scan the medication package" />
       ) : (

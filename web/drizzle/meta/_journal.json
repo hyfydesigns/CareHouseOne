@@ -29,6 +29,13 @@
       "when": 1792163502970,
       "tag": "0003_medications_security",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792165057388,
+      "tag": "0004_resident_check",
+      "breakpoints": true
     }
   ]
 }

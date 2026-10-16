@@ -1,0 +1,2 @@
+CREATE TYPE "public"."resident_check" AS ENUM('two_identifiers', 'wristband');--> statement-breakpoint
+ALTER TABLE "organizations" ADD COLUMN "resident_check" "resident_check" DEFAULT 'two_identifiers' NOT NULL;

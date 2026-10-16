@@ -48,7 +48,7 @@ export async function giveAction(_: FormState, fd: FormData): Promise<FormState>
     recordScheduledDose(
       tx,
       actor,
-      { ...obj(fd, ["orderId", "scheduledFor", "residentCode", "packageCode", "outcome", "reason", "note", "bpSystolic", "bpDiastolic"]), packageConfirmed: fd.get("packageConfirmed") === "on" },
+      { ...obj(fd, ["orderId", "scheduledFor", "residentCode", "packageCode", "outcome", "reason", "note", "bpSystolic", "bpDiastolic"]), packageConfirmed: fd.get("packageConfirmed") === "on", residentConfirmed: fd.get("residentConfirmed") === "on" },
       new Date(),
     ),
   );
@@ -58,7 +58,7 @@ export async function giveAction(_: FormState, fd: FormData): Promise<FormState>
 
 export async function prnAction(_: FormState, fd: FormData): Promise<FormState> {
   const r = await asMe((tx, actor) =>
-    recordPrnDose(tx, actor, { ...obj(fd, ["orderId", "residentCode", "packageCode", "reason", "note"]), packageConfirmed: fd.get("packageConfirmed") === "on" }, new Date()),
+    recordPrnDose(tx, actor, { ...obj(fd, ["orderId", "residentCode", "packageCode", "reason", "note"]), packageConfirmed: fd.get("packageConfirmed") === "on", residentConfirmed: fd.get("residentConfirmed") === "on" }, new Date()),
   );
   if (r.ok) revalidatePath("/meds");
   return r.ok ? { message: r.message } : { error: r.error, stop: !!r.stop };

@@ -5,6 +5,7 @@ import {
   administrations,
   facilities,
   medicationOrders,
+  organizations,
   prnFollowups,
   residents,
   users,
@@ -226,7 +227,8 @@ export type DoseResult = { ok: true; message: string } | { ok: false; error: str
 
 const checks = z.object({
   orderId: z.string().uuid(),
-  residentCode: z.string().trim().min(1, "Scan the resident's wristband or room card."),
+  residentCode: z.string().trim().optional(),
+  residentConfirmed: z.coerce.boolean().default(false),
   packageCode: z.string().trim().optional(),
   packageConfirmed: z.coerce.boolean().default(false),
   note: z.string().trim().max(500).optional(),
@@ -247,23 +249,31 @@ async function loadForDose(tx: Tx, actor: Actor, orderId: string) {
   if (!o) return null;
   const r = await getResident(tx, actor, o.residentId);
   if (!r || r.status !== "active") return null;
-  return { order: o, resident: r, tz: await tzOf(tx, r.facilityId) };
+  const [org] = await tx.select({ check: organizations.residentCheck }).from(organizations).where(eq(organizations.id, r.orgId));
+  return { order: o, resident: r, tz: await tzOf(tx, r.facilityId), residentCheck: org?.check ?? "two_identifiers" };
 }
 
 /** The safety checks every dose passes before it can be recorded as given. */
 async function safetyStops(
   tx: Tx,
   actor: Actor,
-  ctx: { order: MedicationOrder; resident: Resident },
-  input: { residentCode: string; packageCode?: string; packageConfirmed: boolean },
+  ctx: { order: MedicationOrder; resident: Resident; residentCheck: "two_identifiers" | "wristband" },
+  input: { residentCode?: string; residentConfirmed: boolean; packageCode?: string; packageConfirmed: boolean },
   giving: boolean,
 ): Promise<DoseResult | null> {
   const stop = async (code: StopCode, error: string): Promise<DoseResult> => {
     await audit(tx, { orgId: ctx.resident.orgId, actorId: actor.id, action: "medication_stop", entity: "resident", entityId: ctx.resident.id, details: { code, orderId: ctx.order.id } });
     return { ok: false, error, stop: code };
   };
-  if (input.residentCode.trim().toUpperCase() !== ctx.resident.wristbandCode) {
+  // Right person: a scanned code must always match. Without a scan, organizations that use
+  // wristbands require one; the others require the caregiver to confirm two identifiers.
+  const code = (input.residentCode ?? "").trim().toUpperCase();
+  if (code && code !== ctx.resident.wristbandCode) {
     return stop("wrong_resident", `Stop. That code isn't ${residentName(ctx.resident)}'s. Check you're with the right person and scan their wristband again.`);
+  }
+  if (!code && ctx.residentCheck === "wristband") return { ok: false, error: "Scan the resident's wristband or room card." };
+  if (!code && !input.residentConfirmed) {
+    return { ok: false, error: `Confirm you're with ${residentName(ctx.resident)}: check their name and date of birth.` };
   }
   if (!giving) return null;
   if (ctx.order.packageCode) {
@@ -319,7 +329,7 @@ export async function recordScheduledDose(tx: Tx, actor: Actor, raw: unknown, no
     bpSystolic: v.bpSystolic ?? null,
     bpDiastolic: v.bpDiastolic ?? null,
     late,
-    residentScanned: true,
+    residentScanned: !!v.residentCode,
     packageScanned: !!ctx.order.packageCode,
     recordedBy: actor.id,
     recordedAt: now,
@@ -366,7 +376,7 @@ export async function recordPrnDose(tx: Tx, actor: Actor, raw: unknown, now: Dat
       outcome: "given",
       reason: v.reason,
       note: v.note || null,
-      residentScanned: true,
+      residentScanned: !!v.residentCode,
       packageScanned: !!ctx.order.packageCode,
       recordedBy: actor.id,
       recordedAt: now,

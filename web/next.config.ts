@@ -12,6 +12,8 @@ const nextConfig: NextConfig = {
   // Native and WASM packages run on the server only and must not be bundled.
   serverExternalPackages: ["@node-rs/argon2", "@electric-sql/pglite", "pg"],
   poweredByHeader: false,
+  // Keep the development badge away from the sidebar's Sign out button.
+  devIndicators: { position: "bottom-right" },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

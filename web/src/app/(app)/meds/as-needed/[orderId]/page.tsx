@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { getDb, withTenant } from "@/db/client";
-import { medicationOrders } from "@/db/schema";
+import { medicationOrders, organizations } from "@/db/schema";
 import { canGiveMeds } from "@/lib/permissions";
 import { requireUser } from "@/lib/session";
 import { getResident } from "@/server/residents";
@@ -20,10 +20,12 @@ export default async function PrnPage({ params, searchParams }: { params: Promis
     const [o] = await tx.select().from(medicationOrders).where(eq(medicationOrders.id, orderId));
     if (!o || o.type !== "prn") return null;
     const r = await getResident(tx, actor, o.residentId);
-    return r ? { o, r } : null;
+    if (!r) return null;
+    const [org] = await tx.select({ check: organizations.residentCheck }).from(organizations).where(eq(organizations.id, r.orgId));
+    return { o, r, mode: org.check };
   });
   if (!data) notFound();
-  const { o, r } = data;
+  const { o, r, mode } = data;
   const back = safeBack(sp.back);
   return (
     <>
@@ -35,7 +37,7 @@ export default async function PrnPage({ params, searchParams }: { params: Promis
         </div>
         {r.allergies.length ? <span className="allergy">Allergies: {r.allergies.join(", ")}</span> : <span className="pill ok">No known allergies</span>}
         {canGiveMeds(me) ? (
-          <PrnForm action={prnAction} orderId={o.id} hasPackageCode={!!o.packageCode} reasons={o.prnReasons} label={`${o.name} ${o.strength}`} back={back} />
+          <PrnForm action={prnAction} orderId={o.id} hasPackageCode={!!o.packageCode} reasons={o.prnReasons} label={`${o.name} ${o.strength}`} back={back} mode={mode} who={{ name: `${r.firstName} ${r.lastName}`, dateOfBirth: r.dateOfBirth, room: r.room }} />
         ) : (
           <p className="error">Only nurses and med-certified caregivers can give medications.</p>
         )}

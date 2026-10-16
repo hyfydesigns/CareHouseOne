@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import QRCode from "qrcode";
 import { eq } from "drizzle-orm";
 import { getDb, withTenant } from "@/db/client";
-import { facilities } from "@/db/schema";
+import { facilities, organizations } from "@/db/schema";
 import { canGiveMeds, canManageCare } from "@/lib/permissions";
 import { requireUser } from "@/lib/session";
 import { localDate, localTime } from "@/lib/time";
@@ -27,6 +27,7 @@ export default async function ResidentPage({ params, searchParams }: { params: P
     const r = await getResident(tx, actor, id);
     if (!r) return null;
     const [home] = await tx.select().from(facilities).where(eq(facilities.id, r.facilityId));
+    const [org] = await tx.select({ check: organizations.residentCheck }).from(organizations).where(eq(organizations.id, r.orgId));
     const today = localDate(now, home.timeZone);
     const [cy, cm] = today.split("-").map(Number);
     const m = /^\d{4}-\d{2}$/.test(sp.m ?? "") ? sp.m! : `${cy}-${String(cm).padStart(2, "0")}`;
@@ -34,6 +35,7 @@ export default async function ResidentPage({ params, searchParams }: { params: P
     return {
       r,
       home,
+      wristbands: org.check === "wristband",
       today,
       ym: { y, mo, cy, cm },
       slots: tab === "today" ? await residentSlots(tx, r, now) : [],
@@ -55,14 +57,14 @@ export default async function ResidentPage({ params, searchParams }: { params: P
         <div className="row">
           <div>
             <h1>{r.firstName} {r.lastName}</h1>
-            <p className="muted" style={{ margin: 0 }}>Room {r.room} · {home.name} · Diet: {r.diet} · {r.codeStatus}</p>
+            <p className="muted" style={{ margin: 0 }}>Room {r.room} · {home.name}{r.dateOfBirth ? ` · Born ${r.dateOfBirth}` : ""} · Diet: {r.diet} · {r.codeStatus}</p>
           </div>
           <span className="spacer" />
           {r.allergies.length ? <span className="allergy">Allergies: {r.allergies.join(", ")}</span> : <span className="pill ok">No known allergies</span>}
         </div>
       </div>
       <nav className="chips" aria-label="Resident sections">
-        {TABS.map(([k, label]) => (
+        {TABS.filter(([k]) => k !== "card" || data.wristbands).map(([k, label]) => (
           <Link key={k} className="chip" href={`/residents/${r.id}?tab=${k}`} aria-current={tab === k ? "page" : undefined}>{label}</Link>
         ))}
       </nav>

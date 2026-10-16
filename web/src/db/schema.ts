@@ -20,10 +20,17 @@ export const userStatusEnum = pgEnum("user_status", ["invited", "active", "deact
 const id = () => uuid("id").primaryKey().default(sql`gen_random_uuid()`);
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 
+/**
+ * How caregivers confirm they have the right person before a medication:
+ * two identifiers (name and date of birth, checked by the caregiver) or a wristband scan.
+ */
+export const residentCheckEnum = pgEnum("resident_check", ["two_identifiers", "wristband"]);
+
 /** A customer organization (tenant). Every other row carries its org_id. */
 export const organizations = pgTable("organizations", {
   id: id(),
   name: text("name").notNull(),
+  residentCheck: residentCheckEnum("resident_check").notNull().default("two_identifiers"),
   createdAt: createdAt(),
 });
 

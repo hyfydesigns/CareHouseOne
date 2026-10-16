@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { getDb, withTenant } from "@/db/client";
-import { facilities, medicationOrders } from "@/db/schema";
+import { facilities, medicationOrders, organizations } from "@/db/schema";
 import { canGiveMeds } from "@/lib/permissions";
 import { requireUser } from "@/lib/session";
 import { localTime } from "@/lib/time";
@@ -25,11 +25,12 @@ export default async function GivePage({ params, searchParams }: { params: Promi
         const r = await getResident(tx, actor, o.residentId);
         if (!r) return null;
         const [home] = await tx.select().from(facilities).where(eq(facilities.id, r.facilityId));
-        return { o, r, tz: home.timeZone };
+        const [org] = await tx.select({ check: organizations.residentCheck }).from(organizations).where(eq(organizations.id, r.orgId));
+        return { o, r, tz: home.timeZone, mode: org.check };
       })
     : null;
   if (!data || !at) notFound();
-  const { o, r, tz } = data;
+  const { o, r, tz, mode } = data;
   const back = safeBack(sp.back);
   return (
     <>
@@ -42,7 +43,7 @@ export default async function GivePage({ params, searchParams }: { params: Promi
         </div>
         {r.allergies.length ? <span className="allergy">Allergies: {r.allergies.join(", ")}</span> : <span className="pill ok">No known allergies</span>}
         {canGiveMeds(me) ? (
-          <GiveForm action={giveAction} orderId={o.id} scheduledFor={at.toISOString()} hasPackageCode={!!o.packageCode} bpCheck={o.bpCheck} label={`${o.name} ${o.strength}`} back={back} />
+          <GiveForm action={giveAction} orderId={o.id} scheduledFor={at.toISOString()} hasPackageCode={!!o.packageCode} bpCheck={o.bpCheck} label={`${o.name} ${o.strength}`} back={back} mode={mode} who={{ name: `${r.firstName} ${r.lastName}`, dateOfBirth: r.dateOfBirth, room: r.room }} />
         ) : (
           <p className="error">Only nurses and med-certified caregivers can give medications.</p>
         )}
