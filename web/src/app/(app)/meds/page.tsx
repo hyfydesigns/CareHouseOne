@@ -29,7 +29,7 @@ export default async function MedsPage({ searchParams }: { searchParams: Promise
   return (
     <>
       <div className="row">
-        <h1>Medication pass</h1>
+        <h1>{give ? "Medication & Diagnosis" : "Medication pass"}</h1>
         <span className="muted">{home.name} · {localTime(now, home.timeZone)} · {due} dose{due === 1 ? "" : "s"} due</span>
       </div>
       {homes.length > 1 && (
@@ -49,6 +49,8 @@ export default async function MedsPage({ searchParams }: { searchParams: Promise
                 <Link href={`/residents/${r.id}`}>{r.firstName} {r.lastName}</Link> <span className="muted small">Room {r.room}</span>
               </h2>
               <span className="spacer" />
+              <Link className="btn small" href={`/residents/${r.id}?tab=diagnoses`}>Diagnoses</Link>
+              <Link className="btn small" href={`/residents/${r.id}?tab=record`}>Medication record</Link>
               {r.allergies.length > 0 && <span className="allergy small">Allergies: {r.allergies.join(", ")}</span>}
             </div>
             {openFollowups.map((f) => (

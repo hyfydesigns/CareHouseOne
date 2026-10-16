@@ -7,7 +7,7 @@ import { listStaff } from "@/server/staff";
 import { inviteAction, staffAction } from "./actions";
 import { InviteForm, RowActions } from "./staff-ui";
 
-const fmt = (d: Date | null) => (d ? d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—");
+const fmtIn = (tz: string) => (d: Date | null) => (d ? d.toLocaleDateString("en-US", { timeZone: tz, month: "short", day: "numeric", year: "numeric" }) : "—");
 
 export default async function StaffPage() {
   const me = await requireUser();
@@ -15,8 +15,9 @@ export default async function StaffPage() {
   const actor = { id: me.id, role: me.role, facilityIds: me.facilityIds };
   const { rows, homes } = await withTenant(await getDb(), me.orgId, async (tx) => ({
     rows: await listStaff(tx, actor),
-    homes: await tx.select({ id: facilities.id, name: facilities.name }).from(facilities).orderBy(facilities.name),
+    homes: await tx.select({ id: facilities.id, name: facilities.name, tz: facilities.timeZone }).from(facilities).orderBy(facilities.name),
   }));
+  const fmt = fmtIn(homes[0]?.tz ?? "America/New_York");
   const myHomes = homes.filter((h) => canInvite(actor, "caregiver", [h.id]));
   const roles = roleEnum.enumValues.filter((r) => myHomes.some((h) => canInvite(actor, r, [h.id]))).map((r) => ({ value: r, label: ROLE_LABEL[r] }));
   return (

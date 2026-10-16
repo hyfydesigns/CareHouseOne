@@ -14,8 +14,12 @@ The build specification lives in Claude Docs ("CareHouse One · Build Specificat
 
 ## Status
 
-Stage 1 (foundation) is built: sign-in with required two-step verification, sessions and idle timeout, password reset, staff invitations, deactivation and reactivation, tenant isolation with PostgreSQL row-level security, and an append-only audit log.
+Built so far:
 
-Next stages: residents and medications (orders, the safe medication pass, PRN and follow-ups), then vitals, progress notes, shift sign-in/out and ICD-10-CM diagnoses, then the owner dashboard, offline mode and Google Cloud deployment.
+1. **Foundation:** sign-in with required two-step verification, sessions and idle timeout, password reset, staff invitations, deactivation and reactivation, tenant isolation with PostgreSQL row-level security, append-only audit log.
+2. **Medications:** residents, medication orders with allergy and duplicate checks, the medication pass with hard stops, as-needed doses with follow-ups, monthly medication record. Resident check is two identifiers or a wristband scan (organization setting).
+3. **Care records:** vital signs with out-of-range flags and nurse review, progress notes with addenda, shift sign-in and sign-out, ICD-10-CM diagnoses with history. Caregivers get a four-item menu for the shared tablet.
+
+Next: owner dashboard across homes, offline mode and tablet polish, then Google Cloud deployment and reviews.
 
 **No real resident information may be entered until the production checklist in the build spec is complete** (BAAs signed, security review, backups verified).

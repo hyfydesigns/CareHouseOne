@@ -260,6 +260,111 @@ export const prnFollowups = pgTable(
   (t) => [index("followups_resident_idx").on(t.residentId)],
 );
 
+// ---------------------------------------------------------------- vitals, notes, shifts, diagnoses
+
+/** Permanent once saved. Out-of-range readings carry flags until a nurse reviews them. */
+export const vitals = pgTable(
+  "vitals",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    residentId: uuid("resident_id").notNull().references(() => residents.id),
+    systolic: integer("systolic").notNull(),
+    diastolic: integer("diastolic").notNull(),
+    pulse: integer("pulse").notNull(),
+    /** Tenths of a degree Fahrenheit (986 = 98.6 °F), so no floating point. */
+    tempTenthsF: integer("temp_tenths_f"),
+    respirations: integer("respirations"),
+    oxygen: integer("oxygen"),
+    /** Tenths of a pound. */
+    weightTenthsLb: integer("weight_tenths_lb"),
+    flags: text("flags").array().notNull().default(sql`'{}'::text[]`),
+    note: text("note"),
+    recordedBy: uuid("recorded_by").notNull().references(() => users.id),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("vitals_resident_idx").on(t.residentId, t.recordedAt)],
+);
+
+/** A nurse's review of an out-of-range reading, kept separately so readings stay unchanged. */
+export const vitalReviews = pgTable("vital_reviews", {
+  vitalId: uuid("vital_id").primaryKey().references(() => vitals.id),
+  orgId: uuid("org_id").notNull().references(() => organizations.id),
+  reviewedBy: uuid("reviewed_by").notNull().references(() => users.id),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }).notNull().defaultNow(),
+  note: text("note"),
+});
+
+export const shiftEnum = pgEnum("shift", ["day", "evening", "night"]);
+export const noteCategoryEnum = pgEnum("note_category", ["general", "activity", "health", "behavior", "family_contact"]);
+
+/** Progress notes can't be edited; corrections are addenda that point at the original. */
+export const progressNotes = pgTable(
+  "progress_notes",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    residentId: uuid("resident_id").notNull().references(() => residents.id),
+    shift: shiftEnum("shift").notNull(),
+    category: noteCategoryEnum("category").notNull(),
+    body: text("body").notNull(),
+    addendumTo: uuid("addendum_to"),
+    recordedBy: uuid("recorded_by").notNull().references(() => users.id),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("notes_resident_idx").on(t.residentId, t.recordedAt)],
+);
+
+/** Caregivers signing in and out of their shift at a home. */
+export const shiftPunches = pgTable(
+  "shift_punches",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    facilityId: uuid("facility_id").notNull().references(() => facilities.id),
+    signedInAt: timestamp("signed_in_at", { withTimezone: true }).notNull(),
+    signedOutAt: timestamp("signed_out_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("punches_user_idx").on(t.userId, t.signedInAt),
+    // At most one open shift per person.
+    uniqueIndex("punches_open_uq").on(t.userId).where(sql`${t.signedOutAt} is null`),
+  ],
+);
+
+/**
+ * ICD-10-CM reference codes (shared by every organization, read-only for the app). Loaded from the
+ * CMS code files each year; `version` is the fiscal year label, e.g. "FY 2027".
+ */
+export const icd10Codes = pgTable("icd10_codes", {
+  code: text("code").primaryKey(),
+  description: text("description").notNull(),
+  billable: boolean("billable").notNull(),
+  version: text("version").notNull(),
+});
+
+/** A resident's diagnosis. Removal sets removed_at; rows are never deleted, so history stays. */
+export const residentDiagnoses = pgTable(
+  "resident_diagnoses",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    residentId: uuid("resident_id").notNull().references(() => residents.id),
+    code: text("code").notNull(),
+    officialDescription: text("official_description").notNull(),
+    /** Plain-language name shown to caregivers. */
+    label: text("label").notNull(),
+    codeSetVersion: text("code_set_version").notNull(),
+    addedBy: uuid("added_by").notNull().references(() => users.id),
+    addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
+    removedBy: uuid("removed_by").references(() => users.id),
+    removedAt: timestamp("removed_at", { withTimezone: true }),
+    removeReason: text("remove_reason"),
+  },
+  (t) => [index("diagnoses_resident_idx").on(t.residentId)],
+);
+
 export type Role = (typeof roleEnum.enumValues)[number];
 export type Resident = typeof residents.$inferSelect;
 export type MedicationOrder = typeof medicationOrders.$inferSelect;

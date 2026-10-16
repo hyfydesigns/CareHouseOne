@@ -1,6 +1,7 @@
 import type { DB } from "@/db/client";
 import { eq } from "drizzle-orm";
-import { administrations, facilities, medicationOrders, organizations, residents, userFacilities, users, type Role } from "@/db/schema";
+import { administrations, facilities, icd10Codes, medicationOrders, organizations, residentDiagnoses, residents, userFacilities, users, type Role } from "@/db/schema";
+import { ICD_SAMPLE, ICD_SAMPLE_VERSION } from "./icd-sample";
 import { encrypt } from "@/lib/crypto";
 import { hashPassword } from "@/lib/password";
 import { newTotpSecret } from "@/lib/totp";
@@ -86,6 +87,14 @@ export async function seedDoseHistory(db: DB, s: Seeded, now: Date, days = 14): 
   }
 }
 
+/** Loads the curated ICD-10-CM sample (shared reference data). Safe to call more than once. */
+export async function seedIcd(db: DB): Promise<void> {
+  await db
+    .insert(icd10Codes)
+    .values(ICD_SAMPLE.map(([code, description, billable]) => ({ code, description, billable, version: ICD_SAMPLE_VERSION })))
+    .onConflictDoNothing();
+}
+
 /** Fictional residents and medication orders for local development and tests. */
 export async function seedCare(db: DB, s: Seeded): Promise<SeededCare> {
   const cr = s.facilities.cedarRidge;
@@ -118,5 +127,21 @@ export async function seedCare(db: DB, s: Seeded): Promise<SeededCare> {
     metformin: await o(R.marcus.id, { name: "Metformin", strength: "500 mg tablet", purpose: "Blood sugar", type: "scheduled", times: ["08:00", "17:00"], instructions: "Give with food" }),
     acetaminophen: await o(R.diego.id, { name: "Acetaminophen", strength: "500 mg tablet", purpose: "Pain or fever", type: "prn", prnReasons: ["Headache", "Fever over 100.4 °F", "Other pain"], prnMinIntervalMinutes: 360, prnMaxPerDay: 4 }),
   };
+  await seedIcd(db);
+  const dx: Array<[keyof SeededCare["residents"], string, string]> = [
+    ["diego", "I10", "High blood pressure"],
+    ["diego", "F71", "Moderate intellectual disability"],
+    ["marcus", "G40.909", "Epilepsy"],
+    ["marcus", "F70", "Mild intellectual disability"],
+    ["marcus", "E11.9", "Type 2 diabetes"],
+    ["lena", "I10", "High blood pressure"],
+    ["lena", "F32.A", "Depression"],
+    ["ben", "Q90.9", "Down syndrome"],
+    ["ben", "E03.9", "Underactive thyroid"],
+  ];
+  for (const [who, code, label] of dx) {
+    const ref = ICD_SAMPLE.find((x) => x[0] === code)!;
+    await db.insert(residentDiagnoses).values({ orgId: s.orgId, residentId: R[who].id, code, officialDescription: ref[1], label, codeSetVersion: ICD_SAMPLE_VERSION, addedBy: s.users.nurse.id });
+  }
   return { residents: residentsOut, orders };
 }

@@ -11,7 +11,8 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:seed": "tsx scripts/seed.ts",
-    "dev:code": "tsx scripts/dev-code.ts"
+    "dev:code": "tsx scripts/dev-code.ts",
+    "icd:import": "tsx scripts/icd-import.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.10",

@@ -36,6 +36,20 @@
       "when": 1792165057388,
       "tag": "0004_resident_check",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792165732442,
+      "tag": "0005_care_records",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792165733410,
+      "tag": "0006_care_records_security",
+      "breakpoints": true
     }
   ]
 }

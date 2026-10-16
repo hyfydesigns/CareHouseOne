@@ -29,6 +29,7 @@ To start over, stop the dev server and delete `.data/`.
 | `npm run build` | Production build |
 | `npm run db:generate` | Create a migration after changing `src/db/schema.ts` |
 | `npm run db:seed` | Seed the local database (refuses to run against `DATABASE_URL`) |
+| `npm run icd:import -- <file> "FY 2027"` | Load the official CMS ICD-10-CM order file (yearly, before October 1) |
 
 ## How it's put together
 

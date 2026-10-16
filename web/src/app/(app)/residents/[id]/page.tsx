@@ -12,11 +12,12 @@ import { getResident } from "@/server/residents";
 import { addOrderAction, followupAction, stopOrderAction } from "../../care-actions";
 import { AddOrderForm, FollowupForm, StopOrderButton } from "../../care-forms";
 import { SlotRow } from "../../meds/slot-row";
+import { DiagnosesPanel, NotesPanel, VitalsPanel } from "../../care/panels";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const TABS = [["today", "Today"], ["orders", "Medication orders"], ["record", "Monthly record"], ["card", "Wristband card"]] as const;
+const TABS = [["today", "Today"], ["orders", "Medication orders"], ["record", "Medication record"], ["diagnoses", "Diagnoses"], ["vitals", "Vital signs"], ["notes", "Progress notes"], ["card", "Wristband card"]] as const;
 
-export default async function ResidentPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; m?: string }> }) {
+export default async function ResidentPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; m?: string; q?: string; cat?: string }> }) {
   const { id } = await params;
   const sp = await searchParams;
   const tab = TABS.some((t) => t[0] === sp.tab) ? sp.tab! : "today";
@@ -153,6 +154,10 @@ export default async function ResidentPage({ params, searchParams }: { params: P
           ) : <p className="muted">None this month.</p>}
         </section>
       )}
+
+      {tab === "vitals" && <VitalsPanel resident={r} me={me} mParam={sp.m} base={`/residents/${r.id}?tab=vitals`} />}
+      {tab === "notes" && <NotesPanel resident={r} me={me} mParam={sp.m} base={`/residents/${r.id}?tab=notes`} />}
+      {tab === "diagnoses" && <DiagnosesPanel resident={r} me={me} q={sp.q} cat={sp.cat} base={`/residents/${r.id}?tab=diagnoses`} />}
 
       {tab === "card" && qr && (
         <section className="card" style={{ justifyItems: "center", textAlign: "center" }}>

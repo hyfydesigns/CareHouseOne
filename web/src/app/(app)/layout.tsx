@@ -5,15 +5,31 @@ import { NavLink } from "./nav-link";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const me = await requireUser();
+  const isCaregiver = me.role === "caregiver" || me.role === "med_caregiver";
   return (
     <div className="shell">
       <nav className="side" aria-label="Main">
         <div className="brand">
           <span className="mark" aria-hidden="true">C1</span>CareHouse One
         </div>
-        <NavLink href="/dashboard">Home</NavLink>
-        <NavLink href="/meds">Medication pass</NavLink>
-        <NavLink href="/residents">Residents</NavLink>
+        {isCaregiver ? (
+          <>
+            {/* The shared-tablet menu: only what caregivers need on shift. */}
+            <NavLink href="/meds">Medication &amp; Diagnosis</NavLink>
+            <NavLink href="/shift">Sign In / Sign Out</NavLink>
+            <NavLink href="/vitals">Vital Signs</NavLink>
+            <NavLink href="/notes">Progress Notes</NavLink>
+          </>
+        ) : (
+          <>
+            <NavLink href="/dashboard">Home</NavLink>
+            <NavLink href="/meds">Medication pass</NavLink>
+            <NavLink href="/residents">Residents</NavLink>
+            <NavLink href="/vitals">Vital signs</NavLink>
+            <NavLink href="/notes">Progress notes</NavLink>
+            <NavLink href="/shift">Sign in / out</NavLink>
+          </>
+        )}
         {canViewStaff(me) && <NavLink href="/staff">Staff</NavLink>}
         {canViewAudit(me) && <NavLink href="/audit">Audit log</NavLink>}
         {canViewAudit(me) && <NavLink href="/settings">Settings</NavLink>}
