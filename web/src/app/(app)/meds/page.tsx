@@ -17,7 +17,7 @@ export default async function MedsPage({ searchParams }: { searchParams: Promise
   const sp = await searchParams;
   const data = await withTenant(await getDb(), me.orgId, async (tx) => {
     const homes = await visibleFacilities(tx, actor);
-    const home = homes.find((h) => h.id === sp.home) ?? homes[0];
+    const home = homes.find((h) => h.id === sp.home) ?? homes.find((h) => h.id === me.device?.facilityId) ?? homes[0];
     if (!home) return null;
     return { homes, home, pass: (await medicationPass(tx, actor, home.id, now)) ?? [] };
   });

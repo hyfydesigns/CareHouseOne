@@ -1,6 +1,6 @@
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import type { DB } from "@/db/client";
-import { accountTokens, sessions, userFacilities, users, type User } from "@/db/schema";
+import { accountTokens, devicePins, devices, sessions, userFacilities, users, type User } from "@/db/schema";
 import { decrypt, encrypt, randomToken, sha256 } from "@/lib/crypto";
 import { checkPasswordPolicy, hashPassword, verifyPassword } from "@/lib/password";
 import { checkTotp, newTotpSecret, totpUri } from "@/lib/totp";
@@ -8,6 +8,8 @@ import { audit, sendMail } from "./audit";
 
 export const SESSION_IDLE_MINUTES = Number(process.env.SESSION_IDLE_MINUTES ?? 15);
 export const SESSION_MAX_HOURS = 12;
+/** Server-side backstop; the tablet itself locks after 2 minutes without a touch. */
+export const DEVICE_LOCK_MINUTES = 5;
 const PENDING_MINUTES = 10;
 const MAX_FAILED = 5;
 const LOCK_MINUTES = 15;
@@ -42,7 +44,7 @@ async function recordFailure(db: DB, user: User, reason: string): Promise<string
 }
 
 /** Step 1: email and password. Creates a pending session that still needs two-step verification. */
-export async function signIn(db: DB, input: { email: string; password: string; userAgent?: string }): Promise<SignInResult> {
+export async function signIn(db: DB, input: { email: string; password: string; userAgent?: string; deviceId?: string | null }): Promise<SignInResult> {
   const user = await findActiveByEmail(db, input.email);
   if (!user || !user.passwordHash) {
     decoyHash ??= hashPassword(randomToken());
@@ -59,8 +61,15 @@ export async function signIn(db: DB, input: { email: string; password: string; u
   await db.update(users).set({ failedLogins: 0, lockedUntil: null }).where(eq(users.id, user.id));
   const token = randomToken();
   const expiresAt = minutes(PENDING_MINUTES);
-  await db.insert(sessions).values({ orgId: user.orgId, userId: user.id, tokenHash: sha256(token), mfaPassed: false, expiresAt, userAgent: input.userAgent?.slice(0, 300) });
+  const deviceId = input.deviceId ? await deviceForOrg(db, input.deviceId, user.orgId) : null;
+  await db.insert(sessions).values({ orgId: user.orgId, userId: user.id, tokenHash: sha256(token), mfaPassed: false, expiresAt, userAgent: input.userAgent?.slice(0, 300), deviceId });
   return { ok: true, token, next: user.mfaEnabled ? "mfa" : "enroll", expiresAt };
+}
+
+/** A tablet registered to another organization is treated as an ordinary browser. */
+async function deviceForOrg(db: DB, deviceId: string, orgId: string): Promise<string | null> {
+  const [d] = await db.select({ id: devices.id }).from(devices).where(and(eq(devices.id, deviceId), eq(devices.orgId, orgId), isNull(devices.revokedAt)));
+  return d?.id ?? null;
 }
 
 async function pendingSession(db: DB, token: string) {
@@ -123,29 +132,59 @@ export interface SessionUser {
   email: string;
   role: User["role"];
   facilityIds: string[];
+  /** The registered shared tablet this session runs on, if any. */
+  device: { id: string; facilityId: string; name: string } | null;
+  /** Shared tablet only: locked until the person's PIN is entered. */
+  locked: boolean;
+  /** Shared tablet only: the person hasn't set a PIN for this tablet yet. */
+  needsPin: boolean;
 }
 
 /** Returns the signed-in user for a full session, enforcing the idle timeout. */
 export async function getSessionUser(db: DB, token: string): Promise<SessionUser | null> {
   const [row] = await db
-    .select({ session: sessions, user: users })
+    .select({ session: sessions, user: users, device: devices })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))
+    .leftJoin(devices, eq(devices.id, sessions.deviceId))
     .where(and(eq(sessions.tokenHash, sha256(token)), isNull(sessions.revokedAt), gt(sessions.expiresAt, new Date()), eq(sessions.mfaPassed, true)));
   if (!row || row.user.status !== "active") return null;
+  const u = row.user;
   const idleMs = Date.now() - row.session.lastSeenAt.getTime();
+  const facs = async () => (await db.select({ id: userFacilities.facilityId }).from(userFacilities).where(eq(userFacilities.userId, u.id))).map((f) => f.id);
+
+  if (row.device) {
+    // Shared tablet: idle locks instead of signing out; the PIN unlocks until the session ends.
+    if (row.device.revokedAt) return null;
+    let locked = row.session.lockedAt !== null;
+    if (!locked && idleMs > DEVICE_LOCK_MINUTES * 60_000) {
+      await db.update(sessions).set({ lockedAt: new Date() }).where(eq(sessions.id, row.session.id));
+      locked = true;
+    }
+    if (!locked && idleMs > 15_000) {
+      await db.update(sessions).set({ lastSeenAt: new Date() }).where(eq(sessions.id, row.session.id));
+      await db.update(devices).set({ lastSeenAt: new Date() }).where(eq(devices.id, row.device.id));
+    }
+    const [pin] = await db
+      .select({ userId: devicePins.userId })
+      .from(devicePins)
+      .where(and(eq(devicePins.deviceId, row.device.id), eq(devicePins.userId, u.id), gt(devicePins.expiresAt, new Date())));
+    const device = { id: row.device.id, facilityId: row.device.facilityId, name: row.device.name };
+    return { sessionId: row.session.id, id: u.id, orgId: u.orgId, name: u.name, email: u.email, role: u.role, facilityIds: await facs(), device, locked, needsPin: !pin };
+  }
+
   if (idleMs > SESSION_IDLE_MINUTES * 60_000) {
     await db.update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.id, row.session.id));
     return null;
   }
   if (idleMs > 60_000) await db.update(sessions).set({ lastSeenAt: new Date() }).where(eq(sessions.id, row.session.id));
-  const facs = await db.select({ id: userFacilities.facilityId }).from(userFacilities).where(eq(userFacilities.userId, row.user.id));
-  const u = row.user;
-  return { sessionId: row.session.id, id: u.id, orgId: u.orgId, name: u.name, email: u.email, role: u.role, facilityIds: facs.map((f) => f.id) };
+  return { sessionId: row.session.id, id: u.id, orgId: u.orgId, name: u.name, email: u.email, role: u.role, facilityIds: await facs(), device: null, locked: false, needsPin: false };
 }
 
 export async function signOut(db: DB, token: string): Promise<void> {
-  await db.update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.tokenHash, sha256(token)));
+  const [s] = await db.update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.tokenHash, sha256(token))).returning();
+  // A PIN only lives as long as the sign-in it was set in.
+  if (s?.deviceId) await db.delete(devicePins).where(and(eq(devicePins.deviceId, s.deviceId), eq(devicePins.userId, s.userId)));
 }
 
 export async function revokeAllSessions(db: DB, userId: string): Promise<void> {

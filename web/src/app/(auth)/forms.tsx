@@ -75,3 +75,37 @@ export function NewPasswordForm({ action, submit }: { action: Action; submit: st
     </form>
   );
 }
+
+const pinInput = { inputMode: "numeric" as const, type: "password", autoComplete: "off", maxLength: 8, minLength: 4, required: true, className: "code-input" };
+
+export function SetPinForm({ action }: { action: Action }) {
+  const [state, formAction, pending] = useActionState(action, {});
+  return (
+    <form action={formAction} className="stack">
+      <div className="field">
+        <label htmlFor="pin">New PIN (4 to 8 digits)</label>
+        <input id="pin" name="pin" {...pinInput} autoFocus />
+      </div>
+      <div className="field">
+        <label htmlFor="confirm">Enter it again</label>
+        <input id="confirm" name="confirm" {...pinInput} />
+      </div>
+      <Status state={state} />
+      <button className="btn primary" disabled={pending}>Save PIN</button>
+    </form>
+  );
+}
+
+export function UnlockForm({ action }: { action: Action }) {
+  const [state, formAction, pending] = useActionState(action, {});
+  return (
+    <form action={formAction} className="stack">
+      <div className="field">
+        <label htmlFor="pin">PIN</label>
+        <input id="pin" name="pin" {...pinInput} autoFocus />
+      </div>
+      <Status state={state} />
+      <button className="btn primary" disabled={pending}>{pending ? "Checking…" : "Unlock"}</button>
+    </form>
+  );
+}

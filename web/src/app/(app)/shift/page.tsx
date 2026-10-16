@@ -18,7 +18,7 @@ export default async function ShiftPage({ searchParams }: { searchParams: Promis
   const data = await withTenant(await getDb(), me.orgId, async (tx) => {
     const homes = await homesFor(tx, actor);
     const open = await shiftStatus(tx, actor);
-    const home = homes.find((h) => h.id === open?.facilityId) ?? homes[0];
+    const home = homes.find((h) => h.id === (open?.facilityId ?? me.device?.facilityId)) ?? homes[0];
     if (!home) return null;
     const m = monthFrom(sp.m, localDate(now, home.timeZone));
     return { homes, open, home, m, today: await todayAtHome(tx, actor, home.id, now), mine: await myShifts(tx, actor, home.id, m.year, m.month) };
@@ -37,8 +37,7 @@ export default async function ShiftPage({ searchParams }: { searchParams: Promis
             {open ? <span className="pill ok">Signed in at {t(open.signedInAt, tz)} · {homes.find((h) => h.id === open.facilityId)?.name}</span> : <span className="pill mute">Not signed in</span>}
           </span>
         </div>
-        <ShiftButton action={shiftAction} signedIn={!!open} homes={homes.map((h) => ({ id: h.id, name: h.name }))} />
-        <p className="small muted" style={{ margin: 0 }}>On the shared tablet, each person unlocks it with their own sign-in, then signs in or out of their shift here.</p>
+        <ShiftButton action={shiftAction} signedIn={!!open} tabletHome={me.device ? (homes.find((h) => h.id === me.device?.facilityId)?.name ?? null) : null} />
       </section>
       <div className="row" style={{ alignItems: "start" }}>
         <section className="card" style={{ flex: "1 1 340px" }}>

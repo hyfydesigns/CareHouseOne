@@ -100,8 +100,45 @@ export const sessions = pgTable(
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     userAgent: text("user_agent"),
+    /** Set when the session was opened on a registered shared tablet. */
+    deviceId: uuid("device_id"),
+    /** Shared tablets lock when idle; a locked session shows nothing until the PIN is entered. */
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
   },
   (t) => [uniqueIndex("sessions_token_uq").on(t.tokenHash), index("sessions_user_idx").on(t.userId)],
+);
+
+/** A shared tablet registered to one home. Shift sign-in only works on a registered device. */
+export const devices = pgTable(
+  "devices",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    facilityId: uuid("facility_id").notNull().references(() => facilities.id),
+    name: text("name").notNull(),
+    /** SHA-256 of the long-lived device cookie. */
+    tokenHash: text("token_hash").notNull(),
+    registeredBy: uuid("registered_by").notNull().references(() => users.id),
+    registeredAt: timestamp("registered_at", { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    revokedBy: uuid("revoked_by").references(() => users.id),
+  },
+  (t) => [uniqueIndex("devices_token_uq").on(t.tokenHash)],
+);
+
+/** A person's quick-unlock PIN on one tablet, valid until the end of their shift. */
+export const devicePins = pgTable(
+  "device_pins",
+  {
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    deviceId: uuid("device_id").notNull().references(() => devices.id),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    pinHash: text("pin_hash").notNull(),
+    failed: integer("failed").notNull().default(0),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.deviceId, t.userId] })],
 );
 
 /** Single-use links: invitations, reactivations and password resets. */
@@ -282,8 +319,10 @@ export const vitals = pgTable(
     note: text("note"),
     recordedBy: uuid("recorded_by").notNull().references(() => users.id),
     recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Set for entries saved offline: the device's id for the entry, so a retried sync can't duplicate it. */
+    clientId: text("client_id"),
   },
-  (t) => [index("vitals_resident_idx").on(t.residentId, t.recordedAt)],
+  (t) => [index("vitals_resident_idx").on(t.residentId, t.recordedAt), uniqueIndex("vitals_client_uq").on(t.orgId, t.clientId).where(sql`${t.clientId} is not null`)],
 );
 
 /** A nurse's review of an out-of-range reading, kept separately so readings stay unchanged. */
@@ -311,8 +350,9 @@ export const progressNotes = pgTable(
     addendumTo: uuid("addendum_to"),
     recordedBy: uuid("recorded_by").notNull().references(() => users.id),
     recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+    clientId: text("client_id"),
   },
-  (t) => [index("notes_resident_idx").on(t.residentId, t.recordedAt)],
+  (t) => [index("notes_resident_idx").on(t.residentId, t.recordedAt), uniqueIndex("notes_client_uq").on(t.orgId, t.clientId).where(sql`${t.clientId} is not null`)],
 );
 
 /** Caregivers signing in and out of their shift at a home. */

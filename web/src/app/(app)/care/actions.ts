@@ -41,5 +41,6 @@ export async function removeDiagnosisAction(_: FormState, fd: FormData) {
 
 export async function shiftAction(_: FormState, fd: FormData) {
   const op = fd.get("op");
-  return run((tx, a, orgId) => (op === "out" ? signOutShift(tx, a, new Date()) : signInShift(tx, a, orgId, String(fd.get("facilityId")), new Date())), ["/shift"]);
+  const me = await requireUser();
+  return run((tx, a, orgId) => (op === "out" ? signOutShift(tx, a, new Date()) : signInShift(tx, a, orgId, me.device?.facilityId ?? null, new Date())), ["/shift", "/dashboard"]);
 }

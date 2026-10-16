@@ -15,7 +15,11 @@ const nextConfig: NextConfig = {
   // Keep the development badge away from the sidebar's Sign out button.
   devIndicators: { position: "bottom-right" },
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      // The service worker must always be checked for updates.
+      { source: "/sw.js", headers: [{ key: "Cache-Control", value: "no-cache, no-store, must-revalidate" }, { key: "Content-Type", value: "application/javascript; charset=utf-8" }] },
+    ];
   },
 };
 

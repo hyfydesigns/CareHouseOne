@@ -1,6 +1,8 @@
 import { requireUser } from "@/lib/session";
 import { canViewAudit, canViewStaff, ROLE_LABEL } from "@/lib/permissions";
-import { signOutAction } from "../(auth)/actions";
+import { IdleLock } from "@/components/idle-lock";
+import { OfflineProvider } from "@/components/offline";
+import { idleLockAction, lockAction, signOutAction } from "../(auth)/actions";
 import { NavLink } from "./nav-link";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -38,15 +40,27 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             Signed in as <b>{me.name}</b>
             <br />
             {ROLE_LABEL[me.role]}
+            {me.device && (
+              <>
+                <br />
+                <span className="small">Tablet · {me.device.name}</span>
+              </>
+            )}
           </span>
+          {me.device && (
+            <form action={lockAction}>
+              <button className="linkbtn">Lock</button>
+            </form>
+          )}
           <form action={signOutAction}>
             <button className="linkbtn">Sign out</button>
           </form>
         </div>
       </nav>
       <main className="main" id="main">
-        {children}
+        <OfflineProvider userId={me.id}>{children}</OfflineProvider>
       </main>
+      {me.device && <IdleLock minutes={2} lock={idleLockAction} />}
     </div>
   );
 }

@@ -2,8 +2,9 @@
 
 import { redirect } from "next/navigation";
 import { getDb } from "@/db/client";
-import { appUrl, clearCookie, PENDING_COOKIE, readCookie, SESSION_COOKIE, setCookie, userAgent } from "@/lib/session";
+import { appUrl, clearCookie, currentDevice, currentUser, PENDING_COOKIE, readCookie, requireSession, SESSION_COOKIE, setCookie, userAgent } from "@/lib/session";
 import { acceptInvite, confirmEnrollment, requestPasswordReset, resetPassword, signIn, signOut, verifyMfa } from "@/server/auth";
+import { lockSession, setPin, unlockWithPin } from "@/server/devices";
 
 export type FormState = { error?: string; message?: string };
 
@@ -13,7 +14,8 @@ export async function signInAction(_: FormState, fd: FormData): Promise<FormStat
   const email = str(fd, "email");
   const password = str(fd, "password");
   if (!email || !password) return { error: "Enter your email and password." };
-  const r = await signIn(await getDb(), { email, password, userAgent: await userAgent() });
+  const device = await currentDevice();
+  const r = await signIn(await getDb(), { email, password, userAgent: await userAgent(), deviceId: device?.id ?? null });
   if (!r.ok) return { error: r.error };
   await setCookie(PENDING_COOKIE, r.token, r.expiresAt);
   redirect(r.next === "mfa" ? "/sign-in/verify" : "/sign-in/setup");
@@ -76,4 +78,36 @@ export async function signOutAction(): Promise<void> {
   if (token) await signOut(await getDb(), token);
   await clearCookie(SESSION_COOKIE);
   redirect("/sign-in");
+}
+
+export async function setPinAction(_: FormState, fd: FormData): Promise<FormState> {
+  const me = await requireSession();
+  const r = await setPin(await getDb(), me, str(fd, "pin"), str(fd, "confirm"));
+  if (!r.ok) return { error: r.error };
+  redirect("/dashboard");
+}
+
+export async function unlockAction(_: FormState, fd: FormData): Promise<FormState> {
+  const me = await requireSession();
+  const r = await unlockWithPin(await getDb(), me, str(fd, "pin"));
+  if (r.ok) redirect("/dashboard");
+  if (r.signedOut) {
+    await clearCookie(SESSION_COOKIE);
+    redirect("/sign-in?locked=1");
+  }
+  return { error: r.error };
+}
+
+/** Called by the tablet itself after 2 minutes without a touch; the page then reloads to the lock screen. */
+export async function idleLockAction(): Promise<void> {
+  const me = await currentUser();
+  if (me) await lockSession(await getDb(), me);
+}
+
+/** The Lock button in the menu. */
+export async function lockAction(): Promise<void> {
+  const me = await currentUser();
+  if (!me) redirect("/sign-in");
+  await lockSession(await getDb(), me);
+  redirect(me.device ? "/locked" : "/dashboard");
 }

@@ -49,7 +49,12 @@ export function vitalFlags(v: { systolic: number; pulse: number; tempTenthsF?: n
   return f;
 }
 
-export async function recordVitals(tx: Tx, actor: Actor, raw: unknown, now: Date): Promise<Result<{ flags: string[] }>> {
+/** `clientId` is set for entries made offline on a tablet, so a retried sync can't save them twice. */
+export interface EntryOpts {
+  clientId?: string;
+}
+
+export async function recordVitals(tx: Tx, actor: Actor, raw: unknown, now: Date, opts: EntryOpts = {}): Promise<Result<{ flags: string[] }>> {
   const p = vitalsSchema.safeParse(raw);
   if (!p.success) return { ok: false, error: p.error.issues[0].message };
   const v = p.data;
@@ -74,9 +79,10 @@ export async function recordVitals(tx: Tx, actor: Actor, raw: unknown, now: Date
       note: v.note || null,
       recordedBy: actor.id,
       recordedAt: now,
+      clientId: opts.clientId ?? null,
     })
     .returning();
-  await audit(tx, { orgId: r.orgId, actorId: actor.id, action: flags.length ? "vitals_out_of_range" : "vitals_recorded", entity: "resident", entityId: r.id, details: { vitalId: row.id, flags } });
+  await audit(tx, { orgId: r.orgId, actorId: actor.id, action: flags.length ? "vitals_out_of_range" : "vitals_recorded", entity: "resident", entityId: r.id, details: { vitalId: row.id, flags, ...(opts.clientId && { offline: true }) } });
   const msg = flags.length
     ? `Saved. ${flags.join(" and ").replace(/^./, (c) => c.toUpperCase())} outside the usual range: tell the nurse now. It's flagged for review.`
     : `Vital signs saved for ${r.firstName}.`;
@@ -139,7 +145,7 @@ export const noteSchema = z.object({
   addendumTo: z.preprocess((v) => (v === "" ? undefined : v), z.string().uuid().optional()),
 });
 
-export async function addNote(tx: Tx, actor: Actor, raw: unknown, now: Date): Promise<Result> {
+export async function addNote(tx: Tx, actor: Actor, raw: unknown, now: Date, opts: EntryOpts = {}): Promise<Result> {
   const p = noteSchema.safeParse(raw);
   if (!p.success) return { ok: false, error: p.error.issues[0].message };
   const v = p.data;
@@ -149,8 +155,8 @@ export async function addNote(tx: Tx, actor: Actor, raw: unknown, now: Date): Pr
     const [orig] = await tx.select().from(progressNotes).where(eq(progressNotes.id, v.addendumTo));
     if (!orig || orig.residentId !== r.id) return { ok: false, error: "The note you're adding to isn't available." };
   }
-  await tx.insert(progressNotes).values({ orgId: r.orgId, residentId: r.id, shift: v.shift, category: v.category, body: v.body, addendumTo: v.addendumTo ?? null, recordedBy: actor.id, recordedAt: now });
-  await audit(tx, { orgId: r.orgId, actorId: actor.id, action: v.addendumTo ? "note_addendum" : "note_added", entity: "resident", entityId: r.id });
+  await tx.insert(progressNotes).values({ orgId: r.orgId, residentId: r.id, shift: v.shift, category: v.category, body: v.body, addendumTo: v.addendumTo ?? null, recordedBy: actor.id, recordedAt: now, clientId: opts.clientId ?? null });
+  await audit(tx, { orgId: r.orgId, actorId: actor.id, action: v.addendumTo ? "note_addendum" : "note_added", entity: "resident", entityId: r.id, details: opts.clientId ? { offline: true } : undefined });
   return { ok: true, message: v.addendumTo ? "Addendum saved." : "Progress note saved." };
 }
 
@@ -180,8 +186,14 @@ export async function shiftStatus(tx: Tx, actor: Actor) {
  * Starts a shift at one of the actor's homes. Production adds a location check (tablet registered
  * to the home, or geofence) so sign-in only works on site.
  */
-export async function signInShift(tx: Tx, actor: Actor, orgId: string, facilityId: string, now: Date): Promise<Result> {
-  if (!actor.facilityIds.includes(facilityId)) return { ok: false, error: "You're not assigned to that home." };
+/**
+ * Shift sign-in is the location check: it only works on a tablet registered to a home, and the
+ * shift is recorded at that tablet's home. Pass the device's home, or null for any other browser.
+ */
+export async function signInShift(tx: Tx, actor: Actor, orgId: string, deviceFacilityId: string | null, now: Date): Promise<Result> {
+  if (!deviceFacilityId) return { ok: false, error: "Sign in to your shift on the home's tablet." };
+  const facilityId = deviceFacilityId;
+  if (!actor.facilityIds.includes(facilityId)) return { ok: false, error: "You're not assigned to the home this tablet belongs to." };
   const open = await openPunch(tx, actor.id);
   if (open) return { ok: false, error: "You're already signed in. Sign out first." };
   await tx.insert(shiftPunches).values({ orgId, userId: actor.id, facilityId, signedInAt: now });

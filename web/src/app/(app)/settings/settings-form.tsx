@@ -35,3 +35,51 @@ export function ResidentCheckForm({ action, current }: { action: (s: FormState, 
     </form>
   );
 }
+
+type Action = (s: FormState, fd: FormData) => Promise<FormState>;
+
+export function RegisterDeviceForm({ action, homes }: { action: Action; homes: Array<{ id: string; name: string }> }) {
+  const [state, formAction, pending] = useActionState(action, {});
+  return (
+    <form action={formAction} className="stack">
+      <div className="row" style={{ alignItems: "end" }}>
+        <div className="field" style={{ flex: "1 1 200px" }}>
+          <label htmlFor="facilityId">Home</label>
+          <select id="facilityId" name="facilityId">{homes.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select>
+        </div>
+        <div className="field" style={{ flex: "2 1 240px" }}>
+          <label htmlFor="name">Tablet name</label>
+          <input id="name" name="name" placeholder="Med room tablet" maxLength={60} required />
+        </div>
+        <button className="btn primary" disabled={pending}>Register this tablet</button>
+      </div>
+      <Status state={state} />
+    </form>
+  );
+}
+
+export function RevokeDeviceButton({ action, deviceId, name }: { action: Action; deviceId: string; name: string }) {
+  const [state, formAction, pending] = useActionState(action, {});
+  return (
+    <form
+      action={formAction}
+      onSubmit={(e) => {
+        if (!confirm(`Remove "${name}"? Anyone signed in on it is signed out, and shift sign-in stops working there.`)) e.preventDefault();
+      }}
+    >
+      <input type="hidden" name="deviceId" value={deviceId} />
+      <button className="btn small" disabled={pending}>Remove</button>
+      <Status state={state} />
+    </form>
+  );
+}
+
+export function ForgetDeviceButton({ action }: { action: () => Promise<FormState> }) {
+  const [state, formAction, pending] = useActionState(action, {});
+  return (
+    <form action={formAction}>
+      <button className="btn small" disabled={pending}>Unmark this browser</button>
+      <Status state={state} />
+    </form>
+  );
+}

@@ -140,3 +140,22 @@ td { padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: to
 .grid-mar .today { box-shadow: inset 0 0 0 2px var(--accent); }
 .big { min-height: 52px; font-size: 17px; padding: 10px 22px; }
 .wristband { font-family: ui-monospace, monospace; font-size: 18px; letter-spacing: 0.08em; }
+
+/* Offline and sync banners (stage 4) */
+.banner { border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 14.5px; background: var(--accent-soft); border: 1px solid var(--accent); display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.banner.offline { background: var(--warn-soft); border-color: var(--warn); }
+.banner.error { background: var(--crit-soft); border-color: var(--crit); }
+.banner.ok { background: var(--ok-soft); border-color: var(--ok); }
+
+/* Shared-tablet idle lock: covers everything at once, before the lock screen loads */
+.lock-cover { position: fixed; inset: 0; z-index: 1000; background: var(--bg); display: grid; place-items: center; padding: 16px; }
+.lock-cover .card { max-width: 380px; width: 100%; }
+
+/* Owner dashboard */
+.homes { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+.stat-row { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.stat { display: flex; flex-direction: column; min-width: 92px; }
+.stat b { font-size: 24px; line-height: 1.1; }
+.stat span { font-size: 13px; color: var(--ink-2); }
+.stat.warn b { color: var(--warn); }
+.stat.crit b { color: var(--crit); }

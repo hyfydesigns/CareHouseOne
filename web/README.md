@@ -38,16 +38,20 @@ To start over, stop the dev server and delete `.data/`.
 | `src/db/schema.ts` | Tables. Every row carries `org_id`. |
 | `drizzle/` | SQL migrations. `0001_security.sql` adds row-level security and the audit-log lock. |
 | `src/db/client.ts` | Database connection and `withTenant()`, which scopes a transaction to one organization. |
-| `src/server/` | Business logic, independent of Next.js and covered by tests: `auth.ts`, `staff.ts`, `audit.ts`. |
+| `src/server/` | Business logic, independent of Next.js and covered by tests: `auth.ts`, `staff.ts`, `audit.ts`, `meds.ts`, `care.ts`, `devices.ts` (tablets and PINs), `sync.ts` (offline entries), `dashboard.ts`. |
 | `src/lib/` | Passwords (Argon2id), two-step codes (TOTP), encryption (AES-256-GCM), permissions, cookies. |
 | `src/app/(auth)/` | Sign-in, two-step verification, setup, password reset, invitations. |
-| `src/app/(app)/` | Signed-in pages: home, staff, audit log. |
+| `src/app/(app)/` | Signed-in pages. `src/app/(auth)/pin` and `locked` are the shared-tablet PIN and lock screens. |
+| `src/app/api/` | `sync` (offline entries) and `heartbeat` (tablet activity). JSON, same-origin only. |
+| `src/lib/offline-queue.ts`, `public/sw.js` | Encrypted offline queue in IndexedDB; service worker that caches only the offline page and build files. |
 | `tests/` | Vitest. `flows.test.ts` runs the real flows against PostgreSQL, including tenant isolation. |
 
 ## Security model
 
 - **Sign-in:** email and password (Argon2id), then a required authenticator code. 5 wrong attempts lock the account for 15 minutes. Unknown emails and wrong passwords get the same answer.
 - **Sessions:** random 256-bit tokens in an HttpOnly cookie; only their SHA-256 is stored. Pending until two-step passes. End after 15 minutes idle (`SESSION_IDLE_MINUTES`) or 12 hours.
+- **Shared tablets:** registered in Settings by an owner or admin (a long-lived `ch1_device` cookie; only its hash is stored). After a full sign-in each person sets a 4 to 8 digit PIN for that tablet. The tablet locks after 2 minutes without a touch (the server locks it after 5 as a backstop) and every page redirects to the lock screen until the PIN is entered. Five wrong PINs end the session. Removing a tablet signs everyone out of it. Shift sign-in only works on a registered tablet and is recorded at its home; sign-out works anywhere.
+- **Offline:** vital signs and progress notes made offline are AES-GCM encrypted in IndexedDB with a non-extractable key, sent only for the person who made them, matched on a client ID so a retry can't duplicate them, keep the time they were taken, and are refused after 72 hours. The service worker never caches pages or resident data.
 - **Tenant isolation:** request code runs as the restricted `app_user` role with `app.org_id` set, and row-level security limits every table to that organization.
 - **Audit log:** append-only; a trigger rejects updates and deletes.
 - **Secrets:** two-step keys are encrypted with `DATA_ENCRYPTION_KEY`.

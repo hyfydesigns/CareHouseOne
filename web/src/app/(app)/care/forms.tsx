@@ -1,12 +1,14 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { useOfflineSubmit } from "@/components/offline";
 import { Status, type FormState } from "@/components/status";
 
 type Action = (s: FormState, fd: FormData) => Promise<FormState>;
 
 export function VitalsForm({ action, residentId, lastReading }: { action: Action; residentId: string; lastReading?: string }) {
   const [state, formAction, pending] = useActionState(action, {});
+  const offline = useOfflineSubmit("vitals");
   const field = (id: string, label: string, mode: "numeric" | "decimal" = "numeric") => (
     <div className="field" style={{ flex: "1 1 140px" }}>
       <label htmlFor={id}>{label}</label>
@@ -14,7 +16,7 @@ export function VitalsForm({ action, residentId, lastReading }: { action: Action
     </div>
   );
   return (
-    <form action={formAction} className="card">
+    <form action={formAction} onSubmit={offline.onSubmit} className="card">
       <h2>Record vital signs</h2>
       {lastReading && <p className="small muted" style={{ margin: 0 }}>Last reading: {lastReading}</p>}
       <input type="hidden" name="residentId" value={residentId} />
@@ -31,7 +33,7 @@ export function VitalsForm({ action, residentId, lastReading }: { action: Action
         <div className="field" style={{ flex: "2 1 220px" }}><label htmlFor="vnote">Note (optional)</label><input id="vnote" name="note" /></div>
       </div>
       <p className="small muted" style={{ margin: 0 }}>Blood pressure and pulse are required. Readings outside the usual range are flagged for the nurse.</p>
-      <Status state={state} />
+      <Status state={offline.saved ? { message: offline.saved } : state} />
       <div className="row"><button className="btn primary big" disabled={pending}>Save vital signs</button></div>
     </form>
   );
@@ -41,8 +43,9 @@ const CATEGORIES: Array<[string, string]> = [["general", "General"], ["activity"
 
 export function NoteForm({ action, residentId, shift, firstName }: { action: Action; residentId: string; shift: string; firstName: string }) {
   const [state, formAction, pending] = useActionState(action, {});
+  const offline = useOfflineSubmit("note");
   return (
-    <form action={formAction} className="card">
+    <form action={formAction} onSubmit={offline.onSubmit} className="card">
       <h2>New progress note</h2>
       <input type="hidden" name="residentId" value={residentId} />
       <div className="row" style={{ alignItems: "start" }}>
@@ -59,7 +62,7 @@ export function NoteForm({ action, residentId, shift, firstName }: { action: Act
         <label htmlFor="body">Note</label>
         <textarea id="body" name="body" rows={4} required placeholder={`Write facts: what you saw, what you did, and how ${firstName} responded.`} />
       </div>
-      <Status state={state} />
+      <Status state={offline.saved ? { message: offline.saved } : state} />
       <div className="row"><button className="btn primary big" disabled={pending}>Save note</button></div>
     </form>
   );
@@ -141,22 +144,17 @@ export function RemoveDiagnosisButton({ action, residentId, diagnosisId, code }:
   );
 }
 
-export function ShiftButton({ action, signedIn, homes }: { action: Action; signedIn: boolean; homes: Array<{ id: string; name: string }> }) {
+export function ShiftButton({ action, signedIn, tabletHome }: { action: Action; signedIn: boolean; tabletHome: string | null }) {
   const [state, formAction, pending] = useActionState(action, {});
+  const blocked = !signedIn && !tabletHome;
   return (
     <form action={formAction} className="stack">
-      {!signedIn && homes.length > 1 && (
-        <div className="field" style={{ maxWidth: 320 }}>
-          <label htmlFor="facilityId">Home</label>
-          <select id="facilityId" name="facilityId">{homes.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select>
-        </div>
-      )}
-      {!signedIn && homes.length === 1 && <input type="hidden" name="facilityId" value={homes[0].id} />}
       <div className="row">
-        <button className={`btn big ${signedIn ? "" : "primary"}`} name="op" value={signedIn ? "out" : "in"} disabled={pending} style={{ minWidth: 220 }}>
-          {signedIn ? "Sign out" : "Sign in"}
+        <button className={`btn big ${signedIn ? "" : "primary"}`} name="op" value={signedIn ? "out" : "in"} disabled={pending || blocked} style={{ minWidth: 220 }}>
+          {signedIn ? "Sign out" : tabletHome ? `Sign in at ${tabletHome}` : "Sign in"}
         </button>
       </div>
+      {blocked && <p className="small muted" style={{ margin: 0 }}>Shift sign-in works on the home&apos;s registered tablet, so your hours are recorded at the right home.</p>}
       <Status state={state} />
     </form>
   );

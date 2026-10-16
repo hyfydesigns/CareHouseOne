@@ -20,6 +20,8 @@ Built so far:
 2. **Medications:** residents, medication orders with allergy and duplicate checks, the medication pass with hard stops, as-needed doses with follow-ups, monthly medication record. Resident check is two identifiers or a wristband scan (organization setting).
 3. **Care records:** vital signs with out-of-range flags and nurse review, progress notes with addenda, shift sign-in and sign-out, ICD-10-CM diagnoses with history. Caregivers get a four-item menu for the shared tablet.
 
-Next: owner dashboard across homes, offline mode and tablet polish, then Google Cloud deployment and reviews.
+4. **Owner view and tablets:** a dashboard card per home (today's medications, late doses, overdue follow-ups, readings to review, notes, who's on shift, tablet last used). Registered home tablets: shift sign-in only works on one, a personal PIN unlocks it, it locks after 2 minutes idle. Offline mode: installable app, offline banner, and an encrypted on-tablet queue for vital signs and progress notes that syncs without duplicates. Medications are not recorded offline.
+
+Next: Google Cloud deployment, then security and clinical reviews.
 
 **No real resident information may be entered until the production checklist in the build spec is complete** (BAAs signed, security review, backups verified).

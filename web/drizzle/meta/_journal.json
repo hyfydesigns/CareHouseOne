@@ -50,6 +50,20 @@
       "when": 1792165733410,
       "tag": "0006_care_records_security",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792178749930,
+      "tag": "0007_tablets",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792178750833,
+      "tag": "0008_tablets_security",
+      "breakpoints": true
     }
   ]
 }

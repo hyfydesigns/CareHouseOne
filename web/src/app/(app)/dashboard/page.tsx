@@ -1,59 +1,90 @@
 import { eq } from "drizzle-orm";
 import { getDb, withTenant } from "@/db/client";
-import { facilities, organizations, userFacilities, users } from "@/db/schema";
+import { organizations, userFacilities, users } from "@/db/schema";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { requireUser } from "@/lib/session";
 import { canManageCare } from "@/lib/permissions";
+import { localDate } from "@/lib/time";
 import { unreviewedVitals } from "@/server/care";
+import { homeSummaries } from "@/server/dashboard";
 import { reviewVitalAction } from "../care/actions";
 import { ReviewButton } from "../care/forms";
+
+const clock = (d: Date, tz: string) => d.toLocaleTimeString("en-US", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false });
 
 export default async function DashboardPage() {
   const me = await requireUser();
   if (me.role === "caregiver" || me.role === "med_caregiver") redirect("/meds");
+  const actor = { id: me.id, role: me.role, facilityIds: me.facilityIds };
+  const now = new Date();
   const data = await withTenant(await getDb(), me.orgId, async (tx) => {
     const [org] = await tx.select().from(organizations).where(eq(organizations.id, me.orgId));
-    const homes = await tx.select().from(facilities).orderBy(facilities.name);
+    const homes = await homeSummaries(tx, actor, now);
     const staff = await tx.select({ userId: userFacilities.userId, facilityId: userFacilities.facilityId, status: users.status }).from(userFacilities).innerJoin(users, eq(users.id, userFacilities.userId));
-    const review = canManageCare(me) ? await unreviewedVitals(tx, { id: me.id, role: me.role, facilityIds: me.facilityIds }) : [];
+    const review = canManageCare(me) ? await unreviewedVitals(tx, actor) : [];
     return { org, homes, staff, review };
   });
-  const visible = me.role === "owner" || me.role === "admin" ? data.homes : data.homes.filter((h) => me.facilityIds.includes(h.id));
-  const count = (fid: string, status: string) => data.staff.filter((s) => s.facilityId === fid && s.status === status).length;
   return (
     <>
       <div>
         <h1>Good to see you, {me.name.split(" ")[0]}</h1>
         <p className="muted">{data.org?.name}</p>
       </div>
-      <section className="card" aria-labelledby="homes-h">
-        <h2 id="homes-h">{visible.length === 1 ? "Your home" : "Homes"}</h2>
-        <div className="tablewrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Home</th>
-                <th>Type</th>
-                <th>Licensed beds</th>
-                <th>Active staff</th>
-                <th>Invited</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((h) => (
-                <tr key={h.id}>
-                  <td><b>{h.name}</b></td>
-                  <td>{h.licenseType}</td>
-                  <td>{h.beds}</td>
-                  <td>{count(h.id, "active")}</td>
-                  <td>{count(h.id, "invited")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <div className="homes">
+        {data.homes.map((h) => {
+          const d = h.doses;
+          const done = d.given + d.refused + d.held;
+          const staff = data.staff.filter((s) => s.facilityId === h.id && s.status === "active").length;
+          return (
+            <section className="card" key={h.id} aria-labelledby={`home-${h.id}`}>
+              <div className="row">
+                <h2 id={`home-${h.id}`} style={{ margin: 0 }}>{h.name}</h2>
+                <span className="spacer" />
+                {d.late > 0 || h.followupsOverdue > 0 || h.readingsToReview > 0 ? <span className="pill crit">Needs attention</span> : <span className="pill ok">On track</span>}
+              </div>
+              <p className="small muted" style={{ margin: 0 }}>
+                {h.residents} resident{h.residents === 1 ? "" : "s"} · {h.beds} beds · {staff} active staff · today {localDate(now, h.timeZone)} · {clock(now, h.timeZone)}
+              </p>
+              <div>
+                <h3 className="small" style={{ margin: "4px 0" }}>Medications today</h3>
+                <div className="stat-row">
+                  <span className="stat"><b>{done}/{d.total}</b><span>done</span></span>
+                  <span className={`stat ${d.late ? "crit" : ""}`}><b>{d.late}</b><span>late, not recorded</span></span>
+                  <span className={`stat ${d.due ? "warn" : ""}`}><b>{d.due}</b><span>due now</span></span>
+                  <span className="stat"><b>{d.refused + d.held}</b><span>refused or held</span></span>
+                  <span className={`stat ${h.followupsOverdue ? "crit" : ""}`}><b>{h.followupsOverdue}</b><span>PRN follow-ups overdue</span></span>
+                </div>
+              </div>
+              <div>
+                <h3 className="small" style={{ margin: "4px 0" }}>Records today</h3>
+                <div className="stat-row">
+                  <span className="stat"><b>{h.vitalsToday}</b><span>vital signs</span></span>
+                  <span className={`stat ${h.readingsToReview ? "crit" : ""}`}><b>{h.readingsToReview}</b><span>readings to review</span></span>
+                  <span className="stat"><b>{h.notesToday}</b><span>progress notes</span></span>
+                </div>
+              </div>
+              <div>
+                <h3 className="small" style={{ margin: "4px 0" }}>On shift now</h3>
+                {h.onShift.length ? (
+                  <p style={{ margin: 0 }}>{h.onShift.map((p) => `${p.name} (since ${clock(p.since, h.timeZone)})`).join(", ")}</p>
+                ) : (
+                  <p className="muted" style={{ margin: 0 }}>No one is signed in.</p>
+                )}
+              </div>
+              <p className="small muted" style={{ margin: 0 }}>
+                {h.tablets.length
+                  ? `Tablet: ${h.tablets.map((t) => `${t.name}, last used ${t.lastSeenAt ? `${clock(t.lastSeenAt, h.timeZone)} ${localDate(t.lastSeenAt, h.timeZone) === localDate(now, h.timeZone) ? "today" : localDate(t.lastSeenAt, h.timeZone)}` : "never"}`).join("; ")}`
+                  : "No tablet registered. Shift sign-in won't work here until one is (Settings)."}
+              </p>
+              <div className="row">
+                <Link className="btn small" href={`/meds?home=${h.id}`}>Medication pass</Link>
+                <Link className="btn small" href="/residents">Residents</Link>
+              </div>
+            </section>
+          );
+        })}
+      </div>
       {data.review.length > 0 && (
         <section className="card" style={{ borderColor: "var(--crit)" }} aria-labelledby="rev-h">
           <h2 id="rev-h">Readings to review</h2>
