@@ -2,7 +2,7 @@ import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import type { DB } from "@/db/client";
 import { accountTokens, devicePins, devices, sessions, userFacilities, users, type User } from "@/db/schema";
 import { decrypt, encrypt, randomToken, sha256 } from "@/lib/crypto";
-import { checkPasswordPolicy, hashPassword, verifyPassword } from "@/lib/password";
+import { BREACHED, checkPasswordPolicy, hashPassword, isBreached, verifyPassword } from "@/lib/password";
 import { checkTotp, newTotpSecret, totpUri } from "@/lib/totp";
 import { audit, sendMail } from "./audit";
 
@@ -227,6 +227,7 @@ export async function resetPassword(db: DB, token: string, password: string): Pr
   if (!row || row.user.status !== "active") return { ok: false, error: "This link has expired or was already used. Ask for a new one." };
   const problem = checkPasswordPolicy(password, row.user.email);
   if (problem) return { ok: false, error: problem };
+  if (await isBreached(password)) return { ok: false, error: BREACHED };
   await db.update(users).set({ passwordHash: await hashPassword(password), failedLogins: 0, lockedUntil: null }).where(eq(users.id, row.user.id));
   await db.update(accountTokens).set({ usedAt: new Date() }).where(eq(accountTokens.id, row.t.id));
   await revokeAllSessions(db, row.user.id);
@@ -244,6 +245,7 @@ export async function acceptInvite(db: DB, token: string, password: string, user
   if (!row || row.user.status !== "invited") return { ok: false, error: "This invitation has expired or was cancelled. Ask your manager to send a new one." };
   const problem = checkPasswordPolicy(password, row.user.email);
   if (problem) return { ok: false, error: problem };
+  if (await isBreached(password)) return { ok: false, error: BREACHED };
   await db
     .update(users)
     .set({ passwordHash: await hashPassword(password), status: "active", mfaEnabled: false, mfaSecretEnc: null, failedLogins: 0, lockedUntil: null, deactivatedAt: null, deactivationReason: null })

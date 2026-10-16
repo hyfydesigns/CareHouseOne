@@ -56,12 +56,22 @@ To start over, stop the dev server and delete `.data/`.
 - **Audit log:** append-only; a trigger rejects updates and deletes.
 - **Secrets:** two-step keys are encrypted with `DATA_ENCRYPTION_KEY`.
 
-## Before production
+## Production
 
-These are tracked in the build spec's production plan. Code-side items still open:
+Deployment to Google Cloud (Cloud Run, Cloud SQL, Secret Manager) is described in [deploy/README.md](../deploy/README.md). In production the app:
 
-- Email provider for invitations and resets (messages contain no resident details).
-- Breached-password check against the Have I Been Pwned range API.
-- Per-IP rate limiting on sign-in and reset, and a Content Security Policy.
-- Migrations as a deploy step against Cloud SQL, with the app connecting as a least-privilege role.
-- Independent security review.
+- Builds as a standalone server in `Dockerfile` and applies migrations at startup (`src/instrumentation.ts`, with an advisory lock so instances take turns).
+- Refuses to start without `DATABASE_URL`, a 32-byte `DATA_ENCRYPTION_KEY`, an https `APP_URL` and `CRON_SECRET` (`src/lib/config.ts`).
+- Sends a Content Security Policy with a per-request nonce (`src/proxy.ts`).
+- Limits sign-in, two-step, PIN, reset and invitation attempts per IP address, counted in the database (`src/server/rate-limit.ts`).
+- Checks new passwords against Have I Been Pwned (only 5 characters of the hash leave the server).
+- Sends invitation and reset emails over SMTP from the outbox, retrying through `/api/cron` (`src/server/mailer.ts`).
+- Exposes `/api/health` for Cloud Run and uptime checks.
+
+`npm run org:create -- org.json` creates a customer organization and invites its owner (see the runbook).
+
+## Still open before real data
+
+- Independent security review and penetration test.
+- Clinical review of vital-sign limits, medication rules and PRN follow-up times.
+- The production plan's compliance steps (BAAs, risk assessment, policies) and a restore test.

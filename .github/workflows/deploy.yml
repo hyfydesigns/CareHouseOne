@@ -1,0 +1,89 @@
+name: Deploy
+
+# Manual only: Actions tab > Deploy > Run workflow (from main). Runs the full checks, builds the
+# image, pushes it to Artifact Registry and deploys it to Cloud Run. Database migrations run when
+# the new revision starts; if they fail, Cloud Run keeps serving the previous revision.
+# Settings come from repository variables written out by deploy/setup.sh.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+
+  deploy:
+    needs: check
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # Add required reviewers to this environment (Settings > Environments) for an approval step.
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/carehouse/web:${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build and push the image
+        run: |
+          gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" --quiet
+          docker build -t "$IMAGE" web
+          docker push "$IMAGE"
+
+      - name: Deploy to Cloud Run
+        run: |
+          SECRETS="DATABASE_URL=database-url:latest,DATA_ENCRYPTION_KEY=data-encryption-key:latest,CRON_SECRET=cron-secret:latest"
+          if [ "${{ vars.SMTP_ENABLED }}" = "true" ]; then SECRETS="$SECRETS,SMTP_URL=smtp-url:latest"; fi
+          gcloud run deploy carehouse-one \
+            --image "$IMAGE" \
+            --region "${{ vars.GCP_REGION }}" \
+            --service-account "${{ vars.GCP_RUN_SA }}" \
+            --add-cloudsql-instances "${{ vars.CLOUD_SQL }}" \
+            --set-secrets "$SECRETS" \
+            --set-env-vars "^|^APP_URL=${{ vars.APP_URL }}|MAIL_FROM=${{ vars.MAIL_FROM }}|SESSION_IDLE_MINUTES=15" \
+            --no-invoker-iam-check \
+            --execution-environment gen2 \
+            --cpu 1 --memory 1Gi --cpu-boost \
+            --concurrency 40 --min-instances 0 --max-instances 3 \
+            --timeout 60 \
+            --startup-probe "httpGet.path=/api/health,initialDelaySeconds=2,periodSeconds=5,failureThreshold=24,timeoutSeconds=4" \
+            --quiet
+
+      - name: Check the live app
+        run: |
+          for i in $(seq 1 10); do
+            if curl -fsS "${{ vars.APP_URL }}/api/health"; then exit 0; fi
+            sleep 6
+          done
+          echo "Health check failed" >&2
+          exit 1

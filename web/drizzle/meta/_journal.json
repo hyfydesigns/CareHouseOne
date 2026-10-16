@@ -64,6 +64,20 @@
       "when": 1792178750833,
       "tag": "0008_tablets_security",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792180838695,
+      "tag": "0009_production",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792180840668,
+      "tag": "0010_production_security",
+      "breakpoints": true
     }
   ]
 }

@@ -62,6 +62,16 @@ export async function appUrl(): Promise<string> {
   return `http://${h.get("host") ?? "localhost:3000"}`;
 }
 
+/**
+ * The caller's IP for rate limiting. Google's front end appends the address it saw to
+ * X-Forwarded-For, so the last entry is the one a client can't forge.
+ */
+export async function clientIp(): Promise<string> {
+  const xff = (await headers()).get("x-forwarded-for");
+  const last = xff?.split(",").map((s) => s.trim()).filter(Boolean).pop();
+  return last ?? "unknown";
+}
+
 export async function userAgent(): Promise<string | undefined> {
   return (await headers()).get("user-agent") ?? undefined;
 }

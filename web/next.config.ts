@@ -12,6 +12,8 @@ const nextConfig: NextConfig = {
   // Native and WASM packages run on the server only and must not be bundled.
   serverExternalPackages: ["@node-rs/argon2", "@electric-sql/pglite", "pg"],
   poweredByHeader: false,
+  // A self-contained server for the Docker image (see Dockerfile).
+  output: "standalone",
   // Keep the development badge away from the sidebar's Sign out button.
   devIndicators: { position: "bottom-right" },
   async headers() {

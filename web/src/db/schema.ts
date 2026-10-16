@@ -184,6 +184,20 @@ export const outbox = pgTable("outbox", {
   subject: text("subject").notNull(),
   body: text("body").notNull(),
   createdAt: createdAt(),
+  /** Set once the email provider accepted the message. Unsent rows are retried. */
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+  attempts: integer("attempts").notNull().default(0),
+  lastError: text("last_error"),
+});
+
+/**
+ * Fixed-window counters for sign-in, reset and PIN attempts by IP address. Kept in the database
+ * so the limit holds across every Cloud Run instance. Keys never contain passwords or codes.
+ */
+export const rateLimits = pgTable("rate_limits", {
+  key: text("key").primaryKey(),
+  count: integer("count").notNull().default(0),
+  windowStart: timestamp("window_start", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ---------------------------------------------------------------- residents and medications

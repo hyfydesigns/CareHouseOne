@@ -8,7 +8,8 @@ Care management for group homes: medications (eMAR), diagnoses, vitals, progress
 | --- | --- |
 | `web/` | The application (Next.js, TypeScript, PostgreSQL). See [web/README.md](web/README.md). |
 | `prototype/` | The clickable HTML prototypes and the original UX spec page. Sample data only. |
-| `.github/workflows/` | CI: lint, type-check, tests and build on every push. |
+| `deploy/` | Google Cloud setup script and the production runbook. |
+| `.github/workflows/` | CI on every push; `Deploy` (manual) builds and deploys to Cloud Run. |
 
 The build specification lives in Claude Docs ("CareHouse One · Build Specification v1").
 
@@ -22,6 +23,8 @@ Built so far:
 
 4. **Owner view and tablets:** a dashboard card per home (today's medications, late doses, overdue follow-ups, readings to review, notes, who's on shift, tablet last used). Registered home tablets: shift sign-in only works on one, a personal PIN unlocks it, it locks after 2 minutes idle. Offline mode: installable app, offline banner, and an encrypted on-tablet queue for vital signs and progress notes that syncs without duplicates. Medications are not recorded offline.
 
-Next: Google Cloud deployment, then security and clinical reviews.
+5. **Production readiness (in progress):** Docker image and Cloud Run deployment (manual GitHub workflow with keyless sign-in), Cloud SQL with backups and point-in-time recovery, secrets in Secret Manager, migrations at startup, SMTP email with retries, per-IP rate limits, Content Security Policy, breached-password check, health check, and a script to create a customer organization. See [deploy/README.md](deploy/README.md).
+
+Next: run the setup in the Google Cloud project, the restore test, then the security and clinical reviews.
 
 **No real resident information may be entered until the production checklist in the build spec is complete** (BAAs signed, security review, backups verified).

@@ -26,6 +26,27 @@ async function openPostgres(url: string): Promise<DB> {
   return drizzle(pool, { schema }) as unknown as DB;
 }
 
+/**
+ * Applies pending migrations to PostgreSQL. Runs when a production server starts (see
+ * src/instrumentation.ts); a session advisory lock makes concurrent instances take turns, so
+ * only the first one does the work. If a migration fails the server doesn't start, and Cloud
+ * Run keeps traffic on the previous revision.
+ */
+export async function migrateDatabase(url: string): Promise<void> {
+  const { Client } = await import("pg");
+  const { drizzle } = await import("drizzle-orm/node-postgres");
+  const { migrate } = await import("drizzle-orm/node-postgres/migrator");
+  const client = new Client({ connectionString: url });
+  await client.connect();
+  try {
+    await client.query("select pg_advisory_lock(7351902)");
+    await migrate(drizzle(client), { migrationsFolder: MIGRATIONS });
+  } finally {
+    await client.query("select pg_advisory_unlock(7351902)").catch(() => {});
+    await client.end();
+  }
+}
+
 const g = globalThis as unknown as { __ch1Db?: Promise<DB> };
 
 /**

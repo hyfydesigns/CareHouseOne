@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getDb, withTenant, type Tx } from "@/db/client";
 import type { Actor } from "@/lib/permissions";
 import { appUrl, requireUser } from "@/lib/session";
+import { deliverNow } from "@/server/mailer";
 import { cancelInvite, deactivateStaff, inviteStaff, reactivateStaff, resendInvite, type Result } from "@/server/staff";
 
 export type StaffState = { error?: string; message?: string };
@@ -11,7 +12,9 @@ export type StaffState = { error?: string; message?: string };
 /** Every staff change re-checks the signed-in user and runs inside their organization only. */
 async function run(fn: (tx: Tx, actor: Actor, orgId: string) => Promise<Result>): Promise<StaffState> {
   const me = await requireUser();
-  const r = await withTenant(await getDb(), me.orgId, (tx) => fn(tx, { id: me.id, role: me.role, facilityIds: me.facilityIds }, me.orgId));
+  const db = await getDb();
+  const r = await withTenant(db, me.orgId, (tx) => fn(tx, { id: me.id, role: me.role, facilityIds: me.facilityIds }, me.orgId));
+  if (r.ok) await deliverNow(db);
   revalidatePath("/staff");
   return r.ok ? { message: r.message } : { error: r.error };
 }

@@ -18,13 +18,14 @@ export async function audit(
 }
 
 /**
- * Sends an email. Messages never contain resident information, only links into the app.
- * Until an email provider is configured, messages are stored in the outbox table and printed
- * to the server log so they can be followed during development.
+ * Queues an email in the outbox; mailer.ts delivers it once the transaction has committed.
+ * Messages never contain resident information, only links into the app. In local development
+ * (no SMTP_URL) they're also printed to the server log so the links can be followed. Never in
+ * production: reset and invitation links are secrets.
  */
 export async function sendMail(db: Exec, m: { orgId: string | null; to: string; subject: string; body: string }): Promise<void> {
   await db.insert(outbox).values({ orgId: m.orgId, to: m.to, subject: m.subject, body: m.body });
-  if (process.env.NODE_ENV !== "test") {
+  if (process.env.NODE_ENV === "development" && !process.env.SMTP_URL) {
     console.info(`[mail] to=${m.to} subject="${m.subject}"\n${m.body}`);
   }
 }
