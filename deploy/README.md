@@ -132,7 +132,10 @@ Before go-live and once a year, restore into a throwaway instance and check the 
 ```bash
 gcloud sql instances clone carehouse-db carehouse-restore-test --point-in-time "$(date -u -d '-1 hour' +%Y-%m-%dT%H:%M:%SZ)"
 # connect with cloud-sql-proxy to carehouse-restore-test and check row counts, then:
+# the copy inherits deletion protection; turn it off on the COPY only, never on carehouse-db
+gcloud sql instances patch carehouse-restore-test --no-deletion-protection
 gcloud sql instances delete carehouse-restore-test
+gcloud sql instances list   # only carehouse-db should remain
 ```
 
 Write down the date, how long the restore took and who checked it; keep it with the HIPAA policies.
