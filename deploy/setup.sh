@@ -2,7 +2,7 @@
 # One-time Google Cloud setup for CareHouse One. Run it in Cloud Shell (gcloud is already signed
 # in there) after creating the project, linking billing and accepting Google's BAA:
 #
-#   PROJECT_ID=carehouse-one-prod bash deploy/setup.sh
+#   PROJECT_ID=carehouseone bash deploy/setup.sh
 #
 # Safe to re-run: steps that already exist are skipped. It creates:
 #   - Artifact Registry repository for the app image
@@ -16,7 +16,7 @@
 # Secret values are generated here and go straight into Secret Manager; nothing is printed.
 set -euo pipefail
 
-: "${PROJECT_ID:?Set PROJECT_ID, for example PROJECT_ID=carehouse-one-prod}"
+: "${PROJECT_ID:?Set PROJECT_ID, for example PROJECT_ID=carehouseone}"
 REGION="${REGION:-us-central1}"
 SERVICE="${SERVICE:-carehouse-one}"
 REPO="${REPO:-carehouse}"
@@ -133,7 +133,7 @@ cat <<EOF
   GCP_RUN_SA        ${RUN_SA}
   CLOUD_SQL         ${CONNECTION}
   APP_URL           ${APP_URL}
-  MAIL_FROM         CareHouse One <no-reply@your-domain>
+  MAIL_FROM         CareHouse One <no-reply@carehouseone.com>
   SMTP_ENABLED      $( [[ -n "${SMTP_URL:-}" ]] && echo true || echo false )
 Then run the "Deploy" workflow from the Actions tab.
 EOF
