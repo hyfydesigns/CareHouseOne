@@ -97,7 +97,7 @@ for s in database-url data-encryption-key cron-secret smtp-url; do
     --role=roles/secretmanager.secretAccessor >/dev/null
 done
 
-for role in roles/run.developer roles/artifactregistry.writer; do
+for role in roles/run.admin roles/artifactregistry.writer; do  # run.admin: needed to make the service public (no invoker IAM check)
   gcloud projects add-iam-policy-binding "$PROJECT_ID" --member="serviceAccount:${DEPLOY_SA}" \
     --role="$role" --condition=None >/dev/null
 done
