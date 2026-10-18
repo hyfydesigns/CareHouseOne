@@ -27,6 +27,8 @@ export async function signInAction(_: FormState, fd: FormData): Promise<FormStat
   const device = await currentDevice();
   const r = await signIn(await getDb(), { email, password, userAgent: await userAgent(), deviceId: device?.id ?? null });
   if (!r.ok) return { error: r.error };
+  // A caregiver on their home's tablet is signed in already (the PIN comes next).
+  if (r.next === "done") return finish(r.token, r.expiresAt);
   await setCookie(PENDING_COOKIE, r.token, r.expiresAt);
   redirect(r.next === "mfa" ? "/sign-in/verify" : "/sign-in/setup");
 }
@@ -89,8 +91,11 @@ export async function acceptInviteAction(token: string, _: FormState, fd: FormDa
   if (pw !== str(fd, "confirm")) return { error: "The two passwords don't match." };
   const busy = await limited("link");
   if (busy) return { error: busy };
-  const r = await acceptInvite(await getDb(), token, pw, await userAgent());
+  const device = await currentDevice();
+  const r = await acceptInvite(await getDb(), token, pw, await userAgent(), device?.id ?? null);
   if (!r.ok) return { error: r.error };
+  if (r.next === "tablet-only") redirect("/sign-in?tablet=1");
+  if (r.next === "done") return finish(r.token, r.expiresAt);
   await setCookie(PENDING_COOKIE, r.token, r.expiresAt);
   redirect("/sign-in/setup");
 }

@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createTestDb, withTenant, type DB } from "@/db/client";
-import { devicePins, progressNotes, sessions, vitals } from "@/db/schema";
+import { auditLog, devicePins, progressNotes, sessions, vitals } from "@/db/schema";
 import type { Actor } from "@/lib/permissions";
 import { currentTotp } from "@/lib/totp";
 import { getSessionUser, signIn, signOut, verifyMfa, DEVICE_LOCK_MINUTES } from "@/server/auth";
@@ -25,6 +25,7 @@ const inOrg = <T>(fn: Parameters<typeof withTenant<T>>[2], orgId = s.orgId) => w
 async function signInOn(user: { email: string; totpSecret: string }, deviceId: string | null) {
   const r = await signIn(db, { email: user.email, password: DEMO_PASSWORD, deviceId });
   if (!r.ok) throw new Error(r.error);
+  if (r.next === "done") return r.token; // a caregiver on their home's tablet: no two-step code
   const v = await verifyMfa(db, r.token, await currentTotp(user.totpSecret));
   if (!v.ok) throw new Error(v.error);
   return r.token;
@@ -71,6 +72,37 @@ describe("registering tablets", () => {
     const u = await me(token);
     expect(u.device).toBeNull();
     expect(u.needsPin).toBe(false);
+  });
+});
+
+describe("who needs two-step verification", () => {
+  const signInRaw = (email: string, deviceId: string | null) => signIn(db, { email, password: DEMO_PASSWORD, deviceId });
+
+  it("lets caregivers sign in on their own home's tablet with just a password", async () => {
+    const r = await signInRaw(s.users.caregiver.email, tabletId);
+    expect(r.ok && r.next).toBe("done");
+    if (!r.ok) return;
+    expect((await me(r.token)).needsPin).toBe(true);
+    const logged = await db.select().from(auditLog).where(and(eq(auditLog.action, "sign_in_tablet"), eq(auditLog.actorId, s.users.caregiver.id)));
+    expect(logged.length).toBeGreaterThan(0);
+  });
+
+  it("still asks everyone else, and caregivers anywhere else, for a code", async () => {
+    // A nurse on the same tablet.
+    const nurse = await signInRaw(s.users.nurse.email, tabletId);
+    expect(nurse.ok && nurse.next).toBe("mfa");
+    // The caregiver on an ordinary browser (they have two-step set up from the demo seed).
+    const away = await signInRaw(s.users.caregiver.email, null);
+    expect(away.ok && away.next).toBe("mfa");
+    // The caregiver on a tablet registered to a home they don't work at.
+    const r = await inOrg((tx) => registerDevice(tx, owner, s.orgId, { facilityId: s.facilities.mapleHouse, name: "Maple House office" }));
+    const maple = (await resolveDevice(db, r.ok ? r.data!.token : ""))!.id;
+    const elsewhere = await signInRaw(s.users.caregiver.email, maple);
+    expect(elsewhere.ok && elsewhere.next).toBe("mfa");
+    // A removed tablet counts as an ordinary browser.
+    await inOrg((tx) => revokeDevice(tx, owner, maple));
+    const removed = await signInRaw(s.users.caregiver.email, maple);
+    expect(removed.ok && removed.next).toBe("mfa");
   });
 });
 

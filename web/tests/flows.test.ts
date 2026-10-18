@@ -107,22 +107,35 @@ describe("password reset", () => {
 });
 
 describe("staff lifecycle", () => {
-  it("lets a manager invite a caregiver to their home, who then sets a password and two-step", async () => {
+  it("lets a manager invite a caregiver, who sets a password and is sent to the home's tablet", async () => {
     const mgr = actor(s.users.manager, "manager", [s.facilities.cedarRidge]);
     const res = await withTenant(db, s.orgId, (tx) =>
       inviteStaff(tx, mgr, s.orgId, { name: "Marisol Vega", email: "marisol.vega@harborviewliving.test", role: "caregiver", facilityIds: [s.facilities.cedarRidge] }, APP),
     );
     expect(res.ok).toBe(true);
     const link = await lastLink("marisol.vega@harborviewliving.test");
+    // Away from a registered tablet: password saved, no session, no authenticator setup.
+    const acc = await acceptInvite(db, link, "harbor sunrise walk 2026");
+    expect(acc.ok && acc.next).toBe("tablet-only");
+    const away = await signIn(db, { email: "marisol.vega@harborviewliving.test", password: "harbor sunrise walk 2026" });
+    expect(!away.ok && away.error).toMatch(/home's tablet/);
+    expect((await acceptInvite(db, link, "harbor sunrise walk 2026")).ok).toBe(false);
+  });
+
+  it("has nurses set a password and two-step verification", async () => {
+    const owner = actor(s.users.owner, "owner", [s.facilities.cedarRidge, s.facilities.mapleHouse]);
+    await withTenant(db, s.orgId, (tx) =>
+      inviteStaff(tx, owner, s.orgId, { name: "Ruth Adeyemi", email: "ruth.adeyemi@harborviewliving.test", role: "nurse", facilityIds: [s.facilities.cedarRidge] }, APP),
+    );
+    const link = await lastLink("ruth.adeyemi@harborviewliving.test");
     const acc = await acceptInvite(db, link, "harbor sunrise walk 2026");
     expect(acc.ok && acc.next).toBe("enroll");
-    if (!acc.ok) return;
+    if (!acc.ok || acc.next === "tablet-only") return;
     const enr = await beginEnrollment(db, acc.token);
     expect(enr?.uri).toMatch(/^otpauth:\/\/totp\//);
     const done = await confirmEnrollment(db, acc.token, await currentTotp(enr!.secret));
     expect(done.ok).toBe(true);
-    expect((await getSessionUser(db, acc.token))?.role).toBe("caregiver");
-    expect((await acceptInvite(db, link, "harbor sunrise walk 2026")).ok).toBe(false);
+    expect((await getSessionUser(db, acc.token))?.role).toBe("nurse");
   });
 
   it("stops managers adding other roles, other homes, or duplicate emails", async () => {
@@ -152,7 +165,7 @@ describe("staff lifecycle", () => {
     expect(await db.select().from(users).where(eq(users.id, owen.id))).toHaveLength(0);
   });
 
-  it("deactivates (signs out everywhere) and reactivates with a fresh password and two-step", async () => {
+  it("deactivates (signs out everywhere) and reactivates with a fresh password", async () => {
     const token = await fullSignIn(s.users.caregiver.email, s.users.caregiver.totpSecret, "a brand new phrase 2026");
     const mgr = actor(s.users.manager, "manager", [s.facilities.cedarRidge]);
     const d = await withTenant(db, s.orgId, (tx) => deactivateStaff(tx, mgr, s.users.caregiver.id, { reason: "Resigned" }));
@@ -162,8 +175,9 @@ describe("staff lifecycle", () => {
     const r = await withTenant(db, s.orgId, (tx) => reactivateStaff(tx, mgr, s.users.caregiver.id, APP));
     expect(r.ok).toBe(true);
     const link = await lastLink(s.users.caregiver.email);
+    // A returning caregiver sets a new password, then signs in on the home's tablet (reactivation clears two-step).
     const acc = await acceptInvite(db, link, "returning to harbor 2026");
-    expect(acc.ok && acc.next).toBe("enroll");
+    expect(acc.ok && acc.next).toBe("tablet-only");
   });
 
   it("sends people gone over 12 months to rehire instead of reactivation", async () => {

@@ -19,9 +19,16 @@ export const INVITE_DAYS = 7;
 const minutes = (n: number) => new Date(Date.now() + n * 60_000);
 const GENERIC_FAIL = "That email and password don't match.";
 
-export type SignInResult =
-  | { ok: true; token: string; next: "mfa" | "enroll"; expiresAt: Date }
-  | { ok: false; error: string };
+/**
+ * "done": signed in (a caregiver on their home's registered tablet, see tabletSignIn).
+ * "mfa" / "enroll": a pending session that still needs two-step verification.
+ * "tablet-only": invitation accepted by a caregiver away from the tablet; no session.
+ */
+export type SignInResult = { ok: true; token: string; next: "mfa" | "enroll" | "done"; expiresAt: Date } | { ok: false; error: string };
+export type InviteResult = SignInResult | { ok: true; next: "tablet-only" };
+
+const CAREGIVER_ROLES: ReadonlyArray<User["role"]> = ["caregiver", "med_caregiver"];
+const TABLET_ONLY = "Caregivers sign in on their home's tablet. Ask your manager if you need to sign in somewhere else.";
 
 // A real hash to compare against when the email is unknown, so timing doesn't reveal accounts.
 let decoyHash: Promise<string> | null = null;
@@ -43,7 +50,21 @@ async function recordFailure(db: DB, user: User, reason: string): Promise<string
   return lock ? `Too many attempts. Try again in ${LOCK_MINUTES} minutes.` : reason === "password" ? GENERIC_FAIL : "That code isn't right. Try again.";
 }
 
-/** Step 1: email and password. Creates a pending session that still needs two-step verification. */
+/**
+ * Caregivers don't use authenticator apps. On a registered tablet belonging to one of their homes,
+ * the tablet stands in for the second factor: only an owner can register one, it can be removed
+ * remotely, and the person then sets a PIN that locks it. Everyone else, and caregivers anywhere
+ * else, use two-step verification.
+ */
+async function tabletSignIn(db: DB, user: User, deviceId: string | null): Promise<boolean> {
+  if (!deviceId || !CAREGIVER_ROLES.includes(user.role)) return false;
+  const [d] = await db.select({ facilityId: devices.facilityId }).from(devices).where(eq(devices.id, deviceId));
+  if (!d) return false;
+  const [link] = await db.select().from(userFacilities).where(and(eq(userFacilities.userId, user.id), eq(userFacilities.facilityId, d.facilityId)));
+  return !!link;
+}
+
+/** Step 1: email and password. Usually creates a pending session that still needs two-step verification. */
 export async function signIn(db: DB, input: { email: string; password: string; userAgent?: string; deviceId?: string | null }): Promise<SignInResult> {
   const user = await findActiveByEmail(db, input.email);
   if (!user || !user.passwordHash) {
@@ -62,7 +83,13 @@ export async function signIn(db: DB, input: { email: string; password: string; u
   const token = randomToken();
   const expiresAt = minutes(PENDING_MINUTES);
   const deviceId = input.deviceId ? await deviceForOrg(db, input.deviceId, user.orgId) : null;
-  await db.insert(sessions).values({ orgId: user.orgId, userId: user.id, tokenHash: sha256(token), mfaPassed: false, expiresAt, userAgent: input.userAgent?.slice(0, 300), deviceId });
+  const tablet = await tabletSignIn(db, user, deviceId);
+  if (!tablet && CAREGIVER_ROLES.includes(user.role) && !user.mfaEnabled) return { ok: false, error: TABLET_ONLY };
+  const [session] = await db
+    .insert(sessions)
+    .values({ orgId: user.orgId, userId: user.id, tokenHash: sha256(token), mfaPassed: false, expiresAt, userAgent: input.userAgent?.slice(0, 300), deviceId })
+    .returning();
+  if (tablet) return { ok: true, token, next: "done", expiresAt: await completeSession(db, session.id, user, "sign_in_tablet") };
   return { ok: true, token, next: user.mfaEnabled ? "mfa" : "enroll", expiresAt };
 }
 
@@ -240,7 +267,7 @@ export async function resetPassword(db: DB, token: string, password: string): Pr
  * Accepting an invitation or reactivation: set a password, then go straight to setting up
  * two-step verification with a pending session.
  */
-export async function acceptInvite(db: DB, token: string, password: string, userAgent?: string): Promise<SignInResult> {
+export async function acceptInvite(db: DB, token: string, password: string, userAgent?: string, deviceId?: string | null): Promise<InviteResult> {
   const row = await liveToken(db, token, ["invite", "reactivate"]);
   if (!row || row.user.status !== "invited") return { ok: false, error: "This invitation has expired or was cancelled. Ask your manager to send a new one." };
   const problem = checkPasswordPolicy(password, row.user.email);
@@ -252,6 +279,17 @@ export async function acceptInvite(db: DB, token: string, password: string, user
     .where(eq(users.id, row.user.id));
   await db.update(accountTokens).set({ usedAt: new Date() }).where(eq(accountTokens.id, row.t.id));
   await audit(db, { orgId: row.user.orgId, actorId: row.user.id, action: row.t.purpose === "invite" ? "invitation_accepted" : "reactivation_accepted", entity: "user", entityId: row.user.id });
+  if (CAREGIVER_ROLES.includes(row.user.role)) {
+    // Caregivers never set up an authenticator: on the tablet they're signed straight in, anywhere else they're told to use the tablet.
+    const device = deviceId ? await deviceForOrg(db, deviceId, row.user.orgId) : null;
+    if (!(await tabletSignIn(db, row.user, device))) return { ok: true, next: "tablet-only" };
+    const session = randomToken();
+    const [s] = await db
+      .insert(sessions)
+      .values({ orgId: row.user.orgId, userId: row.user.id, tokenHash: sha256(session), mfaPassed: false, expiresAt: minutes(PENDING_MINUTES), userAgent: userAgent?.slice(0, 300), deviceId: device })
+      .returning();
+    return { ok: true, token: session, next: "done", expiresAt: await completeSession(db, s.id, row.user, "sign_in_tablet") };
+  }
   const session = randomToken();
   const expiresAt = minutes(PENDING_MINUTES);
   await db.insert(sessions).values({ orgId: row.user.orgId, userId: row.user.id, tokenHash: sha256(session), mfaPassed: false, expiresAt, userAgent: userAgent?.slice(0, 300) });

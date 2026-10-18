@@ -48,7 +48,8 @@ To start over, stop the dev server and delete `.data/`.
 
 ## Security model
 
-- **Sign-in:** email and password (Argon2id), then a required authenticator code. 5 wrong attempts lock the account for 15 minutes. Unknown emails and wrong passwords get the same answer.
+- **Sign-in:** email and password (Argon2id), then an authenticator code for owners, admins, managers and nurses. 5 wrong attempts lock the account for 15 minutes. Unknown emails and wrong passwords get the same answer.
+- **Caregivers:** no authenticator app. They sign in with a password only on a registered tablet belonging to one of their homes (the tablet is the second factor: only an owner can register it, it can be removed remotely, and it then locks with their PIN). Anywhere else they're refused, unless they already set up two-step verification. Recorded as `sign_in_tablet` in the audit log.
 - **Sessions:** random 256-bit tokens in an HttpOnly cookie; only their SHA-256 is stored. Pending until two-step passes. End after 15 minutes idle (`SESSION_IDLE_MINUTES`) or 12 hours.
 - **Shared tablets:** registered in Settings by an owner or admin (a long-lived `ch1_device` cookie; only its hash is stored). After a full sign-in each person sets a 4 to 8 digit PIN for that tablet. The tablet locks after 2 minutes without a touch (the server locks it after 5 as a backstop) and every page redirects to the lock screen until the PIN is entered. Five wrong PINs end the session. Removing a tablet signs everyone out of it. Shift sign-in only works on a registered tablet and is recorded at its home; sign-out works anywhere.
 - **Offline:** vital signs and progress notes made offline are AES-GCM encrypted in IndexedDB with a non-extractable key, sent only for the person who made them, matched on a client ID so a retry can't duplicate them, keep the time they were taken, and are refused after 72 hours. The service worker never caches pages or resident data.
