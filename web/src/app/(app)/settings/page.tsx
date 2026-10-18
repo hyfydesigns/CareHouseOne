@@ -2,8 +2,11 @@ import { redirect } from "next/navigation";
 import { getDb, withTenant } from "@/db/client";
 import { canViewAudit } from "@/lib/permissions";
 import { currentDevice, requireUser } from "@/lib/session";
-import { asc } from "drizzle-orm";
-import { facilities } from "@/db/schema";
+import { and, asc, count, eq } from "drizzle-orm";
+import { facilities, residents } from "@/db/schema";
+import { billingState, orgSubscription } from "@/server/billing";
+import { paypalLive, PRICE_PER_RESIDENT } from "@/server/paypal";
+import { CONTACT_EMAIL } from "../../(site)/shell";
 import { listDevices } from "@/server/devices";
 import { getOrg } from "@/server/org";
 import { forgetThisDeviceAction, registerDeviceAction, residentCheckAction, revokeDeviceAction } from "./actions";
@@ -13,12 +16,18 @@ export default async function SettingsPage() {
   const me = await requireUser();
   if (!canViewAudit(me)) redirect("/dashboard");
   const actor = { id: me.id, role: me.role, facilityIds: me.facilityIds };
-  const data = await withTenant(await getDb(), me.orgId, async (tx) => ({ org: await getOrg(tx, me.orgId), devices: await listDevices(tx, actor), homes: await tx.select().from(facilities).orderBy(asc(facilities.name)) }));
+  const data = await withTenant(await getDb(), me.orgId, async (tx) => ({ org: await getOrg(tx, me.orgId), devices: await listDevices(tx, actor), homes: await tx.select().from(facilities).orderBy(asc(facilities.name)),
+    sub: await orgSubscription(tx),
+    activeResidents: (await tx.select({ n: count() }).from(residents).where(and(eq(residents.orgId, me.orgId), eq(residents.status, "active"))))[0].n,
+  }));
   if (!data.org) redirect("/dashboard");
   const here = await currentDevice();
   const tz = data.homes[0]?.timeZone ?? "UTC";
   const when = (d: Date | null) => (d ? d.toLocaleString("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) : "—");
   const active = data.devices.filter((r) => !r.d.revokedAt);
+  const bill = billingState(data.sub);
+  const day = (d: Date | null) => (d ? d.toLocaleDateString("en-US", { timeZone: tz, month: "long", day: "numeric", year: "numeric" }) : "—");
+  const paypalAccount = paypalLive() ? "https://www.paypal.com/myaccount/autopay/" : "https://www.sandbox.paypal.com/myaccount/autopay/";
   return (
     <>
       <div>
@@ -60,6 +69,33 @@ export default async function SettingsPage() {
         </div>
       </section>
       <ResidentCheckForm action={residentCheckAction} current={data.org.residentCheck} />
+      <section className="card" id="billing" aria-labelledby="billing-h">
+        <div className="row">
+          <h2 id="billing-h" style={{ margin: 0 }}>Billing</h2>
+          <span className={`pill ${bill.tone}`}>{bill.label}</span>
+        </div>
+        {data.sub ? (
+          <>
+            <div className="kpis">
+              <div><span className="small muted">Plan</span><br /><b>${PRICE_PER_RESIDENT} per resident per month</b></div>
+              <div><span className="small muted">Residents billed</span><br /><b>{data.sub.quantity}</b></div>
+              <div><span className="small muted">Active residents now</span><br /><b>{data.activeResidents}</b></div>
+              <div><span className="small muted">Next payment</span><br /><b>{day(data.sub.nextBillingAt)}</b></div>
+            </div>
+            {bill.warning && <p className={bill.tone === "crit" ? "error" : "notice"} style={{ margin: 0 }}>{bill.warning}</p>}
+            {data.sub.approvalUrl && (
+              <a className="btn primary" href={data.sub.approvalUrl} target="_blank" rel="noreferrer" style={{ justifySelf: "start" }}>Approve the new count in PayPal</a>
+            )}
+            <p className="small muted" style={{ margin: 0 }}>
+              The count is sent to PayPal on the first of each month. Change the payment method or cancel in your PayPal account
+              {data.sub.payerEmail ? ` (${data.sub.payerEmail})` : ""}: <a href={paypalAccount} target="_blank" rel="noreferrer">PayPal automatic payments</a>. Care
+              records are never locked for a missed payment. CareHouse One never sees or stores card details.
+            </p>
+          </>
+        ) : (
+          <p className="small muted" style={{ margin: 0 }}>Your organization is billed by invoice. Questions: <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.</p>
+        )}
+      </section>
     </>
   );
 }

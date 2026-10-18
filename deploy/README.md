@@ -8,7 +8,11 @@ This is the runbook for production. Every step is done by the developer.
 | Region | `us-central1` |
 | App address | `https://app.carehouseone.com` (until the domain is mapped in step 8: `https://carehouse-one-PROJECT_NUMBER.us-central1.run.app`, printed by `setup.sh`) |
 | Email sender | `CareHouse One <no-reply@carehouseone.com>`, sent through Resend |
-| Domain registrar and DNS | Cloudflare (`carehouseone.com`) | **No real resident data until the build spec's production plan step 1 (compliance foundation) and step 4 (testing, including a restore test) are complete.**
+| Domain registrar and DNS | Cloudflare (`carehouseone.com`) |
+| Public site | `https://www.carehouseone.com` (same Cloud Run service; step 9) |
+| Payments | PayPal Subscriptions, $50 per resident per month, 30-day free trial (step 9) |
+
+**No real resident data until the build spec's production plan step 1 (compliance foundation) and step 4 (testing, including a restore test) are complete.**
 
 ## What runs where
 
@@ -16,9 +20,10 @@ This is the runbook for production. Every step is done by the developer.
 | --- | --- | --- |
 | Web app | Cloud Run `carehouse-one` | Docker image from `web/Dockerfile`. Scales to zero; at most 3 instances. Applies database migrations when a new revision starts. |
 | Database | Cloud SQL for PostgreSQL 17 `carehouse-db` | Daily backups kept 30 days, point-in-time recovery for 7 days, encrypted connections only, deletion protection. Reached through the Cloud SQL connector, never an open port. |
-| Secrets | Secret Manager | `database-url`, `data-encryption-key`, `cron-secret`, `smtp-url` (optional). Only the runtime service account can read them. |
+| Secrets | Secret Manager | `database-url`, `data-encryption-key`, `cron-secret`, `smtp-url`, `paypal-client-secret`. Only the runtime service account can read them. |
 | Images | Artifact Registry `carehouse` | Tagged with the git commit. |
-| Housekeeping | Cloud Scheduler `carehouse-cron` | Every 5 minutes: retries unsent emails, clears old rate-limit counters. |
+| Housekeeping | Cloud Scheduler `carehouse-cron` | Every 5 minutes: retries unsent emails, refreshes PayPal subscriptions (and sends the resident count on the 1st), clears old rate-limit counters. |
+| Payments | PayPal | Sees the organization name, billing contact and resident count only, never resident details. Webhooks go to `/api/paypal/webhook`. |
 | Email | Resend (SMTP) | Invitation and password-reset links only, never resident details. |
 | DNS | Cloudflare | Every record DNS only (grey cloud), never proxied. |
 | Deploys | GitHub Actions `Deploy` workflow | Manual. Signs in to Google with Workload Identity Federation (no keys), only from `main` of this repository. |
@@ -162,6 +167,65 @@ gcloud scheduler jobs update http carehouse-cron --location us-central1 --uri "h
 ```
 
 Also in Cloudflare: turn on auto-renew and the registrar lock for `carehouseone.com`. If the domain lapses, email and the app address stop working.
+
+## 9. Public site and PayPal sign-up
+
+The landing page, pricing and sign-up live at `www.carehouseone.com`, served by the same Cloud Run service as the app. **Online sign-up stays closed (`SIGNUP_OPEN` off) until the lawyer-reviewed Terms of Service and Business Associate Agreement replace the placeholders at `/terms` and `/baa`.** Until then the site offers "Request a demo".
+
+### 9a. The www address
+
+1. Map it (the domain is already verified from step 8):
+
+```bash
+gcloud beta run domain-mappings create --service carehouse-one --domain www.carehouseone.com --region us-central1
+```
+
+2. In Cloudflare add the record it shows (`CNAME`, name `www`, target `ghs.googlehosted.com`), **DNS only**.
+3. Send the bare domain to www: in Cloudflare add an `A` record for `@` pointing to `192.0.2.1` with the proxy **on** (orange cloud; nothing is ever served from it), then Rules > Redirect Rules > "Redirect from root to WWW". This is the only proxied record, and it carries no app traffic.
+4. Email for the site: in Cloudflare Email Routing, forward `hello@carehouseone.com` to your inbox.
+5. GitHub variables: `SITE_URL` = `https://www.carehouseone.com`, `CONTACT_EMAIL` = `hello@carehouseone.com`, `LEADS_EMAIL` = the address that should get demo requests. Run Deploy.
+
+Demo requests are stored in the `leads` table and emailed to `LEADS_EMAIL`.
+
+### 9b. PayPal in sandbox (test money)
+
+1. developer.paypal.com > Apps & Credentials > **Sandbox** > Create App. Copy the client ID and secret.
+2. Create the product and plan (in Cloud Shell, from `~/CareHouseOne/web`). It prints the plan ID:
+
+```bash
+PAYPAL_ENV=sandbox PAYPAL_CLIENT_ID='CLIENT_ID' PAYPAL_CLIENT_SECRET='SECRET' npm run paypal:setup
+```
+
+3. Store the secret and let the app read it:
+
+```bash
+printf '%s' 'SECRET' | gcloud secrets create paypal-client-secret --data-file=-
+gcloud secrets add-iam-policy-binding paypal-client-secret --member="serviceAccount:carehouse-run@carehouseone.iam.gserviceaccount.com" --role=roles/secretmanager.secretAccessor
+```
+
+4. In the PayPal app, add a webhook: URL `https://app.carehouseone.com/api/paypal/webhook`, events `BILLING.SUBSCRIPTION.ACTIVATED`, `BILLING.SUBSCRIPTION.UPDATED`, `BILLING.SUBSCRIPTION.CANCELLED`, `BILLING.SUBSCRIPTION.SUSPENDED`, `BILLING.SUBSCRIPTION.EXPIRED`, `BILLING.SUBSCRIPTION.PAYMENT.FAILED` and `PAYMENT.SALE.COMPLETED`. Copy the webhook ID.
+5. GitHub variables: `PAYPAL_ENV` = `sandbox`, `PAYPAL_CLIENT_ID`, `PAYPAL_PLAN_ID`, `PAYPAL_WEBHOOK_ID`. Leave `SIGNUP_OPEN` unset. Run Deploy.
+
+**Try the whole flow locally** with the sandbox (sign-up is open only on your computer). In `web/.env.local` (never committed):
+
+```
+SIGNUP_OPEN=true
+PAYPAL_ENV=sandbox
+PAYPAL_CLIENT_ID=...
+PAYPAL_CLIENT_SECRET=...
+PAYPAL_PLAN_ID=...
+```
+
+Then `npm run dev`, open `http://www.localhost:3000/signup`, subscribe with a PayPal sandbox **personal** test account (developer dashboard > Testing tools > Sandbox accounts), set up the organization, and follow the invitation link printed in the dev server log. Webhooks don't reach your computer; the scheduled sync picks the subscription up in production.
+
+### 9c. Going live
+
+1. Publish the final Terms of Service and BAA at `/terms` and `/baa` (replace the placeholder pages in `web/src/app/(site)/`), and have the privacy page reviewed with them.
+2. In PayPal, switch to **Live**, create a live app, run `npm run paypal:setup` with `PAYPAL_ENV=live` and the live credentials, add a new version of `paypal-client-secret` with the live secret, and add the same webhook to the live app.
+3. GitHub variables: `PAYPAL_ENV` = `live`, the live `PAYPAL_CLIENT_ID`, `PAYPAL_PLAN_ID` and `PAYPAL_WEBHOOK_ID`, and `SIGNUP_OPEN` = `true`. Run Deploy. The app refuses to start with sign-up open and any PayPal setting missing.
+4. Subscribe once yourself with a real card, set up a test organization, then cancel the subscription in PayPal and check that Settings > Billing shows it as cancelled.
+
+**What customers see:** a billing card in Settings with the plan, the residents billed, the active residents now and the next payment date. If a payment fails, owners and admins get an email and a banner; after 14 days inviting staff, registering tablets and settings changes pause. Care records and the medication record are never blocked. On the first of each month the active resident count is sent to PayPal; if PayPal needs the payer to approve a higher amount, an "Approve the new count in PayPal" button appears.
 
 ## Routine work
 

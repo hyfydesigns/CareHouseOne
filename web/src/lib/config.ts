@@ -6,5 +6,9 @@ export function checkProductionConfig(): void {
   const key = Buffer.from(process.env.DATA_ENCRYPTION_KEY!, "base64");
   if (key.length !== 32) throw new Error("DATA_ENCRYPTION_KEY must be 32 bytes, base64 encoded");
   if (!process.env.APP_URL!.startsWith("https://")) throw new Error("APP_URL must use https in production");
+  if (process.env.SIGNUP_OPEN === "true") {
+    const pp = ["PAYPAL_CLIENT_ID", "PAYPAL_CLIENT_SECRET", "PAYPAL_PLAN_ID", "PAYPAL_WEBHOOK_ID"].filter((k) => !process.env[k]);
+    if (pp.length) throw new Error(`SIGNUP_OPEN is on but these PayPal settings are missing: ${pp.join(", ")}`);
+  }
   if (!process.env.SMTP_URL) console.warn("[startup] SMTP_URL is not set: invitation and password-reset emails will wait in the outbox");
 }

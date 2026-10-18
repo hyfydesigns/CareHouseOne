@@ -4,11 +4,14 @@ import { revalidatePath } from "next/cache";
 import type { FormState } from "@/components/status";
 import { getDb, withTenant } from "@/db/client";
 import { clearCookie, DEVICE_COOKIE, requireUser, setDeviceCookie } from "@/lib/session";
+import { adminLockedMessage } from "@/server/billing";
 import { registerDevice, revokeDevice } from "@/server/devices";
 import { setResidentCheck } from "@/server/org";
 
 export async function residentCheckAction(_: FormState, fd: FormData): Promise<FormState> {
   const me = await requireUser();
+  const locked = await withTenant(await getDb(), me.orgId, adminLockedMessage);
+  if (locked) return { error: locked };
   const r = await withTenant(await getDb(), me.orgId, (tx) => setResidentCheck(tx, { id: me.id, role: me.role, facilityIds: me.facilityIds }, me.orgId, fd.get("residentCheck")));
   revalidatePath("/settings");
   return r.ok ? { message: r.message } : { error: r.error };
@@ -17,6 +20,8 @@ export async function residentCheckAction(_: FormState, fd: FormData): Promise<F
 /** Registers the browser this is clicked in as one of the home tablets. */
 export async function registerDeviceAction(_: FormState, fd: FormData): Promise<FormState> {
   const me = await requireUser();
+  const locked = await withTenant(await getDb(), me.orgId, adminLockedMessage);
+  if (locked) return { error: locked };
   const r = await withTenant(await getDb(), me.orgId, (tx) => registerDevice(tx, me, me.orgId, { facilityId: fd.get("facilityId"), name: fd.get("name") }));
   if (!r.ok) return { error: r.error };
   await setDeviceCookie(r.data!.token);

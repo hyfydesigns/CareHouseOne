@@ -425,3 +425,59 @@ export type MedicationOrder = typeof medicationOrders.$inferSelect;
 export type Administration = typeof administrations.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type Facility = typeof facilities.$inferSelect;
+
+// ---------------------------------------------------------------- billing and the public site
+
+/**
+ * A PayPal subscription. Created when someone approves a subscription on the public site; linked
+ * to an organization once they finish setting it up. Organizations created by the developer
+ * (invoiced customers, the first client) have none. PayPal only ever sees the organization's
+ * name, the billing contact and the resident count, never anything about residents.
+ */
+export const subscriptions = pgTable("subscriptions", {
+  id: id(),
+  orgId: uuid("org_id").unique().references(() => organizations.id),
+  paypalSubscriptionId: text("paypal_subscription_id").notNull().unique(),
+  planId: text("plan_id").notNull(),
+  /** PayPal's status: APPROVAL_PENDING, APPROVED, ACTIVE, SUSPENDED, CANCELLED or EXPIRED. */
+  status: text("status").notNull(),
+  quantity: integer("quantity").notNull(),
+  payerEmail: text("payer_email"),
+  payerName: text("payer_name"),
+  nextBillingAt: timestamp("next_billing_at", { withTimezone: true }),
+  failedPayments: integer("failed_payments").notNull().default(0),
+  /** First failed payment or suspension; admin features go read-only 14 days later. */
+  pastDueSince: timestamp("past_due_since", { withTimezone: true }),
+  /** Single-use link to the organization setup page, emailed to the payer. */
+  setupTokenHash: text("setup_token_hash").unique(),
+  setupExpiresAt: timestamp("setup_expires_at", { withTimezone: true }),
+  setupUsedAt: timestamp("setup_used_at", { withTimezone: true }),
+  /** When PayPal needs the payer to approve a new resident count. */
+  approvalUrl: text("approval_url"),
+  /** YYYY-MM of the last first-of-month resident count sent to PayPal. */
+  quantitySyncedMonth: text("quantity_synced_month"),
+  syncedAt: timestamp("synced_at", { withTimezone: true }),
+  createdAt: createdAt(),
+});
+
+/** Every PayPal webhook received, once each (PayPal retries deliveries). */
+export const billingEvents = pgTable("billing_events", {
+  id: id(),
+  paypalEventId: text("paypal_event_id").notNull().unique(),
+  eventType: text("event_type").notNull(),
+  resourceId: text("resource_id"),
+  receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** "Request a demo" from the public site. Contact details of prospects, never resident data. */
+export const leads = pgTable("leads", {
+  id: id(),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  organization: text("organization").notNull(),
+  homes: integer("homes"),
+  residents: integer("residents"),
+  message: text("message"),
+  createdAt: createdAt(),
+});
+export type Subscription = typeof subscriptions.$inferSelect;

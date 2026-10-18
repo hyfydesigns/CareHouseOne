@@ -1,7 +1,7 @@
-import { sql } from "drizzle-orm";
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { DB } from "@/db/client";
-import { accountTokens, facilities, organizations, userFacilities, users } from "@/db/schema";
+import { accountTokens, facilities, organizations, subscriptions, userFacilities, users } from "@/db/schema";
 import { randomToken, sha256 } from "@/lib/crypto";
 import { audit, sendMail } from "./audit";
 import { INVITE_DAYS } from "./auth";
@@ -34,15 +34,31 @@ export type ProvisionInput = z.input<typeof provisionSchema>;
 
 /**
  * Creates a customer organization, its homes and an invitation for its owner, who then sets a
- * password and two-step verification and invites everyone else from the app. Run by the
- * developer with scripts/create-org.ts; there is no public sign-up.
+ * password and two-step verification and invites everyone else from the app. Used by the
+ * developer (scripts/create-org.ts) and by self-service sign-up after a PayPal subscription
+ * (billing.ts), which passes the setup link's hash to claim that subscription.
  */
-export async function provisionOrganization(db: DB, raw: ProvisionInput, appUrl: string): Promise<{ orgId: string; inviteLink: string }> {
+export async function provisionOrganization(
+  db: DB,
+  raw: ProvisionInput,
+  appUrl: string,
+  opts: { setupTokenHash?: string } = {},
+): Promise<{ orgId: string; inviteLink: string }> {
   const input = provisionSchema.parse(raw);
   return db.transaction(async (tx) => {
     const [dup] = await tx.select({ id: users.id }).from(users).where(sql`lower(${users.email}) = ${input.owner.email}`);
     if (dup) throw new Error(`An account already exists for ${input.owner.email}.`);
     const [org] = await tx.insert(organizations).values({ name: input.orgName }).returning();
+    if (opts.setupTokenHash) {
+      // Self-service sign-up: claim the paid subscription. Only one organization per subscription,
+      // and the link works once even if two tabs submit at the same moment.
+      const claimed = await tx
+        .update(subscriptions)
+        .set({ orgId: org.id, setupUsedAt: new Date() })
+        .where(and(eq(subscriptions.setupTokenHash, opts.setupTokenHash), isNull(subscriptions.setupUsedAt), isNull(subscriptions.orgId), gt(subscriptions.setupExpiresAt, new Date())))
+        .returning({ id: subscriptions.id });
+      if (!claimed.length) throw new Error("This setup link has expired or was already used.");
+    }
     const homes = await tx
       .insert(facilities)
       .values(input.homes.map((h) => ({ orgId: org.id, name: h.name, timeZone: h.timeZone, beds: h.beds, licenseType: h.licenseType })))

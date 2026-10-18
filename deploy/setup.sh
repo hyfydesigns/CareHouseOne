@@ -91,7 +91,7 @@ exists gcloud iam service-accounts describe "$DEPLOY_SA" ||
 
 gcloud projects add-iam-policy-binding "$PROJECT_ID" --member="serviceAccount:${RUN_SA}" \
   --role=roles/cloudsql.client --condition=None >/dev/null
-for s in database-url data-encryption-key cron-secret smtp-url; do
+for s in database-url data-encryption-key cron-secret smtp-url paypal-client-secret; do
   exists gcloud secrets describe "$s" || continue
   gcloud secrets add-iam-policy-binding "$s" --member="serviceAccount:${RUN_SA}" \
     --role=roles/secretmanager.secretAccessor >/dev/null

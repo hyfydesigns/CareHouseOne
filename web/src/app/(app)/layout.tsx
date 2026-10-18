@@ -1,4 +1,7 @@
+import Link from "next/link";
+import { getDb, withTenant } from "@/db/client";
 import { requireUser } from "@/lib/session";
+import { billingState, orgSubscription } from "@/server/billing";
 import { canViewAudit, canViewStaff, ROLE_LABEL } from "@/lib/permissions";
 import { IdleLock } from "@/components/idle-lock";
 import { OfflineProvider } from "@/components/offline";
@@ -8,6 +11,8 @@ import { NavLink } from "./nav-link";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const me = await requireUser();
   const isCaregiver = me.role === "caregiver" || me.role === "med_caregiver";
+  // Billing problems are shown to owners and admins only; caregivers' screens never change.
+  const billing = canViewAudit(me) ? billingState(await withTenant(await getDb(), me.orgId, orgSubscription)) : null;
   return (
     <div className="shell">
       <nav className="side" aria-label="Main">
@@ -58,7 +63,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       </nav>
       <main className="main" id="main">
-        <OfflineProvider userId={me.id}>{children}</OfflineProvider>
+        <OfflineProvider userId={me.id}>
+          {billing?.warning && (
+            <div className={`banner ${billing.tone === "crit" ? "error" : "offline"}`} role="status">
+              {billing.warning} <Link href="/settings#billing" style={{ marginLeft: 6 }}>Billing</Link>
+            </div>
+          )}
+          {children}
+        </OfflineProvider>
       </main>
       {me.device && <IdleLock minutes={2} lock={idleLockAction} />}
     </div>

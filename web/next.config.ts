@@ -14,6 +14,8 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   // A self-contained server for the Docker image (see Dockerfile).
   output: "standalone",
+  // Locally the public site is http://www.localhost:3000 (src/lib/hosts.ts).
+  allowedDevOrigins: ["www.localhost", "app.localhost"],
   // Keep the development badge away from the sidebar's Sign out button.
   devIndicators: { position: "bottom-right" },
   async headers() {

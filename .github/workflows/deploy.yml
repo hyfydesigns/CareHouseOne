@@ -64,13 +64,17 @@ jobs:
         run: |
           SECRETS="DATABASE_URL=database-url:latest,DATA_ENCRYPTION_KEY=data-encryption-key:latest,CRON_SECRET=cron-secret:latest"
           if [ "${{ vars.SMTP_ENABLED }}" = "true" ]; then SECRETS="$SECRETS,SMTP_URL=smtp-url:latest"; fi
+          if [ -n "${{ vars.PAYPAL_CLIENT_ID }}" ]; then SECRETS="$SECRETS,PAYPAL_CLIENT_SECRET=paypal-client-secret:latest"; fi
+          ENV="APP_URL=${{ vars.APP_URL }}|MAIL_FROM=${{ vars.MAIL_FROM }}|SESSION_IDLE_MINUTES=15"
+          ENV="$ENV|SITE_URL=${{ vars.SITE_URL || 'https://www.carehouseone.com' }}|CONTACT_EMAIL=${{ vars.CONTACT_EMAIL || 'hello@carehouseone.com' }}|LEADS_EMAIL=${{ vars.LEADS_EMAIL }}"
+          ENV="$ENV|SIGNUP_OPEN=${{ vars.SIGNUP_OPEN || 'false' }}|PAYPAL_ENV=${{ vars.PAYPAL_ENV || 'sandbox' }}|PAYPAL_CLIENT_ID=${{ vars.PAYPAL_CLIENT_ID }}|PAYPAL_PLAN_ID=${{ vars.PAYPAL_PLAN_ID }}|PAYPAL_WEBHOOK_ID=${{ vars.PAYPAL_WEBHOOK_ID }}"
           gcloud run deploy carehouse-one \
             --image "$IMAGE" \
             --region "${{ vars.GCP_REGION }}" \
             --service-account "${{ vars.GCP_RUN_SA }}" \
             --add-cloudsql-instances "${{ vars.CLOUD_SQL }}" \
             --set-secrets "$SECRETS" \
-            --set-env-vars "^|^APP_URL=${{ vars.APP_URL }}|MAIL_FROM=${{ vars.MAIL_FROM }}|SESSION_IDLE_MINUTES=15" \
+            --set-env-vars "^|^$ENV" \
             --no-invoker-iam-check \
             --execution-environment gen2 \
             --cpu 1 --memory 1Gi --cpu-boost \
