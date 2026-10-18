@@ -24,8 +24,8 @@ const FEATURES: Array<{ title: string; body: string; d: string }> = [
     d: "M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
   },
   {
-    title: "Vital signs the nurse sees",
-    body: "Blood pressure, pulse, temperature, oxygen and weight with plain labels. Readings outside the usual range are flagged for the nurse to review.",
+    title: "Vital signs that get noticed",
+    body: "Blood pressure, pulse, temperature, oxygen and weight with plain labels. Readings outside the usual range alert the caregiver and stay flagged until someone reviews them.",
     d: "M3 12h4l3-8 4 16 3-8h4",
   },
   {
@@ -73,7 +73,7 @@ export function Landing() {
             <h1>Care records your caregivers can get right on the first try.</h1>
             <p className="lead">
               CareHouse One puts the medication pass, vital signs, progress notes and shift sign-in on one shared tablet in each home, with large buttons, plain
-              words and hard stops where mistakes happen. Nurses and owners see everything from any browser.
+              words and hard stops where mistakes happen. Owners and admins see everything from any browser.
             </p>
             <div className="site-cta">
               {open ? (
@@ -99,7 +99,7 @@ export function Landing() {
       <section className="site-section" id="features" aria-labelledby="features-h">
         <div className="site-wrap">
           <h2 className="title" id="features-h">Everything a shift needs, nothing it doesn&apos;t</h2>
-          <p className="sub">Caregivers see four screens: Medication &amp; Diagnosis, Sign In / Sign Out, Vital Signs and Progress Notes. Nurses, managers and owners get the tools behind them.</p>
+          <p className="sub">Caregivers see four screens: Medication &amp; Diagnosis, Sign In / Sign Out, Vital Signs and Progress Notes. Owners and admins get the tools behind them.</p>
           <div className="site-grid">
             {FEATURES.map((f) => (
               <div className="site-feature" key={f.title}>
@@ -122,7 +122,7 @@ export function Landing() {
             </li>
             <li>
               <h3>Invite your team</h3>
-              <p>Add caregivers, nurses and managers. Register each home&apos;s tablet in Settings; caregivers set their own PIN on it.</p>
+              <p>Add your caregivers and admins. Register each home&apos;s tablet in Settings; caregivers set their own PIN on it.</p>
             </li>
             <li>
               <h3>Start the medication pass</h3>
@@ -145,7 +145,7 @@ export function Landing() {
               <ul>
                 <li>Every feature, in every home</li>
                 <li>Unlimited staff accounts and homes</li>
-                <li>Two-step verification for owners, managers and nurses; caregivers sign in only on the home&apos;s tablet, with a personal PIN</li>
+                <li>Two-step verification for owners and admins; caregivers sign in only on the home&apos;s tablet, with a personal PIN</li>
                 <li>Automatic tablet lock and an audit log nobody can edit</li>
                 <li>Daily backups</li>
                 <li>A Business Associate Agreement with every subscription</li>
@@ -180,7 +180,7 @@ export function Landing() {
             <details>
               <summary>Is CareHouse One built for HIPAA?</summary>
               <p>
-                Yes. Data is encrypted in transit and at rest. Owners, managers and nurses use two-step verification; caregivers don&apos;t need an
+                Yes. Data is encrypted in transit and at rest. Owners and admins use two-step verification; caregivers don&apos;t need an
                 authenticator app, because they can only sign in on a tablet you&apos;ve registered to their home, which then locks with their personal PIN.
                 Sessions end automatically, and every change is kept in an audit log nobody can edit. It runs on Google Cloud services covered by Google&apos;s Business Associate
                 Agreement, and we sign one with every customer.
@@ -214,7 +214,7 @@ export function Landing() {
           <div>
             <h2 className="title" id="demo-h">See it with your own homes in mind</h2>
             <p className="sub">
-              Tell us a little about your homes and we&apos;ll set up a 30-minute walkthrough of the tablet screens and the nurse and owner tools.
+              Tell us a little about your homes and we&apos;ll set up a 30-minute walkthrough of the tablet screens and the owner tools.
             </p>
           </div>
           <DemoForm action={demoAction} />

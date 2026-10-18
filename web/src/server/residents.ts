@@ -57,7 +57,7 @@ export const residentSchema = z.object({
 });
 
 export async function createResident(tx: Tx, actor: Actor, orgId: string, raw: unknown): Promise<Result<{ id: string }>> {
-  if (!canManageCare(actor)) return { ok: false, error: "Only nurses and managers can add residents." };
+  if (!canManageCare(actor)) return { ok: false, error: "Only owners and admins can add residents." };
   const p = residentSchema.safeParse(raw);
   if (!p.success) return { ok: false, error: p.error.issues[0].message };
   const v = p.data;

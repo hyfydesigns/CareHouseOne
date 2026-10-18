@@ -116,7 +116,7 @@ export async function unreviewedVitals(tx: Tx, actor: Actor) {
 }
 
 export async function reviewVital(tx: Tx, actor: Actor, vitalId: string, note: string): Promise<Result> {
-  if (!canManageCare(actor)) return { ok: false, error: "Only nurses and managers can review readings." };
+  if (!canManageCare(actor)) return { ok: false, error: "Only owners and admins can review readings." };
   const [v] = await tx.select().from(vitals).where(eq(vitals.id, vitalId));
   if (!v || !(await getResident(tx, actor, v.residentId))) return { ok: false, error: "That reading isn't available." };
   const [done] = await tx.select().from(vitalReviews).where(eq(vitalReviews.vitalId, vitalId));

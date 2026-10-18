@@ -75,7 +75,7 @@ export const orderSchema = z
   });
 
 export async function createOrder(tx: Tx, actor: Actor, orgId: string, residentId: string, raw: unknown, now: Date): Promise<Result<{ id: string }>> {
-  if (!canManageCare(actor)) return { ok: false, error: "Only nurses and managers can enter medication orders." };
+  if (!canManageCare(actor)) return { ok: false, error: "Only owners and admins can enter medication orders." };
   const resident = await getResident(tx, actor, residentId);
   if (!resident || resident.status !== "active") return { ok: false, error: "That resident isn't available." };
   const p = orderSchema.safeParse(raw);
@@ -121,7 +121,7 @@ export async function createOrder(tx: Tx, actor: Actor, orgId: string, residentI
 }
 
 export async function stopOrder(tx: Tx, actor: Actor, orderId: string, reason: string): Promise<Result> {
-  if (!canManageCare(actor)) return { ok: false, error: "Only nurses and managers can stop medication orders." };
+  if (!canManageCare(actor)) return { ok: false, error: "Only owners and admins can stop medication orders." };
   const [o] = await tx.select().from(medicationOrders).where(eq(medicationOrders.id, orderId));
   if (!o || o.status !== "active") return { ok: false, error: "That order is already stopped." };
   if (!(await getResident(tx, actor, o.residentId))) return { ok: false, error: "That resident isn't available." };
@@ -289,7 +289,7 @@ async function safetyStops(
 }
 
 export async function recordScheduledDose(tx: Tx, actor: Actor, raw: unknown, now: Date): Promise<DoseResult> {
-  if (!canGiveMeds(actor)) return { ok: false, error: "Only nurses and med-certified caregivers can give medications." };
+  if (!canGiveMeds(actor)) return { ok: false, error: "Only med-certified caregivers can give medications." };
   const p = scheduledSchema.safeParse(raw);
   if (!p.success) return { ok: false, error: p.error.issues[0].message };
   const v = p.data;
@@ -340,7 +340,7 @@ export async function recordScheduledDose(tx: Tx, actor: Actor, raw: unknown, no
 }
 
 export async function recordPrnDose(tx: Tx, actor: Actor, raw: unknown, now: Date): Promise<DoseResult> {
-  if (!canGiveMeds(actor)) return { ok: false, error: "Only nurses and med-certified caregivers can give medications." };
+  if (!canGiveMeds(actor)) return { ok: false, error: "Only med-certified caregivers can give medications." };
   const p = prnSchema.safeParse(raw);
   if (!p.success) return { ok: false, error: p.error.issues[0].message };
   const v = p.data;

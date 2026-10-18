@@ -27,18 +27,33 @@ const isOrgAdmin = (a: Actor) => a.role === "owner" || a.role === "admin";
 const withinOwnHomes = (a: Actor, facilityIds: string[]) =>
   facilityIds.length > 0 && facilityIds.every((f) => a.facilityIds.includes(f));
 
-/** Owners and admins add any role anywhere; managers add caregivers to their own homes only. */
-export function canInvite(actor: Actor, role: Role, facilityIds: string[]): boolean {
+/**
+ * Roles that can be given to new staff. Nurse and Facility manager are switched off: the homes we
+ * serve have only owners, admins and caregivers signing in (owners and admins do the nurse's work
+ * in the app). Add them back here for a customer whose nurses or managers will use it.
+ */
+export const OFFERED_ROLES: Role[] = ["owner", "admin", "med_caregiver", "caregiver"];
+
+/** Owners and admins can manage any role anywhere; managers only caregivers in their own homes. */
+function hasAuthority(actor: Actor, role: Role, facilityIds: string[]): boolean {
   if (isOrgAdmin(actor)) return actor.role === "owner" || role !== "owner";
   if (actor.role === "manager") return CAREGIVER_ROLES.includes(role) && withinOwnHomes(actor, facilityIds);
   return false;
 }
 
-/** The same people who could add someone can deactivate, reactivate or manage their invitation. */
+/** Adding someone: only the roles on offer. */
+export function canInvite(actor: Actor, role: Role, facilityIds: string[]): boolean {
+  return OFFERED_ROLES.includes(role) && hasAuthority(actor, role, facilityIds);
+}
+
+/**
+ * Deactivating, reactivating or managing an invitation. Works for every role, including ones no
+ * longer offered, so an existing nurse or manager account can always be switched off.
+ */
 export function canManage(actor: Actor, target: StaffTarget): boolean {
   if (actor.id === target.id) return false;
   if (target.role === "owner" && actor.role !== "owner") return false;
-  return canInvite(actor, target.role, target.facilityIds);
+  return hasAuthority(actor, target.role, target.facilityIds);
 }
 
 export function canViewAudit(actor: Pick<Actor, "role">): boolean {

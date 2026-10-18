@@ -45,7 +45,7 @@ export default async function GivePage({ params, searchParams }: { params: Promi
         {canGiveMeds(me) ? (
           <GiveForm action={giveAction} orderId={o.id} scheduledFor={at.toISOString()} hasPackageCode={!!o.packageCode} bpCheck={o.bpCheck} label={`${o.name} ${o.strength}`} back={back} mode={mode} who={{ name: `${r.firstName} ${r.lastName}`, dateOfBirth: r.dateOfBirth, room: r.room }} />
         ) : (
-          <p className="error">Only nurses and med-certified caregivers can give medications.</p>
+          <p className="error">Only med-certified caregivers can give medications.</p>
         )}
       </section>
     </>

@@ -32,7 +32,7 @@ export function VitalsForm({ action, residentId, lastReading }: { action: Action
         {field("weight", "Weight lb", "decimal")}
         <div className="field" style={{ flex: "2 1 220px" }}><label htmlFor="vnote">Note (optional)</label><input id="vnote" name="note" /></div>
       </div>
-      <p className="small muted" style={{ margin: 0 }}>Blood pressure and pulse are required. Readings outside the usual range are flagged for the nurse.</p>
+      <p className="small muted" style={{ margin: 0 }}>Blood pressure and pulse are required. Readings outside the usual range are flagged for review; tell the nurse right away.</p>
       <Status state={offline.saved ? { message: offline.saved } : state} />
       <div className="row"><button className="btn primary big" disabled={pending}>Save vital signs</button></div>
     </form>

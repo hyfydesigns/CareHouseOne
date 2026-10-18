@@ -60,10 +60,15 @@ describe("permissions", () => {
   const manager: Actor = { id: "m", role: "manager", facilityIds: [CR] };
   const caregiver: Actor = { id: "c", role: "caregiver", facilityIds: [CR] };
 
-  it("lets owners and admins add any role anywhere, except admins adding owners", () => {
-    expect(canInvite(owner, "manager", [MH])).toBe(true);
-    expect(canInvite(admin, "nurse", [CR, MH])).toBe(true);
+  it("lets owners and admins add the offered roles anywhere, except admins adding owners", () => {
+    expect(canInvite(owner, "admin", [MH])).toBe(true);
+    expect(canInvite(admin, "med_caregiver", [CR, MH])).toBe(true);
     expect(canInvite(admin, "owner", [CR])).toBe(false);
+  });
+  it("doesn't offer the nurse or manager roles, but existing ones can still be managed", () => {
+    expect(canInvite(owner, "nurse", [CR])).toBe(false);
+    expect(canInvite(owner, "manager", [CR])).toBe(false);
+    expect(canManage(owner, { id: "n1", role: "nurse", facilityIds: [CR] })).toBe(true);
   });
   it("limits managers to caregivers in their own homes", () => {
     expect(canInvite(manager, "caregiver", [CR])).toBe(true);

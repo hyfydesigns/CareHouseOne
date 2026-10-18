@@ -133,7 +133,7 @@ export async function DiagnosesPanel({ resident: r, me, q, cat, base }: { reside
             </tbody>
           </table>
         </div>
-        {!nurse && <p className="small muted">Diagnoses are added and updated by the nurse.</p>}
+        {!nurse && <p className="small muted">Diagnoses are added and updated by an owner or admin.</p>}
       </section>
       {nurse && (
         <section className="card">

@@ -60,7 +60,7 @@ const addSchema = z.object({
 });
 
 export async function addDiagnosis(tx: Tx, actor: Actor, raw: unknown): Promise<Result> {
-  if (!canManageCare(actor)) return { ok: false, error: "Only nurses and managers can change diagnoses." };
+  if (!canManageCare(actor)) return { ok: false, error: "Only owners and admins can change diagnoses." };
   const p = addSchema.safeParse(raw);
   if (!p.success) return { ok: false, error: "Choose a code from the list." };
   const r = await getResident(tx, actor, p.data.residentId);
@@ -79,7 +79,7 @@ export async function addDiagnosis(tx: Tx, actor: Actor, raw: unknown): Promise<
 }
 
 export async function removeDiagnosis(tx: Tx, actor: Actor, diagnosisId: string, reason: string): Promise<Result> {
-  if (!canManageCare(actor)) return { ok: false, error: "Only nurses and managers can change diagnoses." };
+  if (!canManageCare(actor)) return { ok: false, error: "Only owners and admins can change diagnoses." };
   const [d] = await tx.select().from(residentDiagnoses).where(eq(residentDiagnoses.id, diagnosisId));
   if (!d || d.removedAt) return { ok: false, error: "That diagnosis was already removed." };
   if (!(await getResident(tx, actor, d.residentId))) return { ok: false, error: "That resident isn't available." };

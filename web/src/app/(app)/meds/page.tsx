@@ -37,7 +37,7 @@ export default async function MedsPage({ searchParams }: { searchParams: Promise
           {homes.map((h) => <Link key={h.id} className="chip" href={`/meds?home=${h.id}`} aria-current={h.id === home.id ? "page" : undefined}>{h.name}</Link>)}
         </nav>
       )}
-      {!give && <p className="notice">You can see the medication pass, but only nurses and med-certified caregivers can give medications.</p>}
+      {!give && <p className="notice">You can see the medication pass, but only med-certified caregivers can give medications.</p>}
       {pass.length === 0 && <p className="muted">No residents at this home yet.</p>}
       {pass.map(({ resident: r, slots, prnOrders, openFollowups }) => {
         const shown = slots.filter((s) => s.state !== "upcoming");

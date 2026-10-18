@@ -122,10 +122,10 @@ describe("staff lifecycle", () => {
     expect((await acceptInvite(db, link, "harbor sunrise walk 2026")).ok).toBe(false);
   });
 
-  it("has nurses set a password and two-step verification", async () => {
+  it("has admins set a password and two-step verification", async () => {
     const owner = actor(s.users.owner, "owner", [s.facilities.cedarRidge, s.facilities.mapleHouse]);
     await withTenant(db, s.orgId, (tx) =>
-      inviteStaff(tx, owner, s.orgId, { name: "Ruth Adeyemi", email: "ruth.adeyemi@harborviewliving.test", role: "nurse", facilityIds: [s.facilities.cedarRidge] }, APP),
+      inviteStaff(tx, owner, s.orgId, { name: "Ruth Adeyemi", email: "ruth.adeyemi@harborviewliving.test", role: "admin", facilityIds: [s.facilities.cedarRidge] }, APP),
     );
     const link = await lastLink("ruth.adeyemi@harborviewliving.test");
     const acc = await acceptInvite(db, link, "harbor sunrise walk 2026");
@@ -135,7 +135,7 @@ describe("staff lifecycle", () => {
     expect(enr?.uri).toMatch(/^otpauth:\/\/totp\//);
     const done = await confirmEnrollment(db, acc.token, await currentTotp(enr!.secret));
     expect(done.ok).toBe(true);
-    expect((await getSessionUser(db, acc.token))?.role).toBe("nurse");
+    expect((await getSessionUser(db, acc.token))?.role).toBe("admin");
   });
 
   it("stops managers adding other roles, other homes, or duplicate emails", async () => {
@@ -155,7 +155,7 @@ describe("staff lifecycle", () => {
   it("resends (old link dies) and cancels invitations", async () => {
     const own = actor(s.users.owner, "owner", [s.facilities.cedarRidge, s.facilities.mapleHouse]);
     await withTenant(db, s.orgId, (tx) =>
-      inviteStaff(tx, own, s.orgId, { name: "Owen Clarke", email: "owen@harborviewliving.test", role: "nurse", facilityIds: [s.facilities.mapleHouse] }, APP),
+      inviteStaff(tx, own, s.orgId, { name: "Owen Clarke", email: "owen@harborviewliving.test", role: "admin", facilityIds: [s.facilities.mapleHouse] }, APP),
     );
     const first = await lastLink("owen@harborviewliving.test");
     const [owen] = await db.select().from(users).where(eq(users.email, "owen@harborviewliving.test"));

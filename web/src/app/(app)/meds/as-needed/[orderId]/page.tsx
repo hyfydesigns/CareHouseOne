@@ -39,7 +39,7 @@ export default async function PrnPage({ params, searchParams }: { params: Promis
         {canGiveMeds(me) ? (
           <PrnForm action={prnAction} orderId={o.id} hasPackageCode={!!o.packageCode} reasons={o.prnReasons} label={`${o.name} ${o.strength}`} back={back} mode={mode} who={{ name: `${r.firstName} ${r.lastName}`, dateOfBirth: r.dateOfBirth, room: r.room }} />
         ) : (
-          <p className="error">Only nurses and med-certified caregivers can give medications.</p>
+          <p className="error">Only med-certified caregivers can give medications.</p>
         )}
       </section>
     </>
