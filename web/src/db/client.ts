@@ -57,7 +57,7 @@ const g = globalThis as unknown as { __ch1Db?: Promise<DB> };
 export function getDb(): Promise<DB> {
   if (!g.__ch1Db) {
     const url = process.env.DATABASE_URL;
-    g.__ch1Db = url ? openPostgres(url) : openPglite(process.env.PGLITE_DIR ?? path.join(process.cwd(), ".data", "pglite"));
+    g.__ch1Db = url ? openPostgres(url) : openPglite(process.env.PGLITE_DIR || path.join(process.cwd(), ".data", "pglite"));
   }
   return g.__ch1Db;
 }

@@ -6,7 +6,7 @@ import { BREACHED, checkPasswordPolicy, hashPassword, isBreached, verifyPassword
 import { checkTotp, newTotpSecret, totpUri } from "@/lib/totp";
 import { audit, sendMail } from "./audit";
 
-export const SESSION_IDLE_MINUTES = Number(process.env.SESSION_IDLE_MINUTES ?? 15);
+export const SESSION_IDLE_MINUTES = Number(process.env.SESSION_IDLE_MINUTES || 15);
 export const SESSION_MAX_HOURS = 12;
 /** Server-side backstop; the tablet itself locks after 2 minutes without a touch. */
 export const DEVICE_LOCK_MINUTES = 5;

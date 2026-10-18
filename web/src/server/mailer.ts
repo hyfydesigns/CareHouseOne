@@ -33,7 +33,7 @@ async function smtpTransport(): Promise<Transport | null> {
 export async function deliverOutbox(db: DB, transport?: Transport | null, limit = 20): Promise<{ sent: number; failed: number }> {
   const t = transport === undefined ? await smtpTransport() : transport;
   if (!t) return { sent: 0, failed: 0 };
-  const from = process.env.MAIL_FROM ?? "CareHouse One <no-reply@localhost>";
+  const from = process.env.MAIL_FROM || "CareHouse One <no-reply@localhost>";
   const rows = await db
     .select()
     .from(outbox)

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { appBaseUrl } from "@/lib/hosts";
 import { signupOpen } from "@/server/billing";
 
-export const CONTACT_EMAIL = process.env.CONTACT_EMAIL ?? "hello@carehouseone.com";
+export const CONTACT_EMAIL = process.env.CONTACT_EMAIL || "hello@carehouseone.com";
 
 /** Header and footer for every public page. */
 export function SiteShell({ children }: { children: React.ReactNode }) {

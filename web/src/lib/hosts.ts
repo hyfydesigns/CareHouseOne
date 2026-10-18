@@ -16,9 +16,9 @@ export function isSiteHost(host: string | null | undefined): boolean {
 }
 
 export function siteUrl(): string {
-  return (process.env.SITE_URL ?? (dev ? "http://www.localhost:3000" : "https://www.carehouseone.com")).replace(/\/$/, "");
+  return (process.env.SITE_URL || (dev ? "http://www.localhost:3000" : "https://www.carehouseone.com")).replace(/\/$/, "");
 }
 
 export function appBaseUrl(): string {
-  return (process.env.APP_URL ?? (dev ? "http://app.localhost:3000" : "https://app.carehouseone.com")).replace(/\/$/, "");
+  return (process.env.APP_URL || (dev ? "http://app.localhost:3000" : "https://app.carehouseone.com")).replace(/\/$/, "");
 }
