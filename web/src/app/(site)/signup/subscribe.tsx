@@ -68,18 +68,22 @@ export function Subscribe(props: {
         onReady={() => setReady(true)}
         onError={() => setError("PayPal couldn't load. Check your connection and refresh.")}
       />
-      <div className="field" style={{ maxWidth: 260 }}>
-        <label htmlFor="residents">How many residents live in your homes?</label>
+      <div className="field" style={{ maxWidth: 380 }}>
+        <label htmlFor="residents">How many residents live in all your homes right now?</label>
         <input
           id="residents"
           inputMode="numeric"
           value={residents}
+          aria-describedby="residentsHint"
+          style={{ maxWidth: 140 }}
           onChange={(e) => setResidents(Math.min(500, Math.max(1, Number(e.target.value.replace(/[^0-9]/g, "")) || 1)))}
         />
+        <span id="residentsHint" className="small muted">
+          You&apos;re billed per resident. The count updates to your active residents on the 1st of each month.
+        </span>
       </div>
       <p style={{ margin: 0 }}>
-        <b>${monthly.toLocaleString("en-US")} a month</b> after {props.trialDays} days free. The count updates on the first of each month to match your
-        active residents.
+        <b>${monthly.toLocaleString("en-US")} a month</b> after {props.trialDays} days free.
       </p>
       {busy ? <p className="notice" role="status">Confirming with PayPal…</p> : <div ref={box} aria-label="PayPal subscription button" />}
       {error && <p className="error" role="alert">{error}</p>}

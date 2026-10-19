@@ -67,8 +67,8 @@ export function SetupForm({
                 <select id={`ht${k}`} name="homeTz" defaultValue="America/Chicago">{ZONES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
               </div>
               <div className="field" style={{ flex: "1 1 90px" }}>
-                <label htmlFor={`hb${k}`}>Beds</label>
-                <input id={`hb${k}`} name="homeBeds" inputMode="numeric" defaultValue="6" />
+                <label htmlFor={`hb${k}`}>Licensed beds</label>
+                <input id={`hb${k}`} name="homeBeds" inputMode="numeric" defaultValue="6" aria-describedby="bedsHint" />
               </div>
               {homes.length > 1 && <button type="button" className="btn small" onClick={() => setHomes(homes.filter((x) => x !== k))}>Remove</button>}
             </div>
@@ -79,6 +79,9 @@ export function SetupForm({
             Add another home
           </button>
         )}
+        <p id="bedsHint" className="small muted" style={{ margin: 0 }}>
+          Licensed beds: the most residents a home can have. Shown on your dashboard; not used for billing.
+        </p>
       </fieldset>
       <div className="field">
         <label htmlFor="ownerName">Owner&apos;s full name</label>
