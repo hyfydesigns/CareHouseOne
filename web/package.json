@@ -14,7 +14,8 @@
     "dev:code": "tsx scripts/dev-code.ts",
     "icd:import": "tsx scripts/icd-import.ts",
     "org:create": "tsx scripts/create-org.ts",
-    "paypal:setup": "tsx scripts/paypal-setup.ts"
+    "paypal:setup": "tsx scripts/paypal-setup.ts",
+    "org:remove": "tsx scripts/org-remove.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.10",
