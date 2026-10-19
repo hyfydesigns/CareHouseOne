@@ -13,12 +13,41 @@ const ZONES: Array<[string, string]> = [
   ["Pacific/Honolulu", "Hawaii"],
 ];
 
-export function SetupForm({ action, payerEmail, payerName, site }: { action: (s: FormState, fd: FormData) => Promise<FormState>; payerEmail: string; payerName: string; site: string }) {
+export function SetupForm({
+  action,
+  payerEmail,
+  payerName,
+  site,
+  contact,
+}: {
+  action: (s: FormState, fd: FormData) => Promise<FormState>;
+  payerEmail: string;
+  payerName: string;
+  site: string;
+  contact: string;
+}) {
   const [state, formAction, pending] = useActionState(action, {});
   const [homes, setHomes] = useState([0]);
   const [next, setNext] = useState(1);
-  if (state.message) return <p className="notice" role="status">{state.message}</p>;
+  if (state.message) {
+    return (
+      <div className="stack" role="status">
+        <h1>You&apos;re all set</h1>
+        <p className="notice" style={{ margin: 0 }}>{state.message}</p>
+        <p className="muted" style={{ margin: 0 }}>
+          Open that email to set your password and two-step verification, then sign in. You can close this page. Not there after a few minutes? Check spam.
+          Wrong address? Email <a href={`mailto:${contact}`}>{contact}</a>.
+        </p>
+      </div>
+    );
+  }
   return (
+    <>
+    <h1>Set up your organization</h1>
+    <p className="muted">
+      Your free trial has started. Add your organization and homes; you can add more homes later. The owner gets an email to set a password and two-step
+      verification.
+    </p>
     <form action={formAction} className="stack">
       <div className="field">
         <label htmlFor="orgName">Organization name</label>
@@ -57,7 +86,8 @@ export function SetupForm({ action, payerEmail, payerName, site }: { action: (s:
       </div>
       <div className="field">
         <label htmlFor="ownerEmail">Owner&apos;s work email</label>
-        <input id="ownerEmail" name="ownerEmail" type="email" autoComplete="email" required defaultValue={payerEmail} />
+        <input id="ownerEmail" name="ownerEmail" type="email" autoComplete="email" required defaultValue={payerEmail} aria-describedby="ownerEmailHint" />
+        <span id="ownerEmailHint" className="small muted">The sign-in link goes here. Filled in from PayPal; change it if the owner uses a different address.</span>
       </div>
       <label className="check" style={{ alignItems: "start" }}>
         <input type="checkbox" name="accepted" required />
@@ -69,5 +99,6 @@ export function SetupForm({ action, payerEmail, payerName, site }: { action: (s:
       <Status state={state} />
       <button className="btn primary" disabled={pending}>{pending ? "Setting up…" : "Create organization"}</button>
     </form>
+    </>
   );
 }

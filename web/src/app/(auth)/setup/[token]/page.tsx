@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getDb } from "@/db/client";
 import { siteUrl } from "@/lib/hosts";
 import { describeSetup, signupOpen } from "@/server/billing";
+import { CONTACT_EMAIL } from "../../../(site)/shell";
 import { setupAction } from "./actions";
 import { SetupForm } from "./setup-form";
 
@@ -17,14 +18,5 @@ export default async function SetupPage({ params }: { params: Promise<{ token: s
       </>
     );
   }
-  return (
-    <>
-      <h1>Set up your organization</h1>
-      <p className="muted">
-        Your free trial has started. Add your organization and homes; you can add more homes later. The owner gets an email to set a password and two-step
-        verification.
-      </p>
-      <SetupForm action={setupAction.bind(null, token)} payerEmail={info.payerEmail ?? ""} payerName={info.payerName ?? ""} site={siteUrl()} />
-    </>
-  );
+  return <SetupForm action={setupAction.bind(null, token)} payerEmail={info.payerEmail ?? ""} payerName={info.payerName ?? ""} site={siteUrl()} contact={CONTACT_EMAIL} />;
 }
