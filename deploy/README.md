@@ -225,6 +225,8 @@ Then `npm run dev`, open `http://www.localhost:3000/signup`, subscribe with a Pa
 3. GitHub variables: `PAYPAL_ENV` = `live`, the live `PAYPAL_CLIENT_ID`, `PAYPAL_PLAN_ID` and `PAYPAL_WEBHOOK_ID`, and `SIGNUP_OPEN` = `true`. Run Deploy. The app refuses to start with sign-up open and any PayPal setting missing.
 4. Subscribe once yourself with a real card, set up a test organization, then cancel the subscription in PayPal and check that Settings > Billing shows it as cancelled.
 
+**Emails:** right after paying, a setup link; after setup, the owner's invitation; 3 days before the free trial ends, a reminder with the first payment date, the amount and how to cancel in PayPal (with a fresh setup link if they never finished setup); and a notice if a payment fails. PayPal sends its own receipts.
+
 **What customers see:** a billing card in Settings with the plan, the residents billed, the active residents now and the next payment date. If a payment fails, owners and admins get an email and a banner; after 14 days inviting staff, registering tablets and settings changes pause. Care records and the medication record are never blocked. On the first of each month the active resident count is sent to PayPal; if PayPal needs the payer to approve a higher amount, an "Approve the new count in PayPal" button appears.
 
 ## Routine work

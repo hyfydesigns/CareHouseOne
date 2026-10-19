@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, like } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTestDb, withTenant, type DB } from "@/db/client";
 import { auditLog, billingEvents, leads, organizations, outbox, subscriptions } from "@/db/schema";
@@ -133,7 +133,8 @@ describe("billing status", () => {
     expect(after.status).toBe("SUSPENDED");
     expect(after.pastDueSince).not.toBeNull();
     const failedMail = await db.select().from(outbox).where(eq(outbox.subject, "Your CareHouse One payment didn't go through"));
-    expect(failedMail.map((m) => m.to).sort()).toEqual(["payer@example.test"]);
+    // The PayPal payer and the owner (even before they've accepted their invitation).
+    expect(failedMail.map((m) => m.to).sort()).toEqual(["jordan@riverside.test", "payer@example.test"]);
 
     // Within 14 days admin features still work; after that they pause. Care records never do.
     expect(billingState(after).adminLocked).toBe(false);
@@ -170,6 +171,53 @@ describe("billing status", () => {
     // The organization only ever sees its own subscription.
     const seen = await withTenant(db, s.orgId, (tx) => tx.select().from(subscriptions));
     expect(seen.map((x) => x.paypalSubscriptionId)).toEqual(["I-DEMO000001"]);
+  });
+});
+
+describe("trial ending reminder", () => {
+  const DAY = 86_400_000;
+  const trialMail = () => db.select().from(outbox).where(like(outbox.subject, "Your CareHouse One free trial ends%"));
+  // Pretend the subscription started `days` ago, and stop the 6-hourly refresh from touching it.
+  const age = (id: string, days: number, now: Date) =>
+    db.update(subscriptions).set({ createdAt: new Date(now.getTime() - days * DAY), nextBillingAt: null, syncedAt: now }).where(eq(subscriptions.paypalSubscriptionId, id));
+
+  it("emails the billing contacts 3 days before the first payment, once", async () => {
+    const now = new Date();
+    sub("I-TRIAL00001");
+    const r = await registerSubscription(db, "I-TRIAL00001", APP);
+    if (!r.ok) throw new Error(r.error);
+    expect((await completeSetup(db, tokenFrom(r.setupUrl), { ...setupInput("lee@trialhomes.test"), orgName: "Trial Homes" }, APP)).ok).toBe(true);
+
+    await age("I-TRIAL00001", 10, now);
+    await syncSubscriptions(db, now);
+    expect(await trialMail()).toHaveLength(0);
+
+    await age("I-TRIAL00001", 28, now);
+    const before = (await trialMail()).length;
+    const result = await syncSubscriptions(db, now);
+    expect(result.reminded).toBeGreaterThanOrEqual(1);
+    const mails = (await trialMail()).slice(before);
+    expect(mails.map((m) => m.to).sort()).toEqual(["lee@trialhomes.test", "payer@example.test"]);
+    expect(mails[0].body).toContain("$300");
+    expect(mails[0].body).toContain("Automatic payments");
+    expect(mails[0].body).not.toContain("/setup/");
+
+    await syncSubscriptions(db, new Date(now.getTime() + 3_600_000));
+    expect((await trialMail()).length).toBe(before + 2);
+  });
+
+  it("sends a fresh setup link to someone who paid but never set up", async () => {
+    const now = new Date();
+    sub("I-NOSETUP001");
+    expect((await registerSubscription(db, "I-NOSETUP001", APP)).ok).toBe(true);
+    await age("I-NOSETUP001", 28, now);
+    const before = (await trialMail()).length;
+    await syncSubscriptions(db, now);
+    const [mail] = (await trialMail()).slice(before);
+    expect(mail.to).toBe("payer@example.test");
+    const link = mail.body.match(/\/setup\/([\w-]+)/)?.[1];
+    expect(link).toBeTruthy();
+    expect(await describeSetup(db, link!)).not.toBeNull();
   });
 });
 

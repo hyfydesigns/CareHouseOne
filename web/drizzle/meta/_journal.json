@@ -92,6 +92,13 @@
       "when": 1792285422109,
       "tag": "0012_billing_security",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792386566865,
+      "tag": "0013_trial_reminder",
+      "breakpoints": true
     }
   ]
 }

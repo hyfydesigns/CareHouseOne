@@ -1,10 +1,11 @@
-import { and, count, eq, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
+import { and, count, eq, gt, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
 import { z } from "zod";
 import type { DB, Tx } from "@/db/client";
-import { billingEvents, residents, subscriptions, users, type Subscription } from "@/db/schema";
+import { billingEvents, facilities, residents, subscriptions, users, type Subscription } from "@/db/schema";
 import { randomToken, sha256 } from "@/lib/crypto";
+import { appBaseUrl } from "@/lib/hosts";
 import { audit, sendMail } from "./audit";
-import { getSubscription, paypalConfigured, reviseQuantity, TRIAL_DAYS, type PaypalSubscription } from "./paypal";
+import { getSubscription, paypalConfigured, PRICE_PER_RESIDENT, reviseQuantity, TRIAL_DAYS, type PaypalSubscription } from "./paypal";
 import { provisionOrganization, provisionSchema } from "./provision";
 
 export const SETUP_DAYS = 7;
@@ -111,7 +112,8 @@ async function applyPaypal(db: DB, row: Subscription, p: PaypalSubscription, now
 
 async function billingContacts(db: DB, row: Subscription): Promise<string[]> {
   if (!row.orgId) return [];
-  const owners = await db.select({ email: users.email }).from(users).where(and(eq(users.orgId, row.orgId), eq(users.role, "owner"), eq(users.status, "active")));
+  // Owners who haven't accepted their invitation yet still hear about billing; deactivated ones don't.
+  const owners = await db.select({ email: users.email }).from(users).where(and(eq(users.orgId, row.orgId), eq(users.role, "owner"), inArray(users.status, ["active", "invited"])));
   return [...new Set([row.payerEmail, ...owners.map((o) => o.email)].filter((e): e is string => !!e))];
 }
 
@@ -133,10 +135,11 @@ export async function handleWebhook(db: DB, event: PaypalEvent, now = new Date()
 
 /**
  * Housekeeping (from /api/cron): refresh subscriptions every 6 hours in case a webhook was missed,
- * and on the first of the month send PayPal the number of active residents.
+ * on the first of the month send PayPal the number of active residents, and remind people whose
+ * free trial ends within 3 days.
  */
-export async function syncSubscriptions(db: DB, now = new Date()): Promise<{ refreshed: number; counted: number }> {
-  if (!paypalConfigured()) return { refreshed: 0, counted: 0 };
+export async function syncSubscriptions(db: DB, now = new Date()): Promise<{ refreshed: number; counted: number; reminded: number }> {
+  if (!paypalConfigured()) return { refreshed: 0, counted: 0, reminded: 0 };
   const stale = new Date(now.getTime() - 6 * 3_600_000);
   const rows = await db
     .select()
@@ -172,7 +175,61 @@ export async function syncSubscriptions(db: DB, now = new Date()): Promise<{ ref
       }
     }
   }
-  return { refreshed, counted };
+  const reminded = await remindTrialEnding(db, now);
+  return { refreshed, counted, reminded };
+}
+
+export const TRIAL_REMINDER_DAYS = 3;
+
+/** When the free trial turns into the first payment: PayPal's next billing time, else signup + trial. */
+export function firstChargeAt(s: Pick<Subscription, "createdAt" | "nextBillingAt">): Date {
+  const trialEnd = new Date(s.createdAt.getTime() + TRIAL_DAYS * DAY);
+  return s.nextBillingAt && s.nextBillingAt.getTime() <= trialEnd.getTime() + DAY ? s.nextBillingAt : trialEnd;
+}
+
+/**
+ * Three days before the trial ends, tell the billing contacts when the first payment is and how
+ * to cancel. Sent once. Someone who paid but never set up their organization gets a fresh setup
+ * link (only a hash of the first one was kept).
+ */
+async function remindTrialEnding(db: DB, now: Date): Promise<number> {
+  const rows = await db
+    .select()
+    .from(subscriptions)
+    .where(and(isNull(subscriptions.trialReminderSentAt), inArray(subscriptions.status, ["APPROVED", "ACTIVE"]), gt(subscriptions.createdAt, new Date(now.getTime() - (TRIAL_DAYS + 1) * DAY))));
+  let sent = 0;
+  for (const row of rows) {
+    const charge = firstChargeAt(row);
+    const left = charge.getTime() - now.getTime();
+    if (left <= 0 || left > TRIAL_REMINDER_DAYS * DAY) continue;
+    const [home] = row.orgId ? await db.select({ tz: facilities.timeZone }).from(facilities).where(eq(facilities.orgId, row.orgId)).limit(1) : [];
+    const day = charge.toLocaleDateString("en-US", { timeZone: home?.tz ?? "America/Chicago", weekday: "long", month: "long", day: "numeric" });
+    const amount = (row.quantity * PRICE_PER_RESIDENT).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+    let setupNote = "";
+    if (!row.orgId) {
+      const token = randomToken();
+      await db.update(subscriptions).set({ setupTokenHash: sha256(token), setupExpiresAt: new Date(now.getTime() + SETUP_DAYS * DAY) }).where(eq(subscriptions.id, row.id));
+      setupNote = `\n\nYou haven't set up your organization yet. Use this link to do it now (it works once and expires in ${SETUP_DAYS} days):\n${appBaseUrl()}/setup/${token}`;
+    }
+    const contacts = row.orgId ? await billingContacts(db, row) : [row.payerEmail].filter((e): e is string => !!e);
+    for (const to of contacts) {
+      await sendMail(db, {
+        orgId: row.orgId,
+        to,
+        subject: `Your CareHouse One free trial ends on ${day}`,
+        body:
+          `Your ${TRIAL_DAYS}-day free trial of CareHouse One ends soon. PayPal will take the first monthly payment of ${amount} ` +
+          `(${row.quantity} resident${row.quantity === 1 ? "" : "s"} at $${PRICE_PER_RESIDENT} each) on ${day}.\n\n` +
+          `To keep using CareHouse One you don't need to do anything. Each month the count updates to your active residents.\n\n` +
+          `To cancel before you're charged, sign in to PayPal and go to Settings > Payments > Automatic payments, then cancel CareHouse One.` +
+          setupNote,
+      });
+    }
+    await db.update(subscriptions).set({ trialReminderSentAt: now }).where(eq(subscriptions.id, row.id));
+    if (row.orgId) await audit(db, { orgId: row.orgId, actorId: null, action: "trial_reminder_sent", entity: "subscription", entityId: row.id, details: { firstChargeAt: charge.toISOString() } });
+    sent++;
+  }
+  return sent;
 }
 
 export interface BillingState {

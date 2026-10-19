@@ -456,6 +456,8 @@ export const subscriptions = pgTable("subscriptions", {
   approvalUrl: text("approval_url"),
   /** YYYY-MM of the last first-of-month resident count sent to PayPal. */
   quantitySyncedMonth: text("quantity_synced_month"),
+  /** The "your trial ends soon" email went out (once per subscription). */
+  trialReminderSentAt: timestamp("trial_reminder_sent_at", { withTimezone: true }),
   syncedAt: timestamp("synced_at", { withTimezone: true }),
   createdAt: createdAt(),
 });
