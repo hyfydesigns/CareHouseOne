@@ -11,7 +11,9 @@ const SIGNED_IN = ["/dashboard", "/pin", "/locked", "/staff", "/audit", "/reside
  */
 function csp(nonce: string, paypal: boolean): string {
   const dev = process.env.NODE_ENV === "development";
-  // Only the public sign-up page loads PayPal's button, which runs in PayPal's own frames.
+  // The public site's sign-up page loads PayPal's button, which runs in PayPal's own frames. Allowed
+  // on every public page, not just /signup: clicking "Start free trial" changes page without loading
+  // a new document, so the landing page's policy is the one in force. The app never allows PayPal.
   const pp = paypal ? " https://*.paypal.com https://*.paypalobjects.com" : "";
   return [
     "default-src 'self'",
@@ -44,7 +46,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/sign-in", request.url));
   }
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
-  const policy = csp(nonce, site && path === "/signup");
+  const policy = csp(nonce, site);
   const headers = new Headers(request.headers);
   headers.set("x-nonce", nonce);
   headers.set("Content-Security-Policy", policy);
