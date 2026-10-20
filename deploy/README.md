@@ -234,7 +234,14 @@ Then `npm run dev`, open `http://www.localhost:3000/signup`, subscribe with a Pa
 - **Yearly ICD-10-CM update** (before October 1): download the CMS order file, then with the proxy running `npm run icd:import -- icd10cm_order_2028.txt "FY 2028"`.
 - **Rotate the cron secret:** add a new version of `cron-secret`, update the scheduler job's Authorization header, redeploy.
 - **Rotate the database password:** `gcloud sql users set-password`, add a new `database-url` version with it, redeploy.
-- **Medication list (typeahead when entering orders):** load the free NLM RxTerms list once, then every few months. In Cloud Shell, with the proxy running (step 5):
+- **Medication list updates are automatic:** the Cloud Scheduler job `carehouse-rxterms` runs at 06:00 on the 5th of January, April, July and October. The app downloads the newest NLM RxTerms release, skips it if it's already loaded, and replaces the list only if the new one has at least 10,000 medications; otherwise the old list stays and an email goes to `OPS_EMAIL` (GitHub variable; falls back to `CONTACT_EMAIL`). `setup.sh` creates the job; on a project set up before this existed, create it once in Cloud Shell:
+
+  ```bash
+  gcloud scheduler jobs create http carehouse-rxterms --location us-central1 --schedule="0 6 5 1,4,7,10 *" --time-zone="America/Chicago" --uri="https://app.carehouseone.com/api/cron/rxterms" --http-method=POST --headers="Authorization=Bearer $(gcloud secrets versions access latest --secret=cron-secret)" --attempt-deadline=600s
+  ```
+
+  To update now instead of waiting: `gcloud scheduler jobs run carehouse-rxterms --location us-central1`, then check Cloud Run logs for "[rxterms] loaded".
+- **Medication list by hand (first load, or if the automatic update emails a failure):** In Cloud Shell, with the proxy running (step 5):
 
   ```bash
   mkdir -p ~/rxterms && cd ~/rxterms

@@ -12,23 +12,38 @@ export interface MedSuggestion {
   residents?: number;
 }
 
+/**
+ * RxTerms' ROUTE values (Oral Pill, Injectable, Topical, Ophthalmic…) to the app's routes. Matched
+ * on whole words of the route only: matching loosely caught "pen" inside "Oral Suspension Tablet".
+ */
 const ROUTE_RULES: Array<[RegExp, (typeof ROUTES)[number]]> = [
-  [/sublingual|buccal/i, "Under the tongue"],
-  [/transdermal|patch/i, "Patch"],
-  [/ophthalmic/i, "Eye drops"],
-  [/otic/i, "Ear drops"],
-  [/nasal/i, "Nasal"],
-  [/inhal/i, "Inhaled"],
-  [/rectal/i, "Rectal"],
-  [/inject|subcutaneous|intramuscular|intravenous|pen|syringe/i, "Injection"],
-  [/topical|cream|ointment|gel|lotion|shampoo|vaginal/i, "Topical"],
-  [/oral|tab|cap|liquid|susp|soln|syrup|chew/i, "By mouth"],
+  [/^sublingual\b/i, "Under the tongue"],
+  [/^(oral|chewable|buccal|mouthwash)\b/i, "By mouth"],
+  [/^(injectable|implant)\b/i, "Injection"],
+  [/^transdermal\b/i, "Patch"],
+  [/^ophthalmic\b/i, "Eye drops"],
+  [/^otic\b/i, "Ear drops"],
+  [/^nasal\b/i, "Nasal"],
+  [/^inhalant\b/i, "Inhaled"],
+  [/^rectal\b/i, "Rectal"],
+  [/^(topical|soap|shampoo|vaginal|mucosal)\b/i, "Topical"],
 ];
 
-/** RxTerms' route (for example "Oral Pill") as one of the app's routes, or null when unclear. */
+/** Only used when a row has no route: the dose form's own words. */
+const FORM_RULES: Array<[RegExp, (typeof ROUTES)[number]]> = [
+  [/\b(injection|injectable|syringe|vial|auto-?injector)\b/i, "Injection"],
+  [/\bpatch\b/i, "Patch"],
+  [/\b(inhaler|inhalation)\b/i, "Inhaled"],
+  [/\bsuppository\b/i, "Rectal"],
+  [/\b(cream|ointment|lotion|gel)\b/i, "Topical"],
+  [/\b(tab|tablet|cap|capsule|sol|soln|susp|syrup|elixir)\b/i, "By mouth"],
+];
+
+/** RxTerms' route (for example "Oral Pill") as one of the app's routes, or null when unclear (packs). */
 export function mapRoute(route: string, doseForm = ""): string | null {
-  const text = `${route} ${doseForm}`;
-  return ROUTE_RULES.find(([re]) => re.test(text))?.[1] ?? null;
+  const r = route.trim();
+  if (r) return ROUTE_RULES.find(([re]) => re.test(r))?.[1] ?? null;
+  return FORM_RULES.find(([re]) => re.test(doseForm))?.[1] ?? null;
 }
 
 const FORM_WORDS: Array<[RegExp, string]> = [
@@ -41,6 +56,10 @@ const FORM_WORDS: Array<[RegExp, string]> = [
   [/\bER\b/g, "extended-release"],
   [/\bDR\b/g, "delayed-release"],
   [/\bODT\b/g, "orally disintegrating tablet"],
+  [/\bPwdr\b/gi, "powder"],
+  [/\bMDI\b/gi, "inhaler"],
+  [/\bDPI\b/gi, "powder inhaler"],
+  [/\bNDA\d+\s*/gi, ""], // FDA application numbers, meaningless to staff
 ];
 
 /** "10 mg" + "Tab" becomes "10 mg tablet". */

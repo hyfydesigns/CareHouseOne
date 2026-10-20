@@ -51,6 +51,14 @@ describe("loading RxTerms", () => {
     expect(mapRoute("Transdermal", "Patch")).toBe("Patch");
     expect(mapRoute("Injectable", "Pen")).toBe("Injection");
     expect(mapRoute("Something", "Odd")).toBeNull();
+    // Real RxTerms routes that the first version got wrong or missed.
+    expect(mapRoute("Oral Suspension Tablet", "Tab")).toBe("By mouth");
+    expect(mapRoute("Oral Liquid", "Sol")).toBe("By mouth");
+    expect(mapRoute("Oral Disintegrating", "ODT")).toBe("By mouth");
+    expect(mapRoute("Buccal", "Film")).toBe("By mouth");
+    expect(mapRoute("Sublingual", "Tab")).toBe("Under the tongue");
+    expect(mapRoute("Pack", "Pack")).toBeNull();
+    expect(mapRoute("", "Prefilled Syringe")).toBe("Injection");
     expect(strengthLabel("500 MG", "ER Tab")).toBe("500 mg extended-release tablet");
   });
 });

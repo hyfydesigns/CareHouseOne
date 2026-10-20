@@ -66,7 +66,7 @@ jobs:
           if [ "${{ vars.SMTP_ENABLED }}" = "true" ]; then SECRETS="$SECRETS,SMTP_URL=smtp-url:latest"; fi
           if [ -n "${{ vars.PAYPAL_CLIENT_ID }}" ]; then SECRETS="$SECRETS,PAYPAL_CLIENT_SECRET=paypal-client-secret:latest"; fi
           ENV="APP_URL=${{ vars.APP_URL }}|MAIL_FROM=${{ vars.MAIL_FROM }}|SESSION_IDLE_MINUTES=15"
-          ENV="$ENV|SITE_URL=${{ vars.SITE_URL || 'https://www.carehouseone.com' }}|CONTACT_EMAIL=${{ vars.CONTACT_EMAIL || 'hello@carehouseone.com' }}|LEADS_EMAIL=${{ vars.LEADS_EMAIL }}"
+          ENV="$ENV|SITE_URL=${{ vars.SITE_URL || 'https://www.carehouseone.com' }}|CONTACT_EMAIL=${{ vars.CONTACT_EMAIL || 'hello@carehouseone.com' }}|LEADS_EMAIL=${{ vars.LEADS_EMAIL }}|OPS_EMAIL=${{ vars.OPS_EMAIL }}"
           ENV="$ENV|SIGNUP_OPEN=${{ vars.SIGNUP_OPEN || 'false' }}|PAYPAL_ENV=${{ vars.PAYPAL_ENV || 'sandbox' }}|PAYPAL_CLIENT_ID=${{ vars.PAYPAL_CLIENT_ID }}|PAYPAL_PLAN_ID=${{ vars.PAYPAL_PLAN_ID }}|PAYPAL_WEBHOOK_ID=${{ vars.PAYPAL_WEBHOOK_ID }}"
           gcloud run deploy carehouse-one \
             --image "$IMAGE" \
@@ -79,7 +79,7 @@ jobs:
             --execution-environment gen2 \
             --cpu 1 --memory 1Gi --cpu-boost \
             --concurrency 40 --min-instances 0 --max-instances 3 \
-            --timeout 60 \
+            --timeout 300 \
             --startup-probe "httpGet.path=/api/health,initialDelaySeconds=2,periodSeconds=5,failureThreshold=24,timeoutSeconds=4" \
             --quiet
 

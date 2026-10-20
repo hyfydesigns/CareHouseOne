@@ -124,6 +124,14 @@ if ! exists gcloud scheduler jobs describe carehouse-cron --location "$REGION"; 
     --attempt-deadline=60s
 fi
 
+say "Cloud Scheduler: medication list (NLM RxTerms) update, quarterly"
+if ! exists gcloud scheduler jobs describe carehouse-rxterms --location "$REGION"; then
+  gcloud scheduler jobs create http carehouse-rxterms --location "$REGION" --schedule="0 6 5 1,4,7,10 *" --time-zone="America/Chicago" \
+    --uri="${APP_URL}/api/cron/rxterms" --http-method=POST \
+    --headers="Authorization=Bearer $(gcloud secrets versions access latest --secret=cron-secret)" \
+    --attempt-deadline=600s
+fi
+
 say "Done. Set these GitHub repository variables (Settings > Secrets and variables > Actions > Variables):"
 cat <<EOF
   GCP_PROJECT_ID    ${PROJECT_ID}
