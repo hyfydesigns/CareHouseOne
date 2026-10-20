@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import type { DB } from "@/db/client";
 import { accountTokens, devicePins, devices, sessions, userFacilities, users, type User } from "@/db/schema";
 import { decrypt, encrypt, randomToken, sha256 } from "@/lib/crypto";
@@ -221,7 +221,12 @@ export async function revokeAllSessions(db: DB, userId: string): Promise<void> {
 /** Always reports success, so the form can't be used to discover which emails have accounts. */
 export async function requestPasswordReset(db: DB, email: string, appUrl: string): Promise<void> {
   const user = await findActiveByEmail(db, email);
-  if (!user) return;
+  if (!user) {
+    // Someone whose invitation lapsed (often a new owner, with no one else to resend it): a fresh one.
+    const invited = (await db.select().from(users).where(sql`lower(${users.email}) = ${email.trim().toLowerCase()}`)).filter((u) => u.status === "invited");
+    if (invited.length === 1) await reissueInvitation(db, invited[0], appUrl);
+    return;
+  }
   const token = randomToken();
   await db.insert(accountTokens).values({ orgId: user.orgId, userId: user.id, purpose: "reset", tokenHash: sha256(token), expiresAt: minutes(RESET_MINUTES) });
   await sendMail(db, {
@@ -231,6 +236,30 @@ export async function requestPasswordReset(db: DB, email: string, appUrl: string
     body: `Use this link to choose a new password. It works once and expires in ${RESET_MINUTES} minutes.\n\n${appUrl}/reset/${token}\n\nIf you didn't ask for this, you can ignore this email.`,
   });
   await audit(db, { orgId: user.orgId, actorId: user.id, action: "password_reset_requested", entity: "user", entityId: user.id });
+}
+
+/**
+ * Sends a new invitation (or reactivation) link to an invited person's own address, cancelling any
+ * earlier one. Used when they ask for a link themselves; only ever goes to the email on the account.
+ */
+async function reissueInvitation(db: DB, user: User, appUrl: string): Promise<void> {
+  const [last] = await db
+    .select({ purpose: accountTokens.purpose })
+    .from(accountTokens)
+    .where(and(eq(accountTokens.userId, user.id), inArray(accountTokens.purpose, ["invite", "reactivate"])))
+    .orderBy(desc(accountTokens.createdAt))
+    .limit(1);
+  const purpose = last?.purpose === "reactivate" ? "reactivate" : "invite";
+  await db.update(accountTokens).set({ cancelledAt: new Date() }).where(and(eq(accountTokens.userId, user.id), isNull(accountTokens.usedAt), isNull(accountTokens.cancelledAt)));
+  const token = randomToken();
+  await db.insert(accountTokens).values({ orgId: user.orgId, userId: user.id, purpose, tokenHash: sha256(token), expiresAt: new Date(Date.now() + INVITE_DAYS * 86_400_000) });
+  await sendMail(db, {
+    orgId: user.orgId,
+    to: user.email,
+    subject: "Your new CareHouse One sign-in link",
+    body: `Hi ${user.name},\n\nHere's a new link to set your CareHouse One password. It works once and expires in ${INVITE_DAYS} days.\n\n${appUrl}/invite/${token}\n\nIf you didn't ask for this, you can ignore this email.`,
+  });
+  await audit(db, { orgId: user.orgId, actorId: user.id, action: "invitation_requested", entity: "user", entityId: user.id });
 }
 
 async function liveToken(db: DB, token: string, purposes: Array<"invite" | "reset" | "reactivate">) {

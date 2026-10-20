@@ -72,7 +72,10 @@ export async function forgotAction(_: FormState, fd: FormData): Promise<FormStat
   if (busy) return { error: busy };
   await requestPasswordReset(await getDb(), email, await appUrl());
   await deliverNow(await getDb());
-  return { message: "If an account exists for that email, a reset link is on its way. It works once and expires in 30 minutes." };
+  return {
+    message:
+      "If that email has an account, a link is on its way: a password reset (expires in 30 minutes), or a new invitation if you never finished setting up your account (expires in 7 days).",
+  };
 }
 
 export async function resetAction(token: string, _: FormState, fd: FormData): Promise<FormState> {

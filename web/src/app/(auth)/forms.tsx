@@ -43,16 +43,16 @@ export function CodeForm({ action, label }: { action: Action; label: string }) {
   );
 }
 
-export function EmailForm({ action }: { action: Action }) {
+export function EmailForm({ action, submit = "Send reset link", label = "Work email" }: { action: Action; submit?: string; label?: string }) {
   const [state, formAction, pending] = useActionState(action, {});
   return (
     <form action={formAction} className="stack">
       <div className="field">
-        <label htmlFor="email">Work email</label>
+        <label htmlFor="email">{label}</label>
         <input id="email" name="email" type="email" autoComplete="username" required />
       </div>
       <Status state={state} />
-      <button className="btn primary" disabled={pending}>Send reset link</button>
+      <button className="btn primary" disabled={pending}>{submit}</button>
     </form>
   );
 }

@@ -2,11 +2,13 @@ import { eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createTestDb, withTenant, type DB } from "@/db/client";
 import { accountTokens, auditLog, outbox, sessions, users } from "@/db/schema";
+import { sha256 } from "@/lib/crypto";
 import { currentTotp } from "@/lib/totp";
 import {
   acceptInvite,
   beginEnrollment,
   confirmEnrollment,
+  describeToken,
   getSessionUser,
   requestPasswordReset,
   resetPassword,
@@ -103,6 +105,35 @@ describe("password reset", () => {
     const n = (await db.select().from(outbox)).length;
     await requestPasswordReset(db, "nobody@example.test", APP);
     expect((await db.select().from(outbox)).length).toBe(n);
+  });
+});
+
+describe("asking for a new link", () => {
+  it("sends a lapsed invitee a fresh invitation from 'Forgot password', and kills the old link", async () => {
+    const own = actor(s.users.owner, "owner", [s.facilities.cedarRidge, s.facilities.mapleHouse]);
+    await withTenant(db, s.orgId, (tx) =>
+      inviteStaff(tx, own, s.orgId, { name: "Lapsed Admin", email: "lapsed@harborviewliving.test", role: "admin", facilityIds: [s.facilities.cedarRidge] }, APP),
+    );
+    const first = await lastLink("lapsed@harborviewliving.test");
+    await db.update(accountTokens).set({ expiresAt: new Date(Date.now() - 60_000) }).where(eq(accountTokens.tokenHash, sha256(first)));
+    expect(await describeToken(db, first, ["invite"])).toBeNull();
+
+    await requestPasswordReset(db, "Lapsed@HarborviewLiving.test", APP);
+    const fresh = await lastLink("lapsed@harborviewliving.test");
+    expect(fresh).not.toBe(first);
+    expect(await describeToken(db, fresh, ["invite"])).toMatchObject({ email: "lapsed@harborviewliving.test", purpose: "invite" });
+    const [mail] = (await db.select().from(outbox).where(eq(outbox.to, "lapsed@harborviewliving.test"))).slice(-1);
+    expect(mail.subject).toBe("Your new CareHouse One sign-in link");
+    expect((await acceptInvite(db, fresh, "harbor sunrise walk 2026")).ok).toBe(true);
+  });
+
+  it("still sends active people a reset link, and unknown emails nothing", async () => {
+    const before = (await db.select().from(outbox)).length;
+    await requestPasswordReset(db, "nobody-here@harborviewliving.test", APP);
+    expect((await db.select().from(outbox)).length).toBe(before);
+    await requestPasswordReset(db, s.users.manager.email, APP);
+    const [mail] = (await db.select().from(outbox).where(eq(outbox.to, s.users.manager.email))).slice(-1);
+    expect(mail.subject).toBe("Reset your CareHouse One password");
   });
 });
 

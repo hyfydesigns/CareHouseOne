@@ -65,6 +65,28 @@ export async function registerSubscription(db: DB, subscriptionId: string, appUr
   return { ok: true, setupUrl };
 }
 
+/**
+ * "Send me a new setup link": for someone who paid but didn't finish setting up within 7 days.
+ * Only goes to the PayPal email on the subscription; says nothing about whether one exists.
+ */
+export async function resendSetupLink(db: DB, email: string, appUrl: string, now = new Date()): Promise<void> {
+  if (!signupOpen()) return;
+  const rows = await db
+    .select()
+    .from(subscriptions)
+    .where(and(eq(subscriptions.payerEmail, email.trim().toLowerCase()), isNull(subscriptions.orgId), isNull(subscriptions.setupUsedAt), inArray(subscriptions.status, ["APPROVED", "ACTIVE"])));
+  for (const row of rows) {
+    const token = randomToken();
+    await db.update(subscriptions).set({ setupTokenHash: sha256(token), setupExpiresAt: new Date(now.getTime() + SETUP_DAYS * DAY) }).where(eq(subscriptions.id, row.id));
+    await sendMail(db, {
+      orgId: null,
+      to: row.payerEmail!,
+      subject: "Your new CareHouse One setup link",
+      body: `Here's a new link to set up your organization in CareHouse One. It works once and expires in ${SETUP_DAYS} days.\n\n${appUrl}/setup/${token}\n\nIf you didn't ask for this, you can ignore this email.`,
+    });
+  }
+}
+
 /** For the setup page: is this link still usable, and who paid? */
 export async function describeSetup(db: DB, token: string, now = new Date()) {
   const [s] = await db.select().from(subscriptions).where(eq(subscriptions.setupTokenHash, sha256(token)));

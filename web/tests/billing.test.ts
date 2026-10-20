@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { createTestDb, withTenant, type DB } from "@/db/client";
 import { auditLog, billingEvents, leads, organizations, outbox, subscriptions } from "@/db/schema";
 import { describeToken } from "@/server/auth";
-import { adminLockedMessage, billingState, completeSetup, describeSetup, handleWebhook, registerSubscription, syncSubscriptions } from "@/server/billing";
+import { adminLockedMessage, billingState, completeSetup, describeSetup, handleWebhook, registerSubscription, resendSetupLink, syncSubscriptions } from "@/server/billing";
 import { createLead } from "@/server/leads";
 import { resetPaypalToken } from "@/server/paypal";
 import { seedCare, seedDemo, type Seeded } from "@/server/seed";
@@ -171,6 +171,25 @@ describe("billing status", () => {
     // The organization only ever sees its own subscription.
     const seen = await withTenant(db, s.orgId, (tx) => tx.select().from(subscriptions));
     expect(seen.map((x) => x.paypalSubscriptionId)).toEqual(["I-DEMO000001"]);
+  });
+});
+
+describe("new setup link on request", () => {
+  it("emails a fresh link for an unfinished sign-up, and nothing for one that's set up", async () => {
+    sub("I-LATE000001", { subscriber: { email_address: "late@example.test" } });
+    expect((await registerSubscription(db, "I-LATE000001", APP)).ok).toBe(true);
+    const count = async (to: string) => (await db.select().from(outbox).where(eq(outbox.to, to))).length;
+    const before = await count("late@example.test");
+    await resendSetupLink(db, "LATE@example.test", APP);
+    const mails = await db.select().from(outbox).where(eq(outbox.to, "late@example.test"));
+    expect(mails.length).toBe(before + 1);
+    const link = mails[mails.length - 1].body.match(/\/setup\/([\w-]+)/)![1];
+    expect(await describeSetup(db, link)).toMatchObject({ payerEmail: "late@example.test" });
+
+    // payer@example.test's only sign-up (Riverside) is already an organization: no link.
+    await resendSetupLink(db, "payer@example.test", APP);
+    const resent = (await db.select().from(outbox).where(eq(outbox.to, "payer@example.test"))).filter((m) => m.subject === "Your new CareHouse One setup link");
+    expect(resent).toHaveLength(0);
   });
 });
 

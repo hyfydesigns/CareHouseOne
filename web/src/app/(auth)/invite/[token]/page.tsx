@@ -1,7 +1,7 @@
 import { getDb } from "@/db/client";
 import { describeToken } from "@/server/auth";
-import { acceptInviteAction } from "../../actions";
-import { NewPasswordForm } from "../../forms";
+import { acceptInviteAction, forgotAction } from "../../actions";
+import { EmailForm, NewPasswordForm } from "../../forms";
 
 export default async function InvitePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -10,7 +10,8 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
     return (
       <>
         <h1>This invitation has expired</h1>
-        <p className="muted">Invitations expire after 7 days or when a new one is sent. Ask your manager to send a new one.</p>
+        <p className="muted">Invitations expire after 7 days or when a newer one is sent. Enter your email and we&apos;ll send you a new link.</p>
+        <EmailForm action={forgotAction} submit="Send me a new link" />
       </>
     );
   }
