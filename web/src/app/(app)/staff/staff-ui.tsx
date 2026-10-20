@@ -87,7 +87,7 @@ export function RowActions({
   return (
     <div className="stack" style={{ justifyItems: "end", gap: 6 }}>
       {status !== "deactivated" && !editing && !confirming && (
-        <button className="btn small" onClick={() => setEditing(true)}>Edit role or homes</button>
+        <button className="btn small" aria-label={`Edit role or homes for ${name}`} onClick={() => setEditing(true)}>Edit</button>
       )}
       {editing && (
         <form action={formAction} className="stack" style={{ gap: 8, minWidth: 260, textAlign: "left" }}>
