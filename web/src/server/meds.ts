@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNull, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Tx } from "@/db/client";
 import {
@@ -46,6 +46,17 @@ const list = z
   .optional()
   .transform((v) => (Array.isArray(v) ? v : (v ?? "").split(/[,\n]/)).map((x) => x.trim()).filter(Boolean));
 
+/** Tablets and capsules can be counted; liquids, creams and inhalers aren't. */
+export const isCountable = (strength: string) => /\b(tab|tabs|tablet|tablets|cap|caps|capsule|capsules|caplet|caplets)\b/i.test(strength);
+const toTenths = (n: number) => Math.round(n * 10);
+/** "29.5" from 295; whole numbers without ".0". */
+export const fmtCount = (tenths: number) => (tenths % 10 === 0 ? String(tenths / 10) : (tenths / 10).toFixed(1));
+/** Below this many days of supply, the order is flagged "Refill soon". */
+export const LOW_SUPPLY_DAYS = 7;
+const blankToUndefined = (v: unknown) => (v === "" || v === null ? undefined : v);
+/** Half tablets allowed: 0.5, 1, 1.5 … */
+const halves = (n: number) => Number.isInteger(n * 2);
+
 /** Scheduled times a day for one order, and the smallest gap between them. */
 export const MAX_TIMES = 12;
 export const MIN_GAP_MINUTES = 60;
@@ -65,6 +76,8 @@ export const orderSchema = z
     instructions: z.string().trim().max(300).optional(),
     prescriber: z.string().trim().max(120).optional(),
     packageCode: z.string().trim().max(64).optional(),
+    countOnHand: z.preprocess(blankToUndefined, z.coerce.number().min(0, "Tablets on hand can't be negative.").max(10000).optional()),
+    perDose: z.preprocess(blankToUndefined, z.coerce.number().min(0.5, "Tablets per dose must be at least half a tablet.").max(20).default(1)),
     startDate: z.string().trim().refine(isDate, "Enter the start date as YYYY-MM-DD."),
     stopDate: z.string().trim().optional().refine((s) => !s || isDate(s), "Enter the stop date as YYYY-MM-DD."),
   })
@@ -85,6 +98,8 @@ export const orderSchema = z
       if (!v.prnMaxPerDay) ctx.addIssue({ code: "custom", message: "Enter the most doses allowed in a day." });
     }
     if (v.stopDate && v.stopDate < v.startDate) ctx.addIssue({ code: "custom", message: "The stop date is before the start date." });
+    if (!halves(v.perDose)) ctx.addIssue({ code: "custom", message: "Tablets per dose must be whole or half tablets, for example 1 or 1.5." });
+    if (v.countOnHand !== undefined && !halves(v.countOnHand)) ctx.addIssue({ code: "custom", message: "Tablets on hand must be whole or half tablets." });
   });
 
 export async function createOrder(tx: Tx, actor: Actor, orgId: string, residentId: string, raw: unknown, now: Date): Promise<Result<{ id: string }>> {
@@ -124,6 +139,8 @@ export async function createOrder(tx: Tx, actor: Actor, orgId: string, residentI
       instructions: v.instructions || null,
       prescriber: v.prescriber || null,
       packageCode: v.packageCode ? v.packageCode.toUpperCase() : null,
+      countTenths: v.countOnHand !== undefined && isCountable(v.strength) ? toTenths(v.countOnHand) : null,
+      doseTenths: toTenths(v.perDose),
       startDate: v.startDate,
       stopDate: v.stopDate || null,
       createdBy: actor.id,
@@ -131,6 +148,84 @@ export async function createOrder(tx: Tx, actor: Actor, orgId: string, residentI
     .returning();
   await audit(tx, { orgId, actorId: actor.id, action: "order_started", entity: "medication_order", entityId: o.id, details: { residentId: resident.id, name: o.name, type: o.type, times: o.times, stopDate: o.stopDate } });
   return { ok: true, message: `${o.name} added for ${resident.firstName}.`, data: { id: o.id } };
+}
+
+/**
+ * Takes one dose off the count, inside the same transaction as the dose itself. Done in the
+ * database (count = count - dose) so two doses recorded at once can't both read the old count.
+ * The count may go below zero: that's a discrepancy for the owner to check, not a reason to stop
+ * a caregiver from recording a dose they gave.
+ */
+async function deductTablets(tx: Tx, orderId: string): Promise<void> {
+  await tx
+    .update(medicationOrders)
+    .set({ countTenths: sql`${medicationOrders.countTenths} - ${medicationOrders.doseTenths}` })
+    .where(and(eq(medicationOrders.id, orderId), isNotNull(medicationOrders.countTenths)));
+}
+
+const countSchema = z.object({
+  mode: z.enum(["add", "set"]),
+  amount: z.coerce.number().min(0, "Enter a number of tablets.").max(10000),
+  reason: z.string().trim().max(200).optional(),
+});
+
+/**
+ * Owners and admins: add a refill (+90) or correct the count after counting by hand (set to 42).
+ * Also starts counting an order that wasn't counted yet. Every change is in the audit log.
+ */
+export async function adjustCount(tx: Tx, actor: Actor, orderId: string, raw: unknown): Promise<Result> {
+  if (!canManageCare(actor)) return { ok: false, error: "Only owners and admins can change tablet counts." };
+  const p = countSchema.safeParse(raw);
+  if (!p.success) return { ok: false, error: p.error.issues[0].message };
+  if (!halves(p.data.amount)) return { ok: false, error: "Use whole or half tablets." };
+  const [o] = await tx.select().from(medicationOrders).where(eq(medicationOrders.id, orderId));
+  if (!o || !(await getResident(tx, actor, o.residentId))) return { ok: false, error: "That order isn't available." };
+  if (!isCountable(o.strength)) return { ok: false, error: "Only tablets and capsules are counted." };
+  if (p.data.mode === "add" && p.data.amount === 0) return { ok: false, error: "Enter how many tablets arrived." };
+  if (p.data.mode === "set" && !p.data.reason) return { ok: false, error: "Say why the count changed, for example: counted by hand." };
+  const before = o.countTenths;
+  const after = p.data.mode === "add" ? (before ?? 0) + toTenths(p.data.amount) : toTenths(p.data.amount);
+  await tx.update(medicationOrders).set({ countTenths: after }).where(eq(medicationOrders.id, o.id));
+  await audit(tx, {
+    orgId: o.orgId,
+    actorId: actor.id,
+    action: p.data.mode === "add" ? "tablets_refilled" : "tablet_count_corrected",
+    entity: "medication_order",
+    entityId: o.id,
+    details: { before: before === null ? null : before / 10, after: after / 10, reason: p.data.reason || null },
+  });
+  return { ok: true, message: p.data.mode === "add" ? `Added ${fmtCount(toTenths(p.data.amount))}. ${fmtCount(after)} on hand.` : `Count set to ${fmtCount(after)}.` };
+}
+
+export interface Supply {
+  count: number;
+  perDose: number;
+  /** Whole days left at the scheduled rate; null for as-needed orders (no fixed rate). */
+  daysLeft: number | null;
+  low: boolean;
+}
+
+/** How long the tablets on hand will last. Null when the order isn't counted. */
+export function supplyOf(o: Pick<MedicationOrder, "countTenths" | "doseTenths" | "type" | "times">): Supply | null {
+  if (o.countTenths === null) return null;
+  const perDay = o.type === "scheduled" ? o.times.length * o.doseTenths : 0;
+  const daysLeft = perDay > 0 ? Math.max(0, Math.floor(o.countTenths / perDay)) : null;
+  const low = o.countTenths <= 0 || (daysLeft !== null && daysLeft < LOW_SUPPLY_DAYS);
+  return { count: o.countTenths / 10, perDose: o.doseTenths / 10, daysLeft, low };
+}
+
+/** Counted, active orders running low, in the homes the actor can see (for the owner dashboard). */
+export async function runningLow(tx: Tx, actor: Actor) {
+  const rows = await tx
+    .select({ o: medicationOrders, r: residents })
+    .from(medicationOrders)
+    .innerJoin(residents, eq(residents.id, medicationOrders.residentId))
+    .where(and(eq(medicationOrders.status, "active"), eq(residents.status, "active"), isNotNull(medicationOrders.countTenths)));
+  return rows
+    .filter((x) => canSeeFacility(actor, x.r.facilityId))
+    .map((x) => ({ ...x, supply: supplyOf(x.o)! }))
+    .filter((x) => x.supply.low)
+    .sort((a, b) => (a.supply.daysLeft ?? 0) - (b.supply.daysLeft ?? 0));
 }
 
 export async function stopOrder(tx: Tx, actor: Actor, orderId: string, reason: string): Promise<Result> {
@@ -347,6 +442,7 @@ export async function recordScheduledDose(tx: Tx, actor: Actor, raw: unknown, no
     recordedBy: actor.id,
     recordedAt: now,
   });
+  if (v.outcome === "given") await deductTablets(tx, ctx.order.id);
   await audit(tx, { orgId: ctx.resident.orgId, actorId: actor.id, action: "dose_recorded", entity: "medication_order", entityId: ctx.order.id, details: { outcome: v.outcome, scheduledFor: v.scheduledFor, late } });
   const what = v.outcome === "given" ? "given" : v.outcome === "refused" ? "recorded as refused" : "recorded as held";
   return { ok: true, message: `${ctx.order.name} ${what} for ${ctx.resident.firstName}${late ? ". Marked late: given more than 60 minutes after its time" : ""}.` };
@@ -397,6 +493,7 @@ export async function recordPrnDose(tx: Tx, actor: Actor, raw: unknown, now: Dat
     .returning();
   const dueAt = new Date(now.getTime() + FOLLOWUP_MINUTES * MIN);
   await tx.insert(prnFollowups).values({ orgId: ctx.resident.orgId, administrationId: dose.id, residentId: ctx.resident.id, dueAt });
+  await deductTablets(tx, ctx.order.id);
   await audit(tx, { orgId: ctx.resident.orgId, actorId: actor.id, action: "prn_given", entity: "medication_order", entityId: ctx.order.id, details: { reason: v.reason } });
   return { ok: true, message: `${ctx.order.name} given for ${ctx.resident.firstName}. Check how it worked at ${localClock(dueAt, ctx.tz)}.` };
 }

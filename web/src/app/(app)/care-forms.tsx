@@ -5,6 +5,7 @@ import { startTransition, useActionState, useEffect, useState, type FormEvent } 
 import { ScanField } from "@/components/scan-field";
 import { ResidentPhoto } from "@/components/resident-photo";
 import { DoseTimes } from "./dose-times";
+import { TabletCount } from "./tablet-count";
 import { MedNameField } from "./med-name-field";
 import { Status, type FormState } from "@/components/status";
 
@@ -184,10 +185,47 @@ export function AddOrderForm({ action, today, allergies }: { action: Action; tod
         <div className="field" style={{ flex: "1 1 180px" }}><label htmlFor="packageCode">Package barcode (optional)</label><input id="packageCode" name="packageCode" /></div>
       </div>
       <div className="field"><label htmlFor="instructions">Instructions for caregivers (optional)</label><input id="instructions" name="instructions" placeholder="Give with food" /></div>
+      <TabletCount />
       <Status state={state} />
       <div className="row">
         <button className="btn primary" disabled={pending}>Add medication</button>
         <button type="button" className="btn" onClick={() => setOpen(false)}>Close</button>
+      </div>
+    </form>
+  );
+}
+
+/** Owners and admins: add a refill or correct the count (with a reason). */
+export function CountAdjust({ action, orderId, residentId, counted }: { action: Action; orderId: string; residentId: string; counted: boolean }) {
+  const [state, formAction, pending] = useActionState(action, {});
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<"add" | "set">(counted ? "add" : "set");
+  if (!open) {
+    return (
+      <div className="row" style={{ gap: 6 }}>
+        {counted && <button type="button" className="btn small" onClick={() => { setMode("add"); setOpen(true); }}>Add refill</button>}
+        <button type="button" className="btn small" onClick={() => { setMode("set"); setOpen(true); }}>{counted ? "Correct count" : "Start counting"}</button>
+        <Status state={state} />
+      </div>
+    );
+  }
+  return (
+    <form action={formAction} className="stack" style={{ gap: 8, maxWidth: 360 }}>
+      <input type="hidden" name="orderId" value={orderId} />
+      <input type="hidden" name="residentId" value={residentId} />
+      <input type="hidden" name="mode" value={mode} />
+      <div className="field">
+        <label htmlFor={`amt-${orderId}`}>{mode === "add" ? "Tablets received" : "Tablets on hand now"}</label>
+        <input id={`amt-${orderId}`} name="amount" type="number" min={0} max={10000} step={0.5} inputMode="decimal" required autoFocus />
+      </div>
+      <div className="field">
+        <label htmlFor={`why-${orderId}`}>{mode === "add" ? "Note (optional)" : "Reason"}</label>
+        <input id={`why-${orderId}`} name="reason" maxLength={200} required={mode === "set"} placeholder={mode === "add" ? "For example: pharmacy delivery" : "For example: counted by hand"} />
+      </div>
+      <Status state={state} />
+      <div className="row" style={{ gap: 6 }}>
+        <button className="btn small primary" disabled={pending}>Save</button>
+        <button type="button" className="btn small" onClick={() => setOpen(false)}>Close</button>
       </div>
     </form>
   );

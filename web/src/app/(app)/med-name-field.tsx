@@ -58,7 +58,10 @@ export function MedNameField() {
     input.current.value = o.name;
     const set = (name: string, value: string) => {
       const el = form.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | null;
-      if (el && value) el.value = value;
+      if (el && value) {
+        el.value = value;
+        el.dispatchEvent(new Event("input", { bubbles: true })); // so fields that watch it (the tablet count) update
+      }
     };
     set("strength", o.strength);
     const route = form.elements.namedItem("route") as HTMLSelectElement | null;

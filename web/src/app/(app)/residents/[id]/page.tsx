@@ -8,10 +8,10 @@ import { facilities, organizations } from "@/db/schema";
 import { canGiveMeds, canManageCare } from "@/lib/permissions";
 import { requireUser } from "@/lib/session";
 import { clock, localClock, localDate } from "@/lib/time";
-import { listOrders, monthRecord, openFollowups, residentSlots } from "@/server/meds";
+import { fmtCount, isCountable, listOrders, monthRecord, openFollowups, residentSlots, supplyOf } from "@/server/meds";
 import { getResident, visibleFacilities } from "@/server/residents";
-import { addOrderAction, dischargeAction, followupAction, readmitAction, stopOrderAction, updateResidentAction } from "../../care-actions";
-import { AddOrderForm, DischargeForm, EditResidentForm, FollowupForm, ReadmitForm, StopOrderButton } from "../../care-forms";
+import { addOrderAction, adjustCountAction, dischargeAction, followupAction, readmitAction, stopOrderAction, updateResidentAction } from "../../care-actions";
+import { AddOrderForm, CountAdjust, DischargeForm, EditResidentForm, FollowupForm, ReadmitForm, StopOrderButton } from "../../care-forms";
 import { SlotRow } from "../../meds/slot-row";
 import { PhotoUpload } from "./photo-upload";
 import { DiagnosesPanel, NotesPanel, VitalsPanel } from "../../care/panels";
@@ -132,7 +132,28 @@ export default async function ResidentPage({ params, searchParams }: { params: P
               <tbody>
                 {data.orders.map(({ order: o, createdByName }) => (
                   <tr key={o.id}>
-                    <td><b>{o.name}</b> {o.strength}<br /><span className="small muted">{o.route}{o.bpCheck ? " · check BP first" : ""}{o.instructions ? ` · ${o.instructions}` : ""}</span></td>
+                    <td>
+                      <b>{o.name}</b> {o.strength}
+                      <br />
+                      <span className="small muted">{o.route}{o.bpCheck ? " · check BP first" : ""}{o.instructions ? ` · ${o.instructions}` : ""}</span>
+                      {canManageCare(me) && o.status === "active" && isCountable(o.strength) && (() => {
+                        const s = supplyOf(o);
+                        return (
+                          <div className="stack" style={{ gap: 6, marginTop: 6 }}>
+                            {s ? (
+                              <span className="small">
+                                <b>{fmtCount(o.countTenths!)}</b> on hand · {fmtCount(o.doseTenths)} per dose
+                                {s.daysLeft !== null && ` · about ${s.daysLeft} day${s.daysLeft === 1 ? "" : "s"} left`}{" "}
+                                {s.low && <span className="pill warn">{o.countTenths! <= 0 ? "Out: count it" : "Refill soon"}</span>}
+                              </span>
+                            ) : (
+                              <span className="small muted">Tablets not counted.</span>
+                            )}
+                            <CountAdjust action={adjustCountAction} orderId={o.id} residentId={r.id} counted={!!s} />
+                          </div>
+                        );
+                      })()}
+                    </td>
                     <td>{o.type === "prn" ? <>As needed<br /><span className="small muted">{o.prnReasons.join(", ")} · at least {(o.prnMinIntervalMinutes ?? 0) / 60} h apart, {o.prnMaxPerDay} a day</span></> : o.times.map(clock).join(", ")}</td>
                     <td>{o.purpose}</td>
                     <td className="small">{o.startDate}{o.stopDate ? ` to ${o.stopDate}` : ""}<br /><span className="muted">{o.prescriber ? `${o.prescriber} · ` : ""}entered by {createdByName ?? "unknown"}</span></td>

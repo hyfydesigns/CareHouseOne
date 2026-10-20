@@ -266,6 +266,12 @@ export const medicationOrders = pgTable(
     prescriber: text("prescriber"),
     /** Barcode on the pharmacy package, if known; scanned during the medication pass. */
     packageCode: text("package_code"),
+    /**
+     * Tablets (or capsules) on hand, in tenths so half tablets work (295 = 29.5). Null: not counted.
+     * Each dose recorded as given takes off doseTenths. Owners and admins only; caregivers never see it.
+     */
+    countTenths: integer("count_tenths"),
+    doseTenths: integer("dose_tenths").notNull().default(10),
     startDate: text("start_date").notNull(),
     stopDate: text("stop_date"),
     status: orderStatusEnum("status").notNull().default("active"),

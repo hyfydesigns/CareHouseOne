@@ -6,7 +6,7 @@ import type { FormState } from "@/components/status";
 import { getDb, withTenant, type Tx } from "@/db/client";
 import type { Actor } from "@/lib/permissions";
 import { requireUser } from "@/lib/session";
-import { createOrder, recordFollowup, recordPrnDose, recordScheduledDose, stopOrder } from "@/server/meds";
+import { adjustCount, createOrder, recordFollowup, recordPrnDose, recordScheduledDose, stopOrder } from "@/server/meds";
 import { createResident, dischargeResident, readmitResident, updateResident } from "@/server/residents";
 
 /** Every care action re-checks the signed-in user and runs inside their organization only. */
@@ -67,7 +67,7 @@ export async function readmitAction(residentId: string, _: FormState, fd: FormDa
 
 export async function addOrderAction(residentId: string, _: FormState, fd: FormData): Promise<FormState> {
   const input = {
-    ...obj(fd, ["name", "strength", "route", "purpose", "type", "prnReasons", "prnMinIntervalHours", "prnMaxPerDay", "instructions", "prescriber", "packageCode", "startDate", "stopDate"]),
+    ...obj(fd, ["name", "strength", "route", "purpose", "type", "prnReasons", "prnMinIntervalHours", "prnMaxPerDay", "instructions", "prescriber", "packageCode", "countOnHand", "perDose", "startDate", "stopDate"]),
     times: fd.getAll("times").map(String),
     bpCheck: fd.get("bpCheck") === "on",
   };
@@ -107,5 +107,13 @@ export async function followupAction(_: FormState, fd: FormData): Promise<FormSt
   const r = await asMe((tx, actor) => recordFollowup(tx, actor, obj(fd, ["followupId", "result", "note"]), new Date()));
   revalidatePath("/meds");
   revalidatePath(`/residents/${fd.get("residentId")}`);
+  return r.ok ? { message: r.message } : { error: r.error };
+}
+
+/** Owners and admins: add a refill or correct the tablet count. */
+export async function adjustCountAction(_: FormState, fd: FormData): Promise<FormState> {
+  const r = await asMe((tx, actor) => adjustCount(tx, actor, String(fd.get("orderId")), obj(fd, ["mode", "amount", "reason"])));
+  revalidatePath(`/residents/${fd.get("residentId")}`);
+  revalidatePath("/dashboard");
   return r.ok ? { message: r.message } : { error: r.error };
 }

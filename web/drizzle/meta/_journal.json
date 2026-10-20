@@ -141,6 +141,13 @@
       "when": 1792512719313,
       "tag": "0019_medication_catalog_security",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792518239628,
+      "tag": "0020_tablet_count",
+      "breakpoints": true
     }
   ]
 }

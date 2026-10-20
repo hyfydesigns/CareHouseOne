@@ -7,7 +7,7 @@ import { requireUser } from "@/lib/session";
 import { canManageCare } from "@/lib/permissions";
 import { localDate } from "@/lib/time";
 import { unreviewedVitals } from "@/server/care";
-import { overdueFollowups } from "@/server/meds";
+import { fmtCount, overdueFollowups, runningLow } from "@/server/meds";
 import { homeSummaries } from "@/server/dashboard";
 import { reviewVitalAction } from "../care/actions";
 import { ReviewButton } from "../care/forms";
@@ -25,7 +25,8 @@ export default async function DashboardPage() {
     const staff = await tx.select({ userId: userFacilities.userId, facilityId: userFacilities.facilityId, status: users.status }).from(userFacilities).innerJoin(users, eq(users.id, userFacilities.userId));
     const review = canManageCare(me) ? await unreviewedVitals(tx, actor) : [];
     const followups = await overdueFollowups(tx, actor, now);
-    return { org, homes, staff, review, followups };
+    const low = canManageCare(me) ? await runningLow(tx, actor) : [];
+    return { org, homes, staff, review, followups, low };
   });
   return (
     <>
@@ -107,6 +108,29 @@ export default async function DashboardPage() {
             </table>
           </div>
           <p className="small muted" style={{ margin: 0 }}>A caregiver on shift should check how each dose worked and record it on the medication screen.</p>
+        </section>
+      )}
+      {data.low.length > 0 && (
+        <section className="card" style={{ borderColor: "var(--warn)" }} aria-labelledby="low-h">
+          <h2 id="low-h">Running low</h2>
+          <div className="tablewrap">
+            <table>
+              <tbody>
+                {data.low.map(({ o, r, supply }) => (
+                  <tr key={o.id}>
+                    <td><Link href={`/residents/${r.id}?tab=orders`}><b>{r.firstName} {r.lastName}</b></Link></td>
+                    <td>{o.name} {o.strength}</td>
+                    <td>
+                      {fmtCount(o.countTenths!)} on hand
+                      {supply.daysLeft !== null && ` · about ${supply.daysLeft} day${supply.daysLeft === 1 ? "" : "s"}`}{" "}
+                      <span className="pill warn">{o.countTenths! <= 0 ? "Out: count it" : "Refill soon"}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="small muted" style={{ margin: 0 }}>Order refills now, then use Add refill on the resident&apos;s Medication orders when they arrive.</p>
         </section>
       )}
       {data.review.length > 0 && (
