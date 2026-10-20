@@ -412,6 +412,29 @@ export const icd10Codes = pgTable("icd10_codes", {
   version: text("version").notNull(),
 });
 
+/**
+ * The standard medication list for typeahead when entering orders: NLM RxTerms (free, US), loaded
+ * with npm run rx:import. Shared by every organization; read-only for the app. One row per
+ * name + strength/form + route.
+ */
+export const medicationCatalog = pgTable(
+  "medication_catalog",
+  {
+    id: id(),
+    /** Generic or brand name, keeping RxTerms' "tall man" lettering (for example hydrOXYzine). */
+    name: text("name").notNull(),
+    /** Strength and form, for example "10 mg tablet". */
+    strength: text("strength").notNull(),
+    /** One of the app's routes ("By mouth", "Topical"…), or null when it doesn't map. */
+    route: text("route"),
+    /** Common abbreviations, for example HCTZ. */
+    synonyms: text("synonyms"),
+    rxcui: text("rxcui"),
+    version: text("version").notNull(),
+  },
+  (t) => [index("medication_catalog_name_idx").on(sql`lower(${t.name})`), uniqueIndex("medication_catalog_uq").on(t.name, t.strength, t.route)],
+);
+
 /** A resident's diagnosis. Removal sets removed_at; rows are never deleted, so history stays. */
 export const residentDiagnoses = pgTable(
   "resident_diagnoses",

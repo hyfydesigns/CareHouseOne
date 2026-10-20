@@ -127,6 +127,20 @@
       "when": 1792510415699,
       "tag": "0017_resident_photos_security",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792512717500,
+      "tag": "0018_medication_catalog",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792512719313,
+      "tag": "0019_medication_catalog_security",
+      "breakpoints": true
     }
   ]
 }

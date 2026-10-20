@@ -234,6 +234,15 @@ Then `npm run dev`, open `http://www.localhost:3000/signup`, subscribe with a Pa
 - **Yearly ICD-10-CM update** (before October 1): download the CMS order file, then with the proxy running `npm run icd:import -- icd10cm_order_2028.txt "FY 2028"`.
 - **Rotate the cron secret:** add a new version of `cron-secret`, update the scheduler job's Authorization header, redeploy.
 - **Rotate the database password:** `gcloud sql users set-password`, add a new `database-url` version with it, redeploy.
+- **Medication list (typeahead when entering orders):** load the free NLM RxTerms list once, then every few months. In Cloud Shell, with the proxy running (step 5):
+
+  ```bash
+  mkdir -p ~/rxterms && cd ~/rxterms
+  curl -fLO https://data.lhncbc.nlm.nih.gov/public/rxterms/release/RxTerms202610.zip && unzip -o RxTerms202610.zip
+  cd ~/CareHouseOne/web && npm run rx:import -- "$(find ~/rxterms -name 'RxTerms2*.txt' | head -1)" "RxTerms 2026-10"
+  ```
+
+  Use the newest file name from https://lhncbc.nlm.nih.gov/MOR/RxTerms/. Until it's loaded, the list is empty and suggestions come only from medications already ordered; `npm run rx:import -- --sample` loads a short starter list instead.
 - **Remove test organizations:** with the proxy running (step 5), `npm run org:remove` lists every organization with its owners and resident count, plus PayPal sign-ups that never set up an organization. `npm run org:remove -- --delete ORG_ID` removes one after you type its exact name; it refuses any organization that has ever had a resident or care record. `npm run org:remove -- --unclaimed I-XXXX` removes an abandoned sign-up. Cancel sandbox subscriptions in PayPal separately, and keep the printed summary with your records.
 - **Remove a lost tablet:** owner signs in > Settings > Home tablets > Remove. That signs everyone out of it. Also lock or wipe it in device management.
 

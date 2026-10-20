@@ -16,6 +16,12 @@ async function openPglite(dataDir?: string): Promise<DB> {
   const client = dataDir ? new PGlite(dataDir) : new PGlite();
   const db = drizzle(client, { schema });
   await migrate(db, { migrationsFolder: MIGRATIONS });
+  // Local and test databases get the starter medication list; production loads RxTerms instead.
+  const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.medicationCatalog);
+  if (n === 0) {
+    const { SAMPLE_CATALOG } = await import("../server/med-sample");
+    await db.insert(schema.medicationCatalog).values(SAMPLE_CATALOG.map((r) => ({ ...r, version: "starter list" }))).onConflictDoNothing();
+  }
   return db as unknown as DB;
 }
 

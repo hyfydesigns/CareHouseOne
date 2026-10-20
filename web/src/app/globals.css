@@ -170,3 +170,11 @@ td { padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: to
 .avatar { display: inline-grid; place-items: center; flex: none; border-radius: 50%; object-fit: cover; background: var(--accent-soft); color: var(--accent); font-weight: 700; border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--line); }
 .who { display: flex; gap: 14px; align-items: center; background: var(--bg); border-radius: 12px; padding: 12px; }
 .who b { font-size: 18px; }
+
+/* Typeahead (medication name) */
+.combo { position: relative; }
+.combo-list { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0; min-width: 280px; max-height: 340px; overflow-y: auto; margin: 0; padding: 4px 0; list-style: none; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 28px rgba(16, 50, 61, 0.18); }
+.combo-group { padding: 8px 12px 4px; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-2); }
+.combo-opt { padding: 10px 12px; cursor: pointer; line-height: 1.35; min-height: 44px; }
+.combo-opt[aria-selected="true"], .combo-opt:hover { background: var(--accent-soft); }
+.combo-empty { padding: 10px 12px; color: var(--ink-2); font-size: 14px; }

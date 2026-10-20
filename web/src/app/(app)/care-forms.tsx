@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { startTransition, useActionState, useEffect, useState, type FormEvent } from "react";
 import { ScanField } from "@/components/scan-field";
 import { ResidentPhoto } from "@/components/resident-photo";
+import { MedNameField } from "./med-name-field";
 import { Status, type FormState } from "@/components/status";
 
 type Action = (s: FormState, fd: FormData) => Promise<FormState>;
@@ -154,7 +155,7 @@ export function AddOrderForm({ action, today, allergies }: { action: Action; tod
       <h2>Add medication</h2>
       <p className="small muted">Enter it exactly as the prescriber ordered. Allergies on file: {allergies.length ? allergies.join(", ") : "none known"}.</p>
       <div className="row" style={{ alignItems: "start" }}>
-        <div className="field" style={{ flex: "2 1 200px" }}><label htmlFor="name">Medication</label><input id="name" name="name" required placeholder="For example: Lisinopril" /></div>
+        <div className="field" style={{ flex: "2 1 200px" }}><label htmlFor="name">Medication</label><MedNameField /></div>
         <div className="field" style={{ flex: "1 1 160px" }}><label htmlFor="strength">Strength and form</label><input id="strength" name="strength" required placeholder="10 mg tablet" /></div>
         <div className="field" style={{ flex: "1 1 160px" }}><label htmlFor="route">Route</label><select id="route" name="route">{ROUTES.map((r) => <option key={r}>{r}</option>)}</select></div>
         <div className="field" style={{ flex: "2 1 200px" }}><label htmlFor="purpose">What it&apos;s for</label><input id="purpose" name="purpose" required placeholder="Blood pressure" /></div>
