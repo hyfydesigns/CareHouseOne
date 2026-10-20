@@ -4,7 +4,7 @@ import { getDb, withTenant } from "@/db/client";
 import { facilities, type Resident } from "@/db/schema";
 import { canManageCare } from "@/lib/permissions";
 import type { SessionUser } from "@/server/auth";
-import { CATEGORY_LABEL, monthNotes, monthVitals, SHIFT_LABEL, shiftAt } from "@/server/care";
+import { BP_POSITIONS, CATEGORY_LABEL, monthNotes, monthVitals, SHIFT_LABEL, shiftAt } from "@/server/care";
 import { childCodes, currentCodeSet, listDiagnoses, searchIcd } from "@/server/diagnoses";
 import { localDate, localTime } from "@/lib/time";
 import { addDiagnosisAction, noteAction, removeDiagnosisAction, reviewVitalAction, vitalsAction } from "./actions";
@@ -37,7 +37,7 @@ export async function VitalsPanel({ resident: r, me, mParam, base }: { resident:
   const nurse = canManageCare(me);
   return (
     <>
-      {m.isCurrent && <VitalsForm action={vitalsAction} residentId={r.id} lastReading={last ? `${when(last.recordedAt, tz)} · BP ${last.systolic}/${last.diastolic} · pulse ${last.pulse}` : undefined} />}
+      {m.isCurrent && <VitalsForm action={vitalsAction} residentId={r.id} lastReading={last ? `${when(last.recordedAt, tz)} · BP ${last.systolic}/${last.diastolic}${last.bpPosition === "lying" ? " (lying down)" : ""} · pulse ${last.pulse}${last.bloodSugar != null ? ` · sugar ${last.bloodSugar} mg/dL` : ""}` : undefined} />}
       <section className="card">
         <div className="row"><h2>Vital signs history</h2><span className="spacer" /><MonthNav base={base} m={m} /></div>
         <div className="kpis">
@@ -47,15 +47,18 @@ export async function VitalsPanel({ resident: r, me, mParam, base }: { resident:
         </div>
         <div className="tablewrap">
           <table>
-            <thead><tr><th>When</th><th>BP</th><th>Pulse</th><th>Temp</th><th>Breaths</th><th>O2</th><th>Weight</th><th>By</th><th></th></tr></thead>
+            <thead><tr><th>When</th><th>BP</th><th>Pulse</th><th>Temp</th><th>Sugar</th><th>O2</th><th>Weight</th><th>By</th><th></th></tr></thead>
             <tbody>
               {data.rows.length ? data.rows.map(({ v, by, reviewedAt }) => (
                 <tr key={v.id}>
                   <td>{when(v.recordedAt, tz)}</td>
-                  <td>{v.systolic}/{v.diastolic}</td>
+                  <td>
+                    {v.systolic}/{v.diastolic}
+                    {v.bpPosition && <span className="small muted"><br />{BP_POSITIONS[v.bpPosition as keyof typeof BP_POSITIONS] ?? v.bpPosition}</span>}
+                  </td>
                   <td>{v.pulse}</td>
                   <td>{tenths(v.tempTenthsF, " °F")}</td>
-                  <td>{v.respirations ?? "—"}</td>
+                  <td>{v.bloodSugar == null ? "—" : `${v.bloodSugar} mg/dL`}</td>
                   <td>{v.oxygen == null ? "—" : `${v.oxygen}%`}</td>
                   <td>{tenths(v.weightTenthsLb, " lb")}</td>
                   <td className="small">{by}</td>

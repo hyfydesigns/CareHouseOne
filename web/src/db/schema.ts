@@ -345,7 +345,12 @@ export const vitals = pgTable(
     pulse: integer("pulse").notNull(),
     /** Tenths of a degree Fahrenheit (986 = 98.6 °F), so no floating point. */
     tempTenthsF: integer("temp_tenths_f"),
+    /** No longer collected (replaced by blood sugar); kept so earlier readings stay in the record. */
     respirations: integer("respirations"),
+    /** Blood sugar (glucose), mg/dL. */
+    bloodSugar: integer("blood_sugar"),
+    /** How the blood pressure was taken: "sitting" or "lying". */
+    bpPosition: text("bp_position"),
     oxygen: integer("oxygen"),
     /** Tenths of a pound. */
     weightTenthsLb: integer("weight_tenths_lb"),

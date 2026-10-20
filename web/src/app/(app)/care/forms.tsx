@@ -26,8 +26,17 @@ export function VitalsForm({ action, residentId, lastReading }: { action: Action
         {field("pulse", "Pulse")}
         {field("temperature", "Temperature °F", "decimal")}
       </div>
+      <fieldset className="row" style={{ border: 0, padding: 0, margin: 0, gap: 10 }}>
+        <legend className="small" style={{ fontWeight: 700, marginBottom: 6 }}>Blood pressure taken</legend>
+        <label className="chip" style={{ minHeight: 48, gap: 8, cursor: "pointer" }}>
+          <input type="radio" name="bpPosition" value="sitting" defaultChecked /> Sitting
+        </label>
+        <label className="chip" style={{ minHeight: 48, gap: 8, cursor: "pointer" }}>
+          <input type="radio" name="bpPosition" value="lying" /> Lying down
+        </label>
+      </fieldset>
       <div className="row" style={{ alignItems: "start" }}>
-        {field("respirations", "Breaths per minute")}
+        {field("bloodSugar", "Blood sugar mg/dL")}
         {field("oxygen", "Oxygen %")}
         {field("weight", "Weight lb", "decimal")}
         <div className="field" style={{ flex: "2 1 220px" }}><label htmlFor="vnote">Note (optional)</label><input id="vnote" name="note" /></div>

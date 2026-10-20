@@ -163,3 +163,20 @@ describe("ICD-10-CM diagnoses", () => {
     expect(seen.every((d) => d.orgId === other.orgId)).toBe(true);
   });
 });
+
+describe("blood sugar and blood pressure position", () => {
+  const base = () => ({ residentId: c.residents.diego.id, systolic: "128", diastolic: "80", pulse: "72" });
+
+  it("records blood sugar and how blood pressure was taken, and flags low or high sugar", async () => {
+    const low = await inOrg((tx) => recordVitals(tx, caregiver, { ...base(), residentId: c.residents.diego.id, bloodSugar: "55", bpPosition: "lying" }, at("06:30", "2026-10-18")));
+    expect(low.ok && low.data?.flags).toEqual(["blood sugar"]);
+    expect(low.ok && low.message).toMatch(/Blood sugar outside the usual range/);
+    const [row] = await db.select().from(vitals).where(eq(vitals.bloodSugar, 55));
+    expect(row).toMatchObject({ bpPosition: "lying", respirations: null });
+
+    const normal = await inOrg((tx) => recordVitals(tx, caregiver, { ...base(), residentId: c.residents.diego.id, bloodSugar: "110", bpPosition: "sitting" }, at("06:40", "2026-10-18")));
+    expect(normal.ok && normal.data?.flags).toEqual([]);
+    expect((await inOrg((tx) => recordVitals(tx, caregiver, { ...base(), residentId: c.residents.diego.id, bloodSugar: "1000" }, at("06:45", "2026-10-18")))).ok).toBe(false);
+    expect((await inOrg((tx) => recordVitals(tx, caregiver, { ...base(), residentId: c.residents.diego.id, bpPosition: "standing" }, at("06:45", "2026-10-18")))).ok).toBe(false);
+  });
+});

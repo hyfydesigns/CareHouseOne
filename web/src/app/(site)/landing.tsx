@@ -25,7 +25,7 @@ const FEATURES: Array<{ title: string; body: string; d: string }> = [
   },
   {
     title: "Vital signs that get noticed",
-    body: "Blood pressure, pulse, temperature, oxygen and weight with plain labels. Readings outside the usual range alert the caregiver and stay flagged until someone reviews them.",
+    body: "Blood pressure (sitting or lying down), pulse, temperature, blood sugar, oxygen and weight with plain labels. Readings outside the usual range alert the caregiver and stay flagged until someone reviews them.",
     d: "M3 12h4l3-8 4 16 3-8h4",
   },
   {

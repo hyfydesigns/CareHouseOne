@@ -23,7 +23,9 @@ async function monthBounds(tx: Tx, facilityId: string, year: number, month: numb
 // ---------------------------------------------------------------- vital signs
 
 /** Outside these, the reading is flagged and the nurse is alerted. Clinical review should confirm them. */
-export const VITAL_LIMITS = { systolicHigh: 160, systolicLow: 90, pulseHigh: 110, pulseLow: 50, feverTenthsF: 1004, oxygenLow: 92 };
+export const VITAL_LIMITS = { systolicHigh: 160, systolicLow: 90, pulseHigh: 110, pulseLow: 50, feverTenthsF: 1004, oxygenLow: 92, sugarLow: 70, sugarHigh: 250 };
+
+export const BP_POSITIONS = { sitting: "Sitting", lying: "Lying down" } as const;
 
 const num = (lo: number, hi: number, what: string) =>
   z.preprocess((v) => (v === "" || v == null ? undefined : v), z.coerce.number().min(lo, `${what} doesn't look possible.`).max(hi, `${what} doesn't look possible.`).optional());
@@ -34,18 +36,20 @@ export const vitalsSchema = z.object({
   diastolic: num(30, 160, "The bottom blood pressure number"),
   pulse: num(25, 220, "The pulse"),
   temperature: num(90, 108, "The temperature"),
-  respirations: num(4, 60, "The breathing rate"),
+  bloodSugar: num(20, 600, "The blood sugar"),
+  bpPosition: z.preprocess((v) => (v === "" || v == null ? undefined : v), z.enum(["sitting", "lying"]).optional()),
   oxygen: num(50, 100, "The oxygen level"),
   weight: num(40, 700, "The weight"),
   note: z.string().trim().max(300).optional(),
 });
 
-export function vitalFlags(v: { systolic: number; pulse: number; tempTenthsF?: number | null; oxygen?: number | null }): string[] {
+export function vitalFlags(v: { systolic: number; pulse: number; tempTenthsF?: number | null; oxygen?: number | null; bloodSugar?: number | null }): string[] {
   const f: string[] = [];
   if (v.systolic >= VITAL_LIMITS.systolicHigh || v.systolic < VITAL_LIMITS.systolicLow) f.push("blood pressure");
   if (v.pulse > VITAL_LIMITS.pulseHigh || v.pulse < VITAL_LIMITS.pulseLow) f.push("pulse");
   if (v.tempTenthsF != null && v.tempTenthsF >= VITAL_LIMITS.feverTenthsF) f.push("temperature");
   if (v.oxygen != null && v.oxygen < VITAL_LIMITS.oxygenLow) f.push("oxygen");
+  if (v.bloodSugar != null && (v.bloodSugar < VITAL_LIMITS.sugarLow || v.bloodSugar > VITAL_LIMITS.sugarHigh)) f.push("blood sugar");
   return f;
 }
 
@@ -62,7 +66,7 @@ export async function recordVitals(tx: Tx, actor: Actor, raw: unknown, now: Date
   const r = await getResident(tx, actor, v.residentId);
   if (!r || r.status !== "active") return { ok: false, error: "That resident isn't available." };
   const tempTenthsF = v.temperature == null ? null : Math.round(v.temperature * 10);
-  const flags = vitalFlags({ systolic: v.systolic, pulse: v.pulse, tempTenthsF, oxygen: v.oxygen ?? null });
+  const flags = vitalFlags({ systolic: v.systolic, pulse: v.pulse, tempTenthsF, oxygen: v.oxygen ?? null, bloodSugar: v.bloodSugar ?? null });
   const [row] = await tx
     .insert(vitals)
     .values({
@@ -72,7 +76,8 @@ export async function recordVitals(tx: Tx, actor: Actor, raw: unknown, now: Date
       diastolic: v.diastolic,
       pulse: v.pulse,
       tempTenthsF,
-      respirations: v.respirations ?? null,
+      bloodSugar: v.bloodSugar ?? null,
+      bpPosition: v.bpPosition ?? null,
       oxygen: v.oxygen ?? null,
       weightTenthsLb: v.weight == null ? null : Math.round(v.weight * 10),
       flags,

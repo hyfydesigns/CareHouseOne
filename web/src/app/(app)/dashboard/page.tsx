@@ -142,7 +142,7 @@ export default async function DashboardPage() {
                 {data.review.map(({ v, r, by }) => (
                   <tr key={v.id}>
                     <td><Link href={`/residents/${r.id}?tab=vitals`}><b>{r.firstName} {r.lastName}</b></Link><br /><span className="small muted">{v.recordedAt.toLocaleString("en-US", { timeZone: data.homes.find((h) => h.id === r.facilityId)?.timeZone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true })} · {by}</span></td>
-                    <td>BP {v.systolic}/{v.diastolic} · pulse {v.pulse}{v.tempTenthsF != null ? ` · ${(v.tempTenthsF / 10).toFixed(1)} °F` : ""}{v.oxygen != null ? ` · O2 ${v.oxygen}%` : ""}<br /><span className="pill crit">Check {v.flags.join(", ")}</span></td>
+                    <td>BP {v.systolic}/{v.diastolic} · pulse {v.pulse}{v.tempTenthsF != null ? ` · ${(v.tempTenthsF / 10).toFixed(1)} °F` : ""}{v.oxygen != null ? ` · O2 ${v.oxygen}%` : ""}{v.bloodSugar != null ? ` · sugar ${v.bloodSugar} mg/dL` : ""}<br /><span className="pill crit">Check {v.flags.join(", ")}</span></td>
                     <td style={{ textAlign: "right" }}><ReviewButton action={reviewVitalAction} vitalId={v.id} residentId={r.id} /></td>
                   </tr>
                 ))}

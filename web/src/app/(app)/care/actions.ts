@@ -20,7 +20,7 @@ const pick = (fd: FormData, keys: string[]) => Object.fromEntries(keys.map((k) =
 const residentPaths = (fd: FormData) => [`/residents/${fd.get("residentId")}`, "/vitals", "/notes", "/dashboard"];
 
 export async function vitalsAction(_: FormState, fd: FormData) {
-  return run((tx, a) => recordVitals(tx, a, pick(fd, ["residentId", "systolic", "diastolic", "pulse", "temperature", "respirations", "oxygen", "weight", "note"]), new Date()), residentPaths(fd));
+  return run((tx, a) => recordVitals(tx, a, pick(fd, ["residentId", "systolic", "diastolic", "pulse", "temperature", "bloodSugar", "bpPosition", "oxygen", "weight", "note"]), new Date()), residentPaths(fd));
 }
 
 export async function reviewVitalAction(_: FormState, fd: FormData) {
