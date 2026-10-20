@@ -58,7 +58,7 @@ export function PhotoUpload({ residentId, photo, name }: { residentId: string; p
       <h2 id="photo-h">Photo</h2>
       <div className="row" style={{ gap: 16 }}>
         <ResidentPhoto src={photo} name={name} size={120} />
-        <div className="stack" style={{ gap: 8 }}>
+        <div className="stack" style={{ gap: 8, flex: "1 1 260px" }}>
           <p className="small muted" style={{ margin: 0 }}>
             Caregivers see this photo on the medication screens to check they have the right person. Use a recent, clear photo of the face, taken with the
             resident&apos;s (or guardian&apos;s) consent.
