@@ -63,8 +63,13 @@ export function MedNameField() {
     set("strength", o.strength);
     const route = form.elements.namedItem("route") as HTMLSelectElement | null;
     if (route && o.route && [...route.options].some((opt) => opt.value === o.route)) route.value = o.route;
+    // Purpose: fill it from history, and replace (or clear) one an earlier pick filled in, but
+    // never overwrite what the person typed themselves.
     const purpose = form.elements.namedItem("purpose") as HTMLInputElement | null;
-    if (purpose && o.purpose && !purpose.value) purpose.value = o.purpose;
+    if (purpose && (!purpose.value || purpose.value === purpose.dataset.auto)) {
+      purpose.value = o.purpose ?? "";
+      purpose.dataset.auto = o.purpose ?? "";
+    }
     setOpen(false);
     (form.elements.namedItem(o.strength ? "purpose" : "strength") as HTMLInputElement | null)?.focus();
   }
