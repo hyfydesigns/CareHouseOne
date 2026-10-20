@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { startTransition, useActionState, useEffect, useState, type FormEvent } from "react";
 import { ScanField } from "@/components/scan-field";
+import { ResidentPhoto } from "@/components/resident-photo";
 import { Status, type FormState } from "@/components/status";
 
 type Action = (s: FormState, fd: FormData) => Promise<FormState>;
@@ -227,19 +228,40 @@ function keepValues(formAction: (fd: FormData) => void) {
 }
 
 export type ResidentCheckMode = "two_identifiers" | "wristband";
-export type Who = { name: string; dateOfBirth: string | null; room: string };
+export type Who = { name: string; dateOfBirth: string | null; room: string; photo: string | null };
 
 /** Step 1 of every dose: confirm the right person, by wristband scan or two identifiers. */
 function ResidentCheck({ mode, who, step }: { mode: ResidentCheckMode; who: Who; step: string }) {
-  if (mode === "wristband") {
-    return <ScanField id="residentCode" name="residentCode" label={`${step}Scan the resident's wristband`} hint="Or the code on their room card." autoFocus />;
-  }
   const second = who.dateOfBirth ? `date of birth ${who.dateOfBirth}` : `room ${who.room} (no date of birth on file)`;
+  // The photo first, so the caregiver looks from the screen to the person before anything else.
+  const face = (
+    <div className="who">
+      <ResidentPhoto src={who.photo} name={who.name} size={104} />
+      <span>
+        <b>{who.name}</b>
+        <br />
+        <span className="small muted">Room {who.room}{who.dateOfBirth ? ` · Born ${who.dateOfBirth}` : ""}</span>
+        <br />
+        <span className="small">{who.photo ? "Look at the person: is this them?" : "No photo on file yet. Ask an owner or admin to add one."}</span>
+      </span>
+    </div>
+  );
+  if (mode === "wristband") {
+    return (
+      <>
+        {face}
+        <ScanField id="residentCode" name="residentCode" label={`${step}Scan the resident's wristband`} hint="Or the code on their room card." autoFocus />
+      </>
+    );
+  }
   return (
-    <label className="check" style={{ alignItems: "start" }}>
-      <input type="checkbox" name="residentConfirmed" required />
-      <span>{step}I&apos;ve checked two identifiers: this is <b>{who.name}</b>, {second}.</span>
-    </label>
+    <>
+      {face}
+      <label className="check" style={{ alignItems: "start" }}>
+        <input type="checkbox" name="residentConfirmed" required />
+        <span>{step}I&apos;ve checked two identifiers: this is <b>{who.name}</b>, {second}.</span>
+      </label>
+    </>
   );
 }
 

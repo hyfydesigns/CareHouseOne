@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ResidentPhoto, residentPhotoUrl } from "@/components/resident-photo";
 import { getDb, withTenant } from "@/db/client";
 import { canManageCare } from "@/lib/permissions";
 import { requireUser } from "@/lib/session";
@@ -32,7 +33,12 @@ export default async function ResidentsPage() {
                   <tbody>
                     {list.map((r) => (
                       <tr key={r.id}>
-                        <td><Link href={`/residents/${r.id}`}><b>{r.firstName} {r.lastName}</b></Link></td>
+                        <td>
+                          <span className="row" style={{ gap: 10, flexWrap: "nowrap" }}>
+                            <ResidentPhoto src={residentPhotoUrl(r)} name={`${r.firstName} ${r.lastName}`} size={40} />
+                            <Link href={`/residents/${r.id}`}><b>{r.firstName} {r.lastName}</b></Link>
+                          </span>
+                        </td>
                         <td>{r.room}</td>
                         <td>{r.allergies.length ? <span className="pill crit">{r.allergies.join(", ")}</span> : <span className="muted">None known</span>}</td>
                         <td>{r.diet}</td>

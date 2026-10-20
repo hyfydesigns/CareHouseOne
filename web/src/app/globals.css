@@ -165,3 +165,8 @@ td { padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: to
 .form-section > legend { float: left; width: 100%; padding: 0; font-family: var(--font-display), sans-serif; font-size: 17px; font-weight: 600; color: var(--ink); }
 .form-section > legend + * { clear: left; }
 .form-section .hint { margin: -4px 0 0; font-size: 14px; color: var(--ink-2); }
+
+/* Resident photos (initials when there's no photo yet) */
+.avatar { display: inline-grid; place-items: center; flex: none; border-radius: 50%; object-fit: cover; background: var(--accent-soft); color: var(--accent); font-weight: 700; border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--line); }
+.who { display: flex; gap: 14px; align-items: center; background: var(--bg); border-radius: 12px; padding: 12px; }
+.who b { font-size: 18px; }

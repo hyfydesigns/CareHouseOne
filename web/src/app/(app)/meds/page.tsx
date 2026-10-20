@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ResidentPhoto, residentPhotoUrl } from "@/components/resident-photo";
 import { redirect } from "next/navigation";
 import { getDb, withTenant } from "@/db/client";
 import { canGiveMeds } from "@/lib/permissions";
@@ -61,6 +62,7 @@ export default async function MedsPage({ searchParams }: { searchParams: Promise
         return (
           <section key={r.id} className="card" aria-labelledby={`r-${r.id}`}>
             <div className="row">
+              <ResidentPhoto src={residentPhotoUrl(r)} name={`${r.firstName} ${r.lastName}`} size={56} />
               <h2 id={`r-${r.id}`} style={{ fontSize: 17, textTransform: "none", letterSpacing: 0, color: "var(--ink)" }}>
                 <Link href={`/residents/${r.id}`}>{r.firstName} {r.lastName}</Link> <span className="muted small">Room {r.room}</span>
               </h2>

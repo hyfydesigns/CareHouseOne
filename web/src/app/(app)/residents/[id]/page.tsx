@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ResidentPhoto, residentPhotoUrl } from "@/components/resident-photo";
 import { notFound } from "next/navigation";
 import QRCode from "qrcode";
 import { eq } from "drizzle-orm";
@@ -12,6 +13,7 @@ import { getResident, visibleFacilities } from "@/server/residents";
 import { addOrderAction, dischargeAction, followupAction, readmitAction, stopOrderAction, updateResidentAction } from "../../care-actions";
 import { AddOrderForm, DischargeForm, EditResidentForm, FollowupForm, ReadmitForm, StopOrderButton } from "../../care-forms";
 import { SlotRow } from "../../meds/slot-row";
+import { PhotoUpload } from "./photo-upload";
 import { DiagnosesPanel, NotesPanel, VitalsPanel } from "../../care/panels";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -74,7 +76,8 @@ export default async function ResidentPage({ params, searchParams }: { params: P
   return (
     <>
       <div className="card">
-        <div className="row">
+        <div className="row" style={{ alignItems: "start" }}>
+          <ResidentPhoto src={residentPhotoUrl(r)} name={`${r.firstName} ${r.lastName}`} size={88} />
           <div>
             <h1>{r.firstName} {r.lastName}</h1>
             <p className="muted" style={{ margin: 0 }}>
@@ -183,6 +186,7 @@ export default async function ResidentPage({ params, searchParams }: { params: P
 
       {tab === "details" && (
         <>
+          <PhotoUpload residentId={r.id} photo={residentPhotoUrl(r)} name={`${r.firstName} ${r.lastName}`} />
           <EditResidentForm
             action={updateResidentAction.bind(null, r.id)}
             homes={data.homes}

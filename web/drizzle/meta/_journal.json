@@ -113,6 +113,20 @@
       "when": 1792509342955,
       "tag": "0015_resident_contacts",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1792510413832,
+      "tag": "0016_resident_photos",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792510415699,
+      "tag": "0017_resident_photos_security",
+      "breakpoints": true
     }
   ]
 }

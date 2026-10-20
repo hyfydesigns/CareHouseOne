@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { residentPhotoUrl } from "@/components/resident-photo";
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { getDb, withTenant } from "@/db/client";
@@ -43,7 +44,7 @@ export default async function GivePage({ params, searchParams }: { params: Promi
         </div>
         {r.allergies.length ? <span className="allergy">Allergies: {r.allergies.join(", ")}</span> : <span className="pill ok">No known allergies</span>}
         {canGiveMeds(me) ? (
-          <GiveForm action={giveAction} orderId={o.id} scheduledFor={at.toISOString()} hasPackageCode={!!o.packageCode} bpCheck={o.bpCheck} label={`${o.name} ${o.strength}`} back={back} mode={mode} who={{ name: `${r.firstName} ${r.lastName}`, dateOfBirth: r.dateOfBirth, room: r.room }} />
+          <GiveForm action={giveAction} orderId={o.id} scheduledFor={at.toISOString()} hasPackageCode={!!o.packageCode} bpCheck={o.bpCheck} label={`${o.name} ${o.strength}`} back={back} mode={mode} who={{ name: `${r.firstName} ${r.lastName}`, dateOfBirth: r.dateOfBirth, room: r.room, photo: residentPhotoUrl(r) }} />
         ) : (
           <p className="error">Only med-certified caregivers can give medications.</p>
         )}

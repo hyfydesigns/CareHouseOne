@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   bigserial,
   boolean,
+  customType,
   index,
   integer,
   jsonb,
@@ -229,6 +230,8 @@ export const residents = pgTable(
     emergencyRelationship: text("emergency_relationship"),
     emergencyPhone: text("emergency_phone"),
     admittedOn: text("admitted_on"),
+    /** When the photo last changed (null: no photo). Also used to bust caches in the photo URL. */
+    photoUpdatedAt: timestamp("photo_updated_at", { withTimezone: true }),
     status: residentStatusEnum("status").notNull().default("active"),
     /** Set on discharge (YYYY-MM-DD, home's local date) and cleared on readmission; history is in the audit log. */
     dischargedOn: text("discharged_on"),
@@ -494,3 +497,22 @@ export const leads = pgTable("leads", {
   createdAt: createdAt(),
 });
 export type Subscription = typeof subscriptions.$inferSelect;
+
+const bytea = customType<{ data: Buffer; driverData: Buffer | Uint8Array }>({
+  dataType: () => "bytea",
+  fromDriver: (v) => Buffer.from(v),
+});
+
+/**
+ * A resident's photo, so caregivers can confirm they have the right person. Kept in the database
+ * (same tenant isolation and backups as the rest of the record), re-encoded on upload with all
+ * metadata stripped. One per resident; replacing it overwrites the old one.
+ */
+export const residentPhotos = pgTable("resident_photos", {
+  residentId: uuid("resident_id").primaryKey().references(() => residents.id),
+  orgId: uuid("org_id").notNull().references(() => organizations.id),
+  data: bytea("data").notNull(),
+  contentType: text("content_type").notNull(),
+  updatedBy: uuid("updated_by").references(() => users.id),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});

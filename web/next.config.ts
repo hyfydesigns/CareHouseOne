@@ -10,7 +10,7 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   // Native and WASM packages run on the server only and must not be bundled.
-  serverExternalPackages: ["@node-rs/argon2", "@electric-sql/pglite", "pg"],
+  serverExternalPackages: ["@node-rs/argon2", "@electric-sql/pglite", "pg", "sharp"],
   poweredByHeader: false,
   // A self-contained server for the Docker image (see Dockerfile).
   output: "standalone",
