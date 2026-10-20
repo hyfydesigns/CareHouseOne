@@ -64,7 +64,19 @@ export default async function StaffPage() {
                   </td>
                   <td>{fmt(r.lastSignInAt)}</td>
                   <td style={{ textAlign: "right" }}>
-                    {r.canManage && <RowActions action={staffAction} userId={r.id} name={r.name} status={r.status} rehireOnly={r.rehireOnly} />}
+                    {r.canManage && (
+                      <RowActions
+                        action={staffAction}
+                        userId={r.id}
+                        name={r.name}
+                        status={r.status}
+                        rehireOnly={r.rehireOnly}
+                        role={r.role}
+                        facilityIds={r.facilityIds}
+                        roles={roles}
+                        homes={myHomes}
+                      />
+                    )}
                   </td>
                 </tr>
               ))}

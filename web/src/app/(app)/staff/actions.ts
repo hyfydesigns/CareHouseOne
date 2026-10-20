@@ -6,7 +6,7 @@ import type { Actor } from "@/lib/permissions";
 import { appUrl, requireUser } from "@/lib/session";
 import { adminLockedMessage } from "@/server/billing";
 import { deliverNow } from "@/server/mailer";
-import { cancelInvite, deactivateStaff, inviteStaff, reactivateStaff, resendInvite, type Result } from "@/server/staff";
+import { cancelInvite, deactivateStaff, inviteStaff, reactivateStaff, resendInvite, updateStaff, type Result } from "@/server/staff";
 
 export type StaffState = { error?: string; message?: string };
 
@@ -44,6 +44,8 @@ export async function staffAction(_: StaffState, fd: FormData): Promise<StaffSta
       return run((tx, actor) => cancelInvite(tx, actor, userId));
     case "deactivate":
       return run((tx, actor) => deactivateStaff(tx, actor, userId, { reason: fd.get("reason") }));
+    case "update":
+      return run((tx, actor) => updateStaff(tx, actor, userId, { role: fd.get("role"), facilityIds: fd.getAll("facilityIds") }), { adminOnly: true });
     case "reactivate":
       return run((tx, actor) => reactivateStaff(tx, actor, userId, url), { adminOnly: true });
     default:

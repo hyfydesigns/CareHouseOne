@@ -7,32 +7,108 @@ import { Status, type FormState } from "@/components/status";
 
 type Action = (s: FormState, fd: FormData) => Promise<FormState>;
 
+export interface ResidentValues {
+  facilityId: string;
+  firstName: string;
+  lastName: string;
+  room: string;
+  allergies: string[];
+  diet: string;
+  codeStatus: string;
+  dateOfBirth: string | null;
+  admittedOn: string | null;
+  guardian: string | null;
+}
+
+/** The same fields for adding and editing a resident. */
+function ResidentFields({ homes, v }: { homes: Array<{ id: string; name: string }>; v?: ResidentValues }) {
+  return (
+    <>
+      <div className="row" style={{ alignItems: "start" }}>
+        <div className="field" style={{ flex: "1 1 180px" }}><label htmlFor="firstName">First name</label><input id="firstName" name="firstName" required defaultValue={v?.firstName} /></div>
+        <div className="field" style={{ flex: "1 1 180px" }}><label htmlFor="lastName">Last name</label><input id="lastName" name="lastName" required defaultValue={v?.lastName} /></div>
+        <div className="field" style={{ flex: "0 1 120px" }}><label htmlFor="room">Room</label><input id="room" name="room" defaultValue={v?.room} /></div>
+        <div className="field" style={{ flex: "1 1 180px" }}>
+          <label htmlFor="facilityId">Home</label>
+          <select id="facilityId" name="facilityId" defaultValue={v?.facilityId}>{homes.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select>
+        </div>
+      </div>
+      <div className="row" style={{ alignItems: "start" }}>
+        <div className="field" style={{ flex: "2 1 260px" }}>
+          <label htmlFor="allergies">Allergies</label>
+          <input id="allergies" name="allergies" placeholder="Separate with commas, for example: Penicillin (hives), Latex" defaultValue={v?.allergies.join(", ")} />
+        </div>
+        <div className="field" style={{ flex: "1 1 180px" }}><label htmlFor="diet">Diet</label><input id="diet" name="diet" defaultValue={v?.diet ?? "Regular"} /></div>
+        <div className="field" style={{ flex: "1 1 160px" }}><label htmlFor="codeStatus">Code status</label><input id="codeStatus" name="codeStatus" defaultValue={v?.codeStatus ?? "Full code"} /></div>
+      </div>
+      <div className="row" style={{ alignItems: "start" }}>
+        <div className="field" style={{ flex: "1 1 160px" }}><label htmlFor="dateOfBirth">Date of birth</label><input id="dateOfBirth" name="dateOfBirth" type="date" defaultValue={v?.dateOfBirth ?? ""} /></div>
+        <div className="field" style={{ flex: "1 1 160px" }}><label htmlFor="admittedOn">Living here since</label><input id="admittedOn" name="admittedOn" type="date" defaultValue={v?.admittedOn ?? ""} /></div>
+        <div className="field" style={{ flex: "2 1 260px" }}><label htmlFor="guardian">Guardian</label><input id="guardian" name="guardian" defaultValue={v?.guardian ?? ""} /></div>
+      </div>
+    </>
+  );
+}
+
 export function AddResidentForm({ action, homes }: { action: Action; homes: Array<{ id: string; name: string }> }) {
   const [state, formAction, pending] = useActionState(action, {});
   return (
     <form action={formAction} className="card">
       <h2>Add a resident</h2>
-      <div className="row" style={{ alignItems: "start" }}>
-        <div className="field" style={{ flex: "1 1 180px" }}><label htmlFor="firstName">First name</label><input id="firstName" name="firstName" required /></div>
-        <div className="field" style={{ flex: "1 1 180px" }}><label htmlFor="lastName">Last name</label><input id="lastName" name="lastName" required /></div>
-        <div className="field" style={{ flex: "0 1 120px" }}><label htmlFor="room">Room</label><input id="room" name="room" /></div>
-        <div className="field" style={{ flex: "1 1 180px" }}>
-          <label htmlFor="facilityId">Home</label>
-          <select id="facilityId" name="facilityId">{homes.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select>
-        </div>
-      </div>
-      <div className="row" style={{ alignItems: "start" }}>
-        <div className="field" style={{ flex: "2 1 260px" }}><label htmlFor="allergies">Allergies</label><input id="allergies" name="allergies" placeholder="Separate with commas, for example: Penicillin (hives), Latex" /></div>
-        <div className="field" style={{ flex: "1 1 180px" }}><label htmlFor="diet">Diet</label><input id="diet" name="diet" defaultValue="Regular" /></div>
-        <div className="field" style={{ flex: "1 1 160px" }}><label htmlFor="codeStatus">Code status</label><input id="codeStatus" name="codeStatus" defaultValue="Full code" /></div>
-      </div>
-      <div className="row" style={{ alignItems: "start" }}>
-        <div className="field" style={{ flex: "1 1 160px" }}><label htmlFor="dateOfBirth">Date of birth</label><input id="dateOfBirth" name="dateOfBirth" type="date" /></div>
-        <div className="field" style={{ flex: "1 1 160px" }}><label htmlFor="admittedOn">Living here since</label><input id="admittedOn" name="admittedOn" type="date" /></div>
-        <div className="field" style={{ flex: "2 1 260px" }}><label htmlFor="guardian">Guardian</label><input id="guardian" name="guardian" /></div>
-      </div>
+      <ResidentFields homes={homes} />
       <Status state={state} />
       <div className="row"><button className="btn primary" disabled={pending}>Add resident</button></div>
+    </form>
+  );
+}
+
+export function EditResidentForm({ action, homes, values }: { action: Action; homes: Array<{ id: string; name: string }>; values: ResidentValues }) {
+  const [state, formAction, pending] = useActionState(action, {});
+  return (
+    <form action={formAction} className="card">
+      <h2>Resident details</h2>
+      <p className="small muted" style={{ margin: 0 }}>Allergies drive the medication safety stops, so keep them up to date. Every change is recorded in the audit log.</p>
+      <ResidentFields homes={homes} v={values} />
+      <Status state={state} />
+      <div className="row"><button className="btn primary" disabled={pending}>Save changes</button></div>
+    </form>
+  );
+}
+
+export function DischargeForm({ action, today, name }: { action: Action; today: string; name: string }) {
+  const [state, formAction, pending] = useActionState(action, {});
+  const [open, setOpen] = useState(false);
+  if (!open) return <button className="btn" style={{ justifySelf: "start" }} onClick={() => setOpen(true)}>Discharge {name}</button>;
+  return (
+    <form action={formAction} className="card" style={{ borderColor: "var(--crit)" }}>
+      <h2>Discharge {name}</h2>
+      <p className="small muted" style={{ margin: 0 }}>
+        They leave the medication pass and the tablet. Nothing is deleted: their records stay readable under Residents, and they can be readmitted.
+      </p>
+      <div className="row" style={{ alignItems: "start" }}>
+        <div className="field" style={{ flex: "0 1 180px" }}><label htmlFor="dDate">Discharge date</label><input id="dDate" name="date" type="date" required defaultValue={today} /></div>
+        <div className="field" style={{ flex: "2 1 280px" }}><label htmlFor="dReason">Reason</label><input id="dReason" name="reason" required maxLength={300} placeholder="For example: moved to another provider" /></div>
+      </div>
+      <Status state={state} />
+      <div className="row">
+        <button type="button" className="btn" onClick={() => setOpen(false)}>Cancel</button>
+        <button className="btn danger" disabled={pending}>Discharge</button>
+      </div>
+    </form>
+  );
+}
+
+export function ReadmitForm({ action, today }: { action: Action; today: string }) {
+  const [state, formAction, pending] = useActionState(action, {});
+  return (
+    <form action={formAction} className="card">
+      <h2>Readmit</h2>
+      <div className="row" style={{ alignItems: "end" }}>
+        <div className="field" style={{ flex: "0 1 180px" }}><label htmlFor="rDate">Readmission date</label><input id="rDate" name="date" type="date" required defaultValue={today} /></div>
+        <button className="btn primary" disabled={pending}>Readmit</button>
+      </div>
+      <p className="small muted" style={{ margin: 0 }}>Check their medication orders before the next medication pass.</p>
+      <Status state={state} />
     </form>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import type { Role } from "@/db/schema";
+import { ROLE_LABEL } from "@/lib/permissions";
 import type { StaffState } from "./actions";
 
 type Action = (s: StaffState, fd: FormData) => Promise<StaffState>;
@@ -57,11 +58,59 @@ export function InviteForm({ action, roles, homes }: { action: Action; roles: Ar
   );
 }
 
-export function RowActions({ action, userId, name, status, rehireOnly }: { action: Action; userId: string; name: string; status: string; rehireOnly: boolean }) {
+export function RowActions({
+  action,
+  userId,
+  name,
+  status,
+  rehireOnly,
+  role,
+  facilityIds,
+  roles,
+  homes,
+}: {
+  action: Action;
+  userId: string;
+  name: string;
+  status: string;
+  rehireOnly: boolean;
+  role: Role;
+  facilityIds: string[];
+  roles: Array<{ value: Role; label: string }>;
+  homes: Array<{ id: string; name: string }>;
+}) {
   const [state, formAction, pending] = useActionState(action, {});
   const [confirming, setConfirming] = useState(false);
+  const [editing, setEditing] = useState(false);
+  // Someone whose role is no longer offered (an existing nurse, say) keeps it as an option.
+  const options = roles.some((r) => r.value === role) ? roles : [...roles, { value: role, label: `${ROLE_LABEL[role]} (current)` }];
   return (
     <div className="stack" style={{ justifyItems: "end", gap: 6 }}>
+      {status !== "deactivated" && !editing && !confirming && (
+        <button className="btn small" onClick={() => setEditing(true)}>Edit role or homes</button>
+      )}
+      {editing && (
+        <form action={formAction} className="stack" style={{ gap: 8, minWidth: 260, textAlign: "left" }}>
+          <input type="hidden" name="userId" value={userId} />
+          <div className="field">
+            <label htmlFor={`role-${userId}`}>Role for {name}</label>
+            <select id={`role-${userId}`} name="role" defaultValue={role}>
+              {options.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+            </select>
+          </div>
+          <fieldset className="field" style={{ border: 0, padding: 0, margin: 0 }}>
+            <legend className="small">Homes</legend>
+            {homes.map((h) => (
+              <label key={h.id} className="check"><input type="checkbox" name="facilityIds" value={h.id} defaultChecked={facilityIds.includes(h.id)} /> {h.name}</label>
+            ))}
+          </fieldset>
+          <p className="small muted" style={{ margin: 0 }}>Changing the role signs them out so they sign in again under the new role.</p>
+          <div className="row" style={{ gap: 6, justifyContent: "end" }}>
+            <button type="button" className="btn small" onClick={() => setEditing(false)}>Close</button>
+            <button className="btn small primary" name="op" value="update" disabled={pending}>Save</button>
+          </div>
+        </form>
+      )}
       {status === "invited" && (
         <form action={formAction} className="row" style={{ gap: 6 }}>
           <input type="hidden" name="userId" value={userId} />
@@ -69,7 +118,7 @@ export function RowActions({ action, userId, name, status, rehireOnly }: { actio
           <button className="btn small" name="op" value="cancel" disabled={pending}>Cancel invitation</button>
         </form>
       )}
-      {status === "active" && !confirming && (
+      {status === "active" && !confirming && !editing && (
         <button className="btn small" onClick={() => setConfirming(true)}>Deactivate</button>
       )}
       {status === "active" && confirming && (

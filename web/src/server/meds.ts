@@ -7,6 +7,7 @@ import {
   medicationOrders,
   organizations,
   prnFollowups,
+  progressNotes,
   residents,
   users,
   type Administration,
@@ -17,6 +18,7 @@ import { allergyConflict } from "@/lib/allergy";
 import { canGiveMeds, canManageCare, canSeeFacility, type Actor } from "@/lib/permissions";
 import { addDays, daysInMonth, isDate, isTime, localDate, localTime, zonedToUtc } from "@/lib/time";
 import { audit } from "./audit";
+import { shiftAt } from "./care";
 import { getResident, residentName, type Result } from "./residents";
 
 export const WINDOW_MINUTES = 60;
@@ -402,8 +404,21 @@ export async function recordFollowup(tx: Tx, actor: Actor, raw: unknown, now: Da
   if (!f || f.result) return { ok: false, error: "That follow-up was already recorded." };
   if (!(await getResident(tx, actor, f.residentId))) return { ok: false, error: "That resident isn't available." };
   await tx.update(prnFollowups).set({ result: p.data.result, note: p.data.note || null, recordedBy: actor.id, recordedAt: now }).where(eq(prnFollowups.id, f.id));
+  // The result also goes into the resident's progress notes, so it's part of the daily record.
+  const [dose] = await tx
+    .select({ given: administrations.recordedAt, reason: administrations.reason, name: medicationOrders.name, strength: medicationOrders.strength, tz: facilities.timeZone })
+    .from(administrations)
+    .innerJoin(medicationOrders, eq(medicationOrders.id, administrations.orderId))
+    .innerJoin(residents, eq(residents.id, administrations.residentId))
+    .innerJoin(facilities, eq(facilities.id, residents.facilityId))
+    .where(eq(administrations.id, f.administrationId));
+  const outcome = { effective: "effective", partly_effective: "partly effective", not_effective: "not effective" }[p.data.result];
+  const body =
+    `As-needed ${dose.name} ${dose.strength} given at ${localTime(dose.given, dose.tz)}${dose.reason ? ` for ${dose.reason.toLowerCase()}` : ""}: ${outcome}.` +
+    (p.data.note ? ` ${p.data.note}` : "");
+  await tx.insert(progressNotes).values({ orgId: f.orgId, residentId: f.residentId, shift: shiftAt(localTime(now, dose.tz)), category: "health", body, recordedBy: actor.id, recordedAt: now });
   await audit(tx, { orgId: f.orgId, actorId: actor.id, action: "prn_followup_recorded", entity: "prn_followup", entityId: f.id, details: { result: p.data.result } });
-  return { ok: true, message: "Follow-up recorded." };
+  return { ok: true, message: "Follow-up recorded and added to the progress notes." };
 }
 
 /** Overdue follow-ups in the actor's homes, for notifications. */

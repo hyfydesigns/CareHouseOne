@@ -222,6 +222,9 @@ export const residents = pgTable(
     guardian: text("guardian"),
     admittedOn: text("admitted_on"),
     status: residentStatusEnum("status").notNull().default("active"),
+    /** Set on discharge (YYYY-MM-DD, home's local date) and cleared on readmission; history is in the audit log. */
+    dischargedOn: text("discharged_on"),
+    dischargeReason: text("discharge_reason"),
     createdAt: createdAt(),
   },
   (t) => [index("residents_facility_idx").on(t.facilityId), uniqueIndex("residents_wristband_uq").on(t.orgId, t.wristbandCode)],

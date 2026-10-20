@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/session";
 import { canManageCare } from "@/lib/permissions";
 import { localDate } from "@/lib/time";
 import { unreviewedVitals } from "@/server/care";
+import { overdueFollowups } from "@/server/meds";
 import { homeSummaries } from "@/server/dashboard";
 import { reviewVitalAction } from "../care/actions";
 import { ReviewButton } from "../care/forms";
@@ -23,7 +24,8 @@ export default async function DashboardPage() {
     const homes = await homeSummaries(tx, actor, now);
     const staff = await tx.select({ userId: userFacilities.userId, facilityId: userFacilities.facilityId, status: users.status }).from(userFacilities).innerJoin(users, eq(users.id, userFacilities.userId));
     const review = canManageCare(me) ? await unreviewedVitals(tx, actor) : [];
-    return { org, homes, staff, review };
+    const followups = await overdueFollowups(tx, actor, now);
+    return { org, homes, staff, review, followups };
   });
   return (
     <>
@@ -85,6 +87,28 @@ export default async function DashboardPage() {
           );
         })}
       </div>
+      {data.followups.length > 0 && (
+        <section className="card" style={{ borderColor: "var(--crit)" }} aria-labelledby="fu-h">
+          <h2 id="fu-h">As-needed follow-ups overdue</h2>
+          <div className="tablewrap">
+            <table>
+              <tbody>
+                {data.followups.map(({ f, r, name }) => {
+                  const tz = data.homes.find((h) => h.id === r.facilityId)?.timeZone ?? "UTC";
+                  return (
+                    <tr key={f.id}>
+                      <td><Link href={`/meds?home=${r.facilityId}#r-${r.id}`}><b>{r.firstName} {r.lastName}</b></Link></td>
+                      <td>{name}</td>
+                      <td><span className="pill crit">Due {f.dueAt.toLocaleString("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })}</span></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="small muted" style={{ margin: 0 }}>A caregiver on shift should check how each dose worked and record it on the medication screen.</p>
+        </section>
+      )}
       {data.review.length > 0 && (
         <section className="card" style={{ borderColor: "var(--crit)" }} aria-labelledby="rev-h">
           <h2 id="rev-h">Readings to review</h2>

@@ -8,20 +8,21 @@ import { canGiveMeds, canManageCare } from "@/lib/permissions";
 import { requireUser } from "@/lib/session";
 import { localDate, localTime } from "@/lib/time";
 import { listOrders, monthRecord, openFollowups, residentSlots } from "@/server/meds";
-import { getResident } from "@/server/residents";
-import { addOrderAction, followupAction, stopOrderAction } from "../../care-actions";
-import { AddOrderForm, FollowupForm, StopOrderButton } from "../../care-forms";
+import { getResident, visibleFacilities } from "@/server/residents";
+import { addOrderAction, dischargeAction, followupAction, readmitAction, stopOrderAction, updateResidentAction } from "../../care-actions";
+import { AddOrderForm, DischargeForm, EditResidentForm, FollowupForm, ReadmitForm, StopOrderButton } from "../../care-forms";
 import { SlotRow } from "../../meds/slot-row";
 import { DiagnosesPanel, NotesPanel, VitalsPanel } from "../../care/panels";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const TABS = [["today", "Today"], ["orders", "Medication orders"], ["record", "Medication record"], ["diagnoses", "Diagnoses"], ["vitals", "Vital signs"], ["notes", "Progress notes"], ["card", "Wristband card"]] as const;
+const TABS = [["today", "Today"], ["orders", "Medication orders"], ["record", "Medication record"], ["diagnoses", "Diagnoses"], ["vitals", "Vital signs"], ["notes", "Progress notes"], ["card", "Wristband card"], ["details", "Details"]] as const;
 
 export default async function ResidentPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; m?: string; q?: string; cat?: string }> }) {
   const { id } = await params;
   const sp = await searchParams;
-  const tab = TABS.some((t) => t[0] === sp.tab) ? sp.tab! : "today";
   const me = await requireUser();
+  // Details (editing, discharge) is for owners and admins.
+  const tab = TABS.some((t) => t[0] === sp.tab) && (sp.tab !== "details" || canManageCare(me)) ? sp.tab! : "today";
   const actor = { id: me.id, role: me.role, facilityIds: me.facilityIds };
   const now = new Date();
   const data = await withTenant(await getDb(), me.orgId, async (tx) => {
@@ -43,6 +44,7 @@ export default async function ResidentPage({ params, searchParams }: { params: P
       followups: tab === "today" ? await openFollowups(tx, r.id) : [],
       orders: tab === "orders" ? await listOrders(tx, r.id) : [],
       record: tab === "record" ? await monthRecord(tx, r, y, mo, now) : null,
+      homes: tab === "details" ? (await visibleFacilities(tx, actor)).map((h) => ({ id: h.id, name: h.name })) : [],
     };
   });
   if (!data) notFound();
@@ -58,14 +60,20 @@ export default async function ResidentPage({ params, searchParams }: { params: P
         <div className="row">
           <div>
             <h1>{r.firstName} {r.lastName}</h1>
-            <p className="muted" style={{ margin: 0 }}>Room {r.room} · {home.name}{r.dateOfBirth ? ` · Born ${r.dateOfBirth}` : ""} · Diet: {r.diet} · {r.codeStatus}</p>
+            <p className="muted" style={{ margin: 0 }}>
+              Room {r.room} · {home.name}{r.dateOfBirth ? ` · Born ${r.dateOfBirth}` : ""} · Diet: {r.diet} · {r.codeStatus}
+              {r.guardian ? ` · Guardian: ${r.guardian}` : ""}
+            </p>
+            {r.status === "discharged" && (
+              <p className="pill mute" style={{ marginTop: 6 }}>Discharged {r.dischargedOn}{r.dischargeReason ? ` · ${r.dischargeReason}` : ""}</p>
+            )}
           </div>
           <span className="spacer" />
           {r.allergies.length ? <span className="allergy">Allergies: {r.allergies.join(", ")}</span> : <span className="pill ok">No known allergies</span>}
         </div>
       </div>
       <nav className="chips" aria-label="Resident sections">
-        {TABS.filter(([k]) => k !== "card" || data.wristbands).map(([k, label]) => (
+        {TABS.filter(([k]) => (k !== "card" || data.wristbands) && (k !== "details" || canManageCare(me))).map(([k, label]) => (
           <Link key={k} className="chip" href={`/residents/${r.id}?tab=${k}`} aria-current={tab === k ? "page" : undefined}>{label}</Link>
         ))}
       </nav>
@@ -153,6 +161,21 @@ export default async function ResidentPage({ params, searchParams }: { params: P
             <div className="tablewrap"><table><tbody>{data.record.prn.map((p) => <tr key={p.dose.id}><td>{p.dose.recordedAt.toLocaleString("en-US", { timeZone: home.timeZone, month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })}</td><td><b>{p.order.name}</b> {p.order.strength}</td><td>{p.dose.reason}</td><td>{p.by}</td></tr>)}</tbody></table></div>
           ) : <p className="muted">None this month.</p>}
         </section>
+      )}
+
+      {tab === "details" && (
+        <>
+          <EditResidentForm
+            action={updateResidentAction.bind(null, r.id)}
+            homes={data.homes}
+            values={{ facilityId: r.facilityId, firstName: r.firstName, lastName: r.lastName, room: r.room, allergies: r.allergies, diet: r.diet, codeStatus: r.codeStatus, dateOfBirth: r.dateOfBirth, admittedOn: r.admittedOn, guardian: r.guardian }}
+          />
+          {r.status === "active" ? (
+            <DischargeForm action={dischargeAction.bind(null, r.id)} today={data.today} name={r.firstName} />
+          ) : (
+            <ReadmitForm action={readmitAction.bind(null, r.id)} today={data.today} />
+          )}
+        </>
       )}
 
       {tab === "vitals" && <VitalsPanel resident={r} me={me} mParam={sp.m} base={`/residents/${r.id}?tab=vitals`} />}

@@ -84,3 +84,82 @@ export async function createResident(tx: Tx, actor: Actor, orgId: string, raw: u
 }
 
 export const residentName = (r: Pick<Resident, "firstName" | "lastName">) => `${r.firstName} ${r.lastName}`;
+
+/** Discharged residents in the actor's homes, most recent first (for readmission and records). */
+export async function listDischarged(tx: Tx, actor: Actor): Promise<Resident[]> {
+  const homes = (await visibleFacilities(tx, actor)).map((f) => f.id);
+  if (!homes.length) return [];
+  const rows = await tx.select().from(residents).where(and(inArray(residents.facilityId, homes), eq(residents.status, "discharged")));
+  return rows.sort((a, b) => (b.dischargedOn ?? "").localeCompare(a.dischargedOn ?? ""));
+}
+
+const EDITABLE = ["facilityId", "firstName", "lastName", "room", "dateOfBirth", "allergies", "diet", "codeStatus", "guardian", "admittedOn"] as const;
+
+/**
+ * Changes a resident's details. The audit log records which fields changed (and, for allergies,
+ * the old and new list, since they drive the medication safety stops).
+ */
+export async function updateResident(tx: Tx, actor: Actor, residentId: string, raw: unknown): Promise<Result> {
+  if (!canManageCare(actor)) return { ok: false, error: "Only owners and admins can change resident details." };
+  const r = await getResident(tx, actor, residentId);
+  if (!r) return { ok: false, error: "That resident isn't available." };
+  const p = residentSchema.safeParse(raw);
+  if (!p.success) return { ok: false, error: p.error.issues[0].message };
+  const v = p.data;
+  if (!canSeeFacility(actor, v.facilityId)) return { ok: false, error: "You can't move residents to that home." };
+  const next = {
+    facilityId: v.facilityId,
+    firstName: v.firstName,
+    lastName: v.lastName,
+    room: v.room,
+    dateOfBirth: v.dateOfBirth || null,
+    allergies: v.allergies,
+    diet: v.diet || "Regular",
+    codeStatus: v.codeStatus || "Full code",
+    guardian: v.guardian || null,
+    admittedOn: v.admittedOn || null,
+  };
+  const changed = EDITABLE.filter((k) => JSON.stringify(next[k]) !== JSON.stringify(r[k]));
+  if (!changed.length) return { ok: true, message: "Nothing changed." };
+  await tx.update(residents).set(next).where(eq(residents.id, r.id));
+  await audit(tx, {
+    orgId: r.orgId,
+    actorId: actor.id,
+    action: "resident_updated",
+    entity: "resident",
+    entityId: r.id,
+    details: { fields: changed, ...(changed.includes("allergies") && { allergiesBefore: r.allergies, allergiesAfter: next.allergies }) },
+  });
+  return { ok: true, message: "Saved." };
+}
+
+const dischargeSchema = z.object({
+  date: z.string().trim().refine(isDate, "Enter the discharge date as YYYY-MM-DD."),
+  reason: z.string().trim().min(2, "Give a reason, for example moved to another provider.").max(300),
+});
+
+/**
+ * Discharge: the resident leaves the medication pass and the tablet. Nothing is deleted; their
+ * records stay readable, and they can be readmitted.
+ */
+export async function dischargeResident(tx: Tx, actor: Actor, residentId: string, raw: unknown): Promise<Result> {
+  if (!canManageCare(actor)) return { ok: false, error: "Only owners and admins can discharge residents." };
+  const r = await getResident(tx, actor, residentId);
+  if (!r || r.status !== "active") return { ok: false, error: "That resident isn't currently admitted." };
+  const p = dischargeSchema.safeParse(raw);
+  if (!p.success) return { ok: false, error: p.error.issues[0].message };
+  await tx.update(residents).set({ status: "discharged", dischargedOn: p.data.date, dischargeReason: p.data.reason }).where(eq(residents.id, r.id));
+  await audit(tx, { orgId: r.orgId, actorId: actor.id, action: "resident_discharged", entity: "resident", entityId: r.id, details: { date: p.data.date, reason: p.data.reason } });
+  return { ok: true, message: `${residentName(r)} is discharged. Their records stay available under Residents > Discharged.` };
+}
+
+export async function readmitResident(tx: Tx, actor: Actor, residentId: string, raw: unknown): Promise<Result> {
+  if (!canManageCare(actor)) return { ok: false, error: "Only owners and admins can readmit residents." };
+  const r = await getResident(tx, actor, residentId);
+  if (!r || r.status !== "discharged") return { ok: false, error: "That resident isn't discharged." };
+  const p = z.object({ date: z.string().trim().refine(isDate, "Enter the readmission date as YYYY-MM-DD.") }).safeParse(raw);
+  if (!p.success) return { ok: false, error: p.error.issues[0].message };
+  await tx.update(residents).set({ status: "active", admittedOn: p.data.date, dischargedOn: null, dischargeReason: null }).where(eq(residents.id, r.id));
+  await audit(tx, { orgId: r.orgId, actorId: actor.id, action: "resident_readmitted", entity: "resident", entityId: r.id, details: { date: p.data.date } });
+  return { ok: true, message: `${residentName(r)} is readmitted. Check their medication orders before the next pass.` };
+}

@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { Tx } from "@/db/client";
 import { accountTokens, facilities, sessions, userFacilities, users, type Role } from "@/db/schema";
 import { randomToken, sha256 } from "@/lib/crypto";
-import { canInvite, canManage, usesTwoStep, type Actor, type StaffTarget } from "@/lib/permissions";
+import { canInvite, canManage, ROLE_LABEL, usesTwoStep, type Actor, type StaffTarget } from "@/lib/permissions";
 import { audit, sendMail } from "./audit";
 import { INVITE_DAYS } from "./auth";
 
@@ -137,6 +137,52 @@ export async function cancelInvite(tx: Tx, actor: Actor, userId: string): Promis
   }
   await audit(tx, { orgId: t.user.orgId, actorId: actor.id, action: "invitation_cancelled", entity: "user", entityId: t.id, details: { email: t.user.email } });
   return { ok: true, message: `Invitation for ${t.user.name} cancelled.` };
+}
+
+const updateSchema = z.object({
+  role: z.enum(["owner", "admin", "manager", "nurse", "med_caregiver", "caregiver"]),
+  facilityIds: z.array(z.string().uuid()).min(1, "Choose at least one home."),
+});
+
+/**
+ * Changes someone's role or homes. A role change signs them out everywhere, so they sign in again
+ * under the new rules (for example, a caregiver who becomes an admin then sets up two-step
+ * verification). Nobody can change their own role, and the last owner can't be demoted.
+ */
+export async function updateStaff(tx: Tx, actor: Actor, userId: string, raw: unknown): Promise<Result> {
+  const p = updateSchema.safeParse(raw);
+  if (!p.success) return { ok: false, error: p.error.issues[0].message };
+  const t = await targetOf(tx, userId);
+  if (!t || t.user.status === "deactivated") return { ok: false, error: "Only active or invited staff can be changed." };
+  if (!canManage(actor, t)) return { ok: false, error: "You can't change that person." };
+  const { role, facilityIds } = p.data;
+  const allowed = role === t.role ? canManage(actor, { id: t.id, role, facilityIds }) : canInvite(actor, role, facilityIds);
+  if (!allowed) return { ok: false, error: "You can't give that role or those homes." };
+  const homes = await tx.select({ id: facilities.id }).from(facilities).where(inArray(facilities.id, facilityIds));
+  if (homes.length !== facilityIds.length) return { ok: false, error: "One of those homes doesn't exist." };
+  if (t.role === "owner" && role !== "owner") {
+    const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(users).where(and(eq(users.role, "owner"), eq(users.status, "active")));
+    if (n <= 1) return { ok: false, error: "The last owner can't be given another role. Make someone else an owner first." };
+  }
+  const sameHomes = facilityIds.length === t.facilityIds.length && facilityIds.every((f) => t.facilityIds.includes(f));
+  if (role === t.role && sameHomes) return { ok: true, message: "Nothing changed." };
+  if (role !== t.role) {
+    await tx.update(users).set({ role }).where(eq(users.id, t.id));
+    await tx.update(sessions).set({ revokedAt: new Date() }).where(and(eq(sessions.userId, t.id), isNull(sessions.revokedAt)));
+  }
+  if (!sameHomes) {
+    await tx.delete(userFacilities).where(eq(userFacilities.userId, t.id));
+    await tx.insert(userFacilities).values(facilityIds.map((facilityId) => ({ orgId: t.user.orgId, userId: t.id, facilityId })));
+  }
+  await audit(tx, {
+    orgId: t.user.orgId,
+    actorId: actor.id,
+    action: "user_updated",
+    entity: "user",
+    entityId: t.id,
+    details: { roleBefore: t.role, roleAfter: role, homesBefore: t.facilityIds, homesAfter: facilityIds },
+  });
+  return { ok: true, message: role !== t.role ? `${t.user.name} is now ${ROLE_LABEL[role]} and has been signed out, to sign in again under the new role.` : `${t.user.name}'s homes are updated.` };
 }
 
 export const deactivateSchema = z.object({

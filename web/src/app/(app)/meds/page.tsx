@@ -38,6 +38,22 @@ export default async function MedsPage({ searchParams }: { searchParams: Promise
         </nav>
       )}
       {!give && <p className="notice">You can see the medication pass, but only med-certified caregivers can give medications.</p>}
+      {(() => {
+        const overdue = pass.flatMap((p) => p.openFollowups.filter((f) => f.dueAt < now).map((f) => ({ ...f, who: `${p.resident.firstName} ${p.resident.lastName}`, rid: p.resident.id })));
+        if (!overdue.length) return null;
+        return (
+          <div className="banner error" role="alert">
+            <b>{overdue.length} as-needed follow-up{overdue.length === 1 ? "" : "s"} overdue:</b>{" "}
+            {overdue.map((f, i) => (
+              <span key={f.id}>
+                {i > 0 && "; "}
+                <a href={`#r-${f.rid}`}>{f.who}</a> ({f.medication}, due {localTime(f.dueAt, home.timeZone)})
+              </span>
+            ))}
+            . Check how each dose worked and record it below.
+          </div>
+        );
+      })()}
       {pass.length === 0 && <p className="muted">No residents at this home yet.</p>}
       {pass.map(({ resident: r, slots, prnOrders, openFollowups }) => {
         const shown = slots.filter((s) => s.state !== "upcoming");

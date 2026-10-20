@@ -38,6 +38,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </>
         )}
         {canViewStaff(me) && <NavLink href="/staff">Staff</NavLink>}
+        {canViewAudit(me) && <NavLink href="/timesheets">Timesheets</NavLink>}
         {canViewAudit(me) && <NavLink href="/audit">Audit log</NavLink>}
         {canViewAudit(me) && <NavLink href="/settings">Settings</NavLink>}
         <div className="foot">

@@ -7,7 +7,7 @@ import { getDb, withTenant, type Tx } from "@/db/client";
 import type { Actor } from "@/lib/permissions";
 import { requireUser } from "@/lib/session";
 import { createOrder, recordFollowup, recordPrnDose, recordScheduledDose, stopOrder } from "@/server/meds";
-import { createResident } from "@/server/residents";
+import { createResident, dischargeResident, readmitResident, updateResident } from "@/server/residents";
 
 /** Every care action re-checks the signed-in user and runs inside their organization only. */
 async function asMe<T>(fn: (tx: Tx, actor: Actor, orgId: string) => Promise<T>): Promise<T> {
@@ -24,6 +24,28 @@ export async function addResidentAction(_: FormState, fd: FormData): Promise<For
   if (!r.ok) return { error: r.error };
   revalidatePath("/residents");
   redirect(`/residents/${r.data!.id}`);
+}
+
+const RESIDENT_FIELDS = ["facilityId", "firstName", "lastName", "room", "dateOfBirth", "allergies", "diet", "codeStatus", "guardian", "admittedOn"];
+
+export async function updateResidentAction(residentId: string, _: FormState, fd: FormData): Promise<FormState> {
+  const r = await asMe((tx, actor) => updateResident(tx, actor, residentId, obj(fd, RESIDENT_FIELDS)));
+  revalidatePath(`/residents/${residentId}`);
+  return r.ok ? { message: r.message } : { error: r.error };
+}
+
+export async function dischargeAction(residentId: string, _: FormState, fd: FormData): Promise<FormState> {
+  const r = await asMe((tx, actor) => dischargeResident(tx, actor, residentId, obj(fd, ["date", "reason"])));
+  revalidatePath(`/residents/${residentId}`);
+  revalidatePath("/residents");
+  return r.ok ? { message: r.message } : { error: r.error };
+}
+
+export async function readmitAction(residentId: string, _: FormState, fd: FormData): Promise<FormState> {
+  const r = await asMe((tx, actor) => readmitResident(tx, actor, residentId, obj(fd, ["date"])));
+  revalidatePath(`/residents/${residentId}`);
+  revalidatePath("/residents");
+  return r.ok ? { message: r.message } : { error: r.error };
 }
 
 export async function addOrderAction(residentId: string, _: FormState, fd: FormData): Promise<FormState> {
