@@ -219,7 +219,15 @@ export const residents = pgTable(
     allergies: text("allergies").array().notNull().default(sql`'{}'::text[]`),
     diet: text("diet").notNull().default("Regular"),
     codeStatus: text("code_status").notNull().default("Full code"),
+    /** Guardian's name. Name, relationship and phone show to caregivers; email only on the Details tab. */
     guardian: text("guardian"),
+    guardianRelationship: text("guardian_relationship"),
+    guardianPhone: text("guardian_phone"),
+    guardianEmail: text("guardian_email"),
+    /** Someone to call in an emergency, in addition to (or instead of) a guardian. */
+    emergencyName: text("emergency_name"),
+    emergencyRelationship: text("emergency_relationship"),
+    emergencyPhone: text("emergency_phone"),
     admittedOn: text("admitted_on"),
     status: residentStatusEnum("status").notNull().default("active"),
     /** Set on discharge (YYYY-MM-DD, home's local date) and cleared on readmission; history is in the audit log. */

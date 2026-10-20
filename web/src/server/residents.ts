@@ -43,6 +43,15 @@ const list = z
   .optional()
   .transform((s) => (s ?? "").split(/[,\n]/).map((x) => x.trim()).filter(Boolean));
 
+/** Optional phone number: digits with the usual separators, 7 to 25 characters. */
+const phone = (whose: string) =>
+  z
+    .string()
+    .trim()
+    .max(25)
+    .optional()
+    .refine((s) => !s || (/^[0-9()+\-.\s]{7,25}$/.test(s) && (s.match(/\d/g) ?? []).length >= 7), `Enter ${whose} phone number, for example (555) 123-4567.`);
+
 export const residentSchema = z.object({
   facilityId: z.string().uuid("Choose a home."),
   firstName: z.string().trim().min(1, "Enter a first name.").max(80),
@@ -53,8 +62,31 @@ export const residentSchema = z.object({
   diet: z.string().trim().max(120).default("Regular"),
   codeStatus: z.string().trim().max(60).default("Full code"),
   guardian: z.string().trim().max(160).optional(),
+  guardianRelationship: z.string().trim().max(80).optional(),
+  guardianPhone: phone("the guardian's"),
+  guardianEmail: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .optional()
+    .refine((s) => !s || z.string().email().safeParse(s).success, "Enter the guardian's email like name@example.com."),
+  emergencyName: z.string().trim().max(160).optional(),
+  emergencyRelationship: z.string().trim().max(80).optional(),
+  emergencyPhone: phone("the emergency contact's"),
   admittedOn: z.string().trim().optional().refine((s) => !s || isDate(s), "Enter the admission date as YYYY-MM-DD."),
 });
+
+/** Guardian and emergency contact details; blank fields are stored as empty. */
+function contacts(v: z.infer<typeof residentSchema>) {
+  return {
+    guardianRelationship: v.guardianRelationship || null,
+    guardianPhone: v.guardianPhone || null,
+    guardianEmail: v.guardianEmail || null,
+    emergencyName: v.emergencyName || null,
+    emergencyRelationship: v.emergencyRelationship || null,
+    emergencyPhone: v.emergencyPhone || null,
+  };
+}
 
 export async function createResident(tx: Tx, actor: Actor, orgId: string, raw: unknown): Promise<Result<{ id: string }>> {
   if (!canManageCare(actor)) return { ok: false, error: "Only owners and admins can add residents." };
@@ -76,6 +108,7 @@ export async function createResident(tx: Tx, actor: Actor, orgId: string, raw: u
       diet: v.diet || "Regular",
       codeStatus: v.codeStatus || "Full code",
       guardian: v.guardian || null,
+      ...contacts(v),
       admittedOn: v.admittedOn || null,
     })
     .returning();
@@ -93,7 +126,24 @@ export async function listDischarged(tx: Tx, actor: Actor): Promise<Resident[]> 
   return rows.sort((a, b) => (b.dischargedOn ?? "").localeCompare(a.dischargedOn ?? ""));
 }
 
-const EDITABLE = ["facilityId", "firstName", "lastName", "room", "dateOfBirth", "allergies", "diet", "codeStatus", "guardian", "admittedOn"] as const;
+const EDITABLE = [
+  "facilityId",
+  "firstName",
+  "lastName",
+  "room",
+  "dateOfBirth",
+  "allergies",
+  "diet",
+  "codeStatus",
+  "guardian",
+  "guardianRelationship",
+  "guardianPhone",
+  "guardianEmail",
+  "emergencyName",
+  "emergencyRelationship",
+  "emergencyPhone",
+  "admittedOn",
+] as const;
 
 /**
  * Changes a resident's details. The audit log records which fields changed (and, for allergies,
@@ -117,6 +167,7 @@ export async function updateResident(tx: Tx, actor: Actor, residentId: string, r
     diet: v.diet || "Regular",
     codeStatus: v.codeStatus || "Full code",
     guardian: v.guardian || null,
+    ...contacts(v),
     admittedOn: v.admittedOn || null,
   };
   const changed = EDITABLE.filter((k) => JSON.stringify(next[k]) !== JSON.stringify(r[k]));

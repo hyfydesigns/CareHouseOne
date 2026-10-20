@@ -17,6 +17,23 @@ import { DiagnosesPanel, NotesPanel, VitalsPanel } from "../../care/panels";
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const TABS = [["today", "Today"], ["orders", "Medication orders"], ["record", "Medication record"], ["diagnoses", "Diagnoses"], ["vitals", "Vital signs"], ["notes", "Progress notes"], ["card", "Wristband card"], ["details", "Details"]] as const;
 
+/** A contact in the resident header: name, relationship and a tap-to-call number (email stays on Details). */
+function Contact({ label, name, relationship, phone }: { label: string; name: string | null; relationship: string | null; phone: string | null }) {
+  if (!name && !phone) return null;
+  return (
+    <p className="small" style={{ margin: "4px 0 0" }}>
+      <b>{label}:</b> {name}
+      {relationship ? ` (${relationship})` : ""}
+      {phone && (
+        <>
+          {" · "}
+          <a href={`tel:${phone.replace(/[^0-9+]/g, "")}`}>{phone}</a>
+        </>
+      )}
+    </p>
+  );
+}
+
 export default async function ResidentPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; m?: string; q?: string; cat?: string }> }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -62,8 +79,9 @@ export default async function ResidentPage({ params, searchParams }: { params: P
             <h1>{r.firstName} {r.lastName}</h1>
             <p className="muted" style={{ margin: 0 }}>
               Room {r.room} · {home.name}{r.dateOfBirth ? ` · Born ${r.dateOfBirth}` : ""} · Diet: {r.diet} · {r.codeStatus}
-              {r.guardian ? ` · Guardian: ${r.guardian}` : ""}
             </p>
+            <Contact label="Guardian" name={r.guardian} relationship={r.guardianRelationship} phone={r.guardianPhone} />
+            <Contact label="Emergency contact" name={r.emergencyName} relationship={r.emergencyRelationship} phone={r.emergencyPhone} />
             {r.status === "discharged" && (
               <p className="pill mute" style={{ marginTop: 6 }}>Discharged {r.dischargedOn}{r.dischargeReason ? ` · ${r.dischargeReason}` : ""}</p>
             )}
@@ -168,7 +186,24 @@ export default async function ResidentPage({ params, searchParams }: { params: P
           <EditResidentForm
             action={updateResidentAction.bind(null, r.id)}
             homes={data.homes}
-            values={{ facilityId: r.facilityId, firstName: r.firstName, lastName: r.lastName, room: r.room, allergies: r.allergies, diet: r.diet, codeStatus: r.codeStatus, dateOfBirth: r.dateOfBirth, admittedOn: r.admittedOn, guardian: r.guardian }}
+            values={{
+              facilityId: r.facilityId,
+              firstName: r.firstName,
+              lastName: r.lastName,
+              room: r.room,
+              allergies: r.allergies,
+              diet: r.diet,
+              codeStatus: r.codeStatus,
+              dateOfBirth: r.dateOfBirth,
+              admittedOn: r.admittedOn,
+              guardian: r.guardian,
+              guardianRelationship: r.guardianRelationship,
+              guardianPhone: r.guardianPhone,
+              guardianEmail: r.guardianEmail,
+              emergencyName: r.emergencyName,
+              emergencyRelationship: r.emergencyRelationship,
+              emergencyPhone: r.emergencyPhone,
+            }}
           />
           {r.status === "active" ? (
             <DischargeForm action={dischargeAction.bind(null, r.id)} today={data.today} name={r.firstName} />

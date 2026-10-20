@@ -19,14 +19,31 @@ const obj = (fd: FormData, keys: string[]) => Object.fromEntries(keys.map((k) =>
 
 export async function addResidentAction(_: FormState, fd: FormData): Promise<FormState> {
   const r = await asMe((tx, actor, orgId) =>
-    createResident(tx, actor, orgId, obj(fd, ["facilityId", "firstName", "lastName", "room", "dateOfBirth", "allergies", "diet", "codeStatus", "guardian", "admittedOn"])),
+    createResident(tx, actor, orgId, obj(fd, RESIDENT_FIELDS)),
   );
   if (!r.ok) return { error: r.error };
   revalidatePath("/residents");
   redirect(`/residents/${r.data!.id}`);
 }
 
-const RESIDENT_FIELDS = ["facilityId", "firstName", "lastName", "room", "dateOfBirth", "allergies", "diet", "codeStatus", "guardian", "admittedOn"];
+const RESIDENT_FIELDS = [
+  "facilityId",
+  "firstName",
+  "lastName",
+  "room",
+  "dateOfBirth",
+  "allergies",
+  "diet",
+  "codeStatus",
+  "guardian",
+  "guardianRelationship",
+  "guardianPhone",
+  "guardianEmail",
+  "emergencyName",
+  "emergencyRelationship",
+  "emergencyPhone",
+  "admittedOn",
+];
 
 export async function updateResidentAction(residentId: string, _: FormState, fd: FormData): Promise<FormState> {
   const r = await asMe((tx, actor) => updateResident(tx, actor, residentId, obj(fd, RESIDENT_FIELDS)));

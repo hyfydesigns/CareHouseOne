@@ -18,6 +18,12 @@ export interface ResidentValues {
   dateOfBirth: string | null;
   admittedOn: string | null;
   guardian: string | null;
+  guardianRelationship: string | null;
+  guardianPhone: string | null;
+  guardianEmail: string | null;
+  emergencyName: string | null;
+  emergencyRelationship: string | null;
+  emergencyPhone: string | null;
 }
 
 /** The same fields for adding and editing a resident. */
@@ -44,8 +50,27 @@ function ResidentFields({ homes, v }: { homes: Array<{ id: string; name: string 
       <div className="row" style={{ alignItems: "start" }}>
         <div className="field" style={{ flex: "1 1 160px" }}><label htmlFor="dateOfBirth">Date of birth</label><input id="dateOfBirth" name="dateOfBirth" type="date" defaultValue={v?.dateOfBirth ?? ""} /></div>
         <div className="field" style={{ flex: "1 1 160px" }}><label htmlFor="admittedOn">Living here since</label><input id="admittedOn" name="admittedOn" type="date" defaultValue={v?.admittedOn ?? ""} /></div>
-        <div className="field" style={{ flex: "2 1 260px" }}><label htmlFor="guardian">Guardian</label><input id="guardian" name="guardian" defaultValue={v?.guardian ?? ""} /></div>
       </div>
+      <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0, gap: 8 }}>
+        <legend className="small" style={{ fontWeight: 700 }}>Guardian</legend>
+        <div className="row" style={{ alignItems: "start" }}>
+          <div className="field" style={{ flex: "2 1 220px" }}><label htmlFor="guardian">Name</label><input id="guardian" name="guardian" autoComplete="off" defaultValue={v?.guardian ?? ""} /></div>
+          <div className="field" style={{ flex: "1 1 180px" }}>
+            <label htmlFor="guardianRelationship">Relationship</label>
+            <input id="guardianRelationship" name="guardianRelationship" autoComplete="off" placeholder="For example: Brother, Court-appointed" defaultValue={v?.guardianRelationship ?? ""} />
+          </div>
+          <div className="field" style={{ flex: "1 1 160px" }}><label htmlFor="guardianPhone">Phone</label><input id="guardianPhone" name="guardianPhone" type="tel" autoComplete="off" defaultValue={v?.guardianPhone ?? ""} /></div>
+          <div className="field" style={{ flex: "2 1 220px" }}><label htmlFor="guardianEmail">Email</label><input id="guardianEmail" name="guardianEmail" type="email" autoComplete="off" defaultValue={v?.guardianEmail ?? ""} /></div>
+        </div>
+      </fieldset>
+      <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0, gap: 8 }}>
+        <legend className="small" style={{ fontWeight: 700 }}>Emergency contact (optional, in addition to the guardian)</legend>
+        <div className="row" style={{ alignItems: "start" }}>
+          <div className="field" style={{ flex: "2 1 220px" }}><label htmlFor="emergencyName">Name</label><input id="emergencyName" name="emergencyName" autoComplete="off" defaultValue={v?.emergencyName ?? ""} /></div>
+          <div className="field" style={{ flex: "1 1 180px" }}><label htmlFor="emergencyRelationship">Relationship</label><input id="emergencyRelationship" name="emergencyRelationship" autoComplete="off" defaultValue={v?.emergencyRelationship ?? ""} /></div>
+          <div className="field" style={{ flex: "1 1 160px" }}><label htmlFor="emergencyPhone">Phone</label><input id="emergencyPhone" name="emergencyPhone" type="tel" autoComplete="off" defaultValue={v?.emergencyPhone ?? ""} /></div>
+        </div>
+      </fieldset>
     </>
   );
 }

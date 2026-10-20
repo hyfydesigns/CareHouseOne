@@ -53,6 +53,31 @@ describe("editing residents", () => {
     expect((log.details as { allergiesAfter: string[] }).allergiesAfter).toContain("Latex");
   });
 
+  it("keeps guardian and emergency contact details, and checks phone numbers and emails", async () => {
+    const lena = c.residents.lena.id;
+    const contacts = {
+      guardianRelationship: "Brother",
+      guardianPhone: "(555) 201-3344",
+      guardianEmail: "Sam.Kim@Example.test",
+      emergencyName: "Ana Kim",
+      emergencyRelationship: "Niece",
+      emergencyPhone: "555-777-1212",
+    };
+    expect((await inOrg((tx) => updateResident(tx, owner, lena, values(contacts)))).ok).toBe(true);
+    const after = await inOrg((tx) => getResident(tx, owner, lena));
+    expect(after).toMatchObject({ ...contacts, guardianEmail: "sam.kim@example.test" });
+    const logs = await db.select().from(auditLog).where(and(eq(auditLog.action, "resident_updated"), eq(auditLog.entityId, lena)));
+    expect((logs[logs.length - 1].details as { fields: string[] }).fields).toEqual(expect.arrayContaining(["guardianPhone", "emergencyName"]));
+
+    const badPhone = await inOrg((tx) => updateResident(tx, owner, lena, values({ ...contacts, guardianPhone: "call me" })));
+    expect(!badPhone.ok && badPhone.error).toMatch(/guardian's phone number/);
+    const badEmail = await inOrg((tx) => updateResident(tx, owner, lena, values({ ...contacts, guardianEmail: "not-an-email" })));
+    expect(!badEmail.ok && badEmail.error).toMatch(/guardian's email/);
+    // Clearing a field is allowed.
+    expect((await inOrg((tx) => updateResident(tx, owner, lena, values({ ...contacts, emergencyPhone: "" })))).ok).toBe(true);
+    expect((await inOrg((tx) => getResident(tx, owner, lena)))?.emergencyPhone).toBeNull();
+  });
+
   it("doesn't let caregivers change residents", async () => {
     const r = await inOrg((tx) => updateResident(tx, medCaregiver, c.residents.lena.id, values({ diet: "Regular" })));
     expect(r.ok).toBe(false);
