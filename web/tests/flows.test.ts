@@ -145,6 +145,9 @@ describe("staff lifecycle", () => {
     );
     expect(res.ok).toBe(true);
     const link = await lastLink("marisol.vega@harborviewliving.test");
+    const [invite] = await db.select().from(outbox).where(eq(outbox.to, "marisol.vega@harborviewliving.test"));
+    expect(invite.body).not.toMatch(/two-step/);
+    expect(invite.body).toMatch(/tablet/);
     // Away from a registered tablet: password saved, no session, no authenticator setup.
     const acc = await acceptInvite(db, link, "harbor sunrise walk 2026");
     expect(acc.ok && acc.next).toBe("tablet-only");
@@ -159,6 +162,8 @@ describe("staff lifecycle", () => {
       inviteStaff(tx, owner, s.orgId, { name: "Ruth Adeyemi", email: "ruth.adeyemi@harborviewliving.test", role: "admin", facilityIds: [s.facilities.cedarRidge] }, APP),
     );
     const link = await lastLink("ruth.adeyemi@harborviewliving.test");
+    const [invite] = await db.select().from(outbox).where(eq(outbox.to, "ruth.adeyemi@harborviewliving.test"));
+    expect(invite.body).toMatch(/two-step verification/);
     const acc = await acceptInvite(db, link, "harbor sunrise walk 2026");
     expect(acc.ok && acc.next).toBe("enroll");
     if (!acc.ok || acc.next === "tablet-only") return;

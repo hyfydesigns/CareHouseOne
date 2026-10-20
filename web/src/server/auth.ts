@@ -275,7 +275,7 @@ async function liveToken(db: DB, token: string, purposes: Array<"invite" | "rese
 /** For the reset and invitation pages: is this link still usable, and for whom? */
 export async function describeToken(db: DB, token: string, purposes: Array<"invite" | "reset" | "reactivate">) {
   const row = await liveToken(db, token, purposes);
-  return row ? { name: row.user.name, email: row.user.email, purpose: row.t.purpose } : null;
+  return row ? { name: row.user.name, email: row.user.email, purpose: row.t.purpose, role: row.user.role } : null;
 }
 
 export async function resetPassword(db: DB, token: string, password: string): Promise<{ ok: true } | { ok: false; error: string }> {

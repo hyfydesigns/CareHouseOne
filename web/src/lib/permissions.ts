@@ -11,6 +11,9 @@ export const ROLE_LABEL: Record<Role, string> = {
 
 export const CAREGIVER_ROLES: Role[] = ["caregiver", "med_caregiver"];
 
+/** Caregivers sign in on their home's registered tablet instead of using an authenticator app. */
+export const usesTwoStep = (role: Role) => !CAREGIVER_ROLES.includes(role);
+
 export interface Actor {
   id: string;
   role: Role;

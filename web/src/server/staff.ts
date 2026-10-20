@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { Tx } from "@/db/client";
 import { accountTokens, facilities, sessions, userFacilities, users, type Role } from "@/db/schema";
 import { randomToken, sha256 } from "@/lib/crypto";
-import { canInvite, canManage, type Actor, type StaffTarget } from "@/lib/permissions";
+import { canInvite, canManage, usesTwoStep, type Actor, type StaffTarget } from "@/lib/permissions";
 import { audit, sendMail } from "./audit";
 import { INVITE_DAYS } from "./auth";
 
@@ -80,7 +80,7 @@ export const inviteSchema = z.object({
   facilityIds: z.array(z.string().uuid()).min(1, "Choose at least one home."),
 });
 
-async function issueLink(tx: Tx, actor: Actor, user: { id: string; orgId: string; email: string; name: string }, purpose: "invite" | "reactivate", appUrl: string) {
+async function issueLink(tx: Tx, actor: Actor, user: { id: string; orgId: string; email: string; name: string; role: Role }, purpose: "invite" | "reactivate", appUrl: string) {
   await tx.update(accountTokens).set({ cancelledAt: new Date() }).where(and(eq(accountTokens.userId, user.id), isNull(accountTokens.usedAt), isNull(accountTokens.cancelledAt)));
   const token = randomToken();
   const expiresAt = days(INVITE_DAYS);
@@ -89,7 +89,9 @@ async function issueLink(tx: Tx, actor: Actor, user: { id: string; orgId: string
     orgId: user.orgId,
     to: user.email,
     subject: purpose === "invite" ? "You're invited to CareHouse One" : "Your CareHouse One account was reactivated",
-    body: `Hi ${user.name},\n\nUse this link to set your password and turn on two-step verification. It works once and expires in ${INVITE_DAYS} days.\n\n${appUrl}/invite/${token}`,
+    body: usesTwoStep(user.role)
+      ? `Hi ${user.name},\n\nUse this link to set your password and turn on two-step verification. It works once and expires in ${INVITE_DAYS} days.\n\n${appUrl}/invite/${token}`
+      : `Hi ${user.name},\n\nUse this link to set your password. It works once and expires in ${INVITE_DAYS} days. Open it on your home's CareHouse One tablet if you can; you'll then sign in on that tablet with your password and a PIN you choose.\n\n${appUrl}/invite/${token}`,
   });
   return expiresAt;
 }
@@ -169,5 +171,5 @@ export async function reactivateStaff(tx: Tx, actor: Actor, userId: string, appU
   await tx.update(users).set({ status: "invited", passwordHash: null, mfaEnabled: false, mfaSecretEnc: null }).where(eq(users.id, t.id));
   await issueLink(tx, actor, t.user, "reactivate", appUrl);
   await audit(tx, { orgId: t.user.orgId, actorId: actor.id, action: "user_reactivated", entity: "user", entityId: t.id });
-  return { ok: true, message: `${t.user.name} will get an email to set a new password and two-step verification.` };
+  return { ok: true, message: `${t.user.name} will get an email to set a new password${usesTwoStep(t.user.role) ? " and two-step verification" : ""}.` };
 }

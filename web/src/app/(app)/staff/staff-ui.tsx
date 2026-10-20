@@ -45,7 +45,10 @@ export function InviteForm({ action, roles, homes }: { action: Action; roles: Ar
           ))}
         </div>
       </fieldset>
-      <p className="muted small">They&apos;ll get an email to set a password and turn on two-step verification. The link expires in 7 days.</p>
+      <p className="muted small">
+        They&apos;ll get an email with a link to set their password; it expires in 7 days. Owners and admins also turn on two-step verification. Caregivers
+        sign in on their home&apos;s registered tablet with their password and a PIN, so they don&apos;t need an authenticator app.
+      </p>
       <Status state={state} />
       <div className="row">
         <button className="btn primary" disabled={pending}>{pending ? "Sending…" : "Send invitation"}</button>
