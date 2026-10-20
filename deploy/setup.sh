@@ -5,7 +5,7 @@
 #   PROJECT_ID=carehouseone bash deploy/setup.sh
 #
 # Safe to re-run: steps that already exist are skipped. It creates:
-#   - Artifact Registry repository for the app image
+#   - Artifact Registry repository for the app image, keeping only the 10 newest images
 #   - Cloud SQL for PostgreSQL 17 with daily backups, point-in-time recovery, encrypted-only
 #     connections and deletion protection
 #   - Secrets: database-url, data-encryption-key, cron-secret (and smtp-url if SMTP_URL is set)
@@ -45,6 +45,19 @@ say "Artifact Registry"
 exists gcloud artifacts repositories describe "$REPO" --location "$REGION" ||
   gcloud artifacts repositories create "$REPO" --repository-format=docker --location "$REGION" \
     --description="CareHouse One images"
+
+# Keep the 10 newest images (the live one and recent rollbacks) and delete the rest once they're
+# a day old, so storage doesn't grow with every deploy. Re-running replaces the policy.
+POLICY="$(mktemp)"
+cat >"$POLICY" <<'JSON'
+[
+  { "name": "keep-recent", "action": { "type": "Keep" }, "mostRecentVersions": { "keepCount": 10 } },
+  { "name": "delete-older", "action": { "type": "Delete" }, "condition": { "tagState": "ANY", "olderThan": "1d" } }
+]
+JSON
+gcloud artifacts repositories set-cleanup-policies "$REPO" --location "$REGION" \
+  --policy="$POLICY" --no-dry-run >/dev/null
+rm -f "$POLICY"
 
 say "Cloud SQL instance (takes several minutes the first time)"
 if ! exists gcloud sql instances describe "$DB_INSTANCE"; then
