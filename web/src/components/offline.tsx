@@ -85,7 +85,7 @@ export function OfflineProvider({ userId, children }: { userId: string; children
       {queue.others > 0 && <div className="banner small">{queue.others} saved {queue.others === 1 ? "entry belongs" : "entries belong"} to someone else. They&apos;ll send when that person signs in here.</div>}
       {queue.problems.map((p) => (
         <div className="banner error" role="alert" key={p.clientId}>
-          {KIND_LABEL[p.kind]} from {new Date(p.createdAt).toLocaleString("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })} couldn&apos;t be saved: {p.error}
+          {KIND_LABEL[p.kind]} from {new Date(p.createdAt).toLocaleString("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true })} couldn&apos;t be saved: {p.error}
           <button className="btn small" style={{ marginLeft: 10 }} onClick={() => discard(p.clientId)}>
             I&apos;ve dealt with it, remove
           </button>

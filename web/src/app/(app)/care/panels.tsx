@@ -11,7 +11,7 @@ import { addDiagnosisAction, noteAction, removeDiagnosisAction, reviewVitalActio
 import { AddDiagnosisButton, AddendumButton, NoteForm, RemoveDiagnosisButton, ReviewButton, VitalsForm } from "./forms";
 import { monthFrom } from "./month";
 
-const when = (d: Date, tz: string) => d.toLocaleString("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+const when = (d: Date, tz: string) => d.toLocaleString("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true });
 const tenths = (n: number | null, unit: string) => (n == null ? "—" : `${(n / 10).toFixed(1)}${unit}`);
 
 async function homeTz(residentFacility: string, orgId: string) {

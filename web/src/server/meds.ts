@@ -16,7 +16,7 @@ import {
 } from "@/db/schema";
 import { allergyConflict } from "@/lib/allergy";
 import { canGiveMeds, canManageCare, canSeeFacility, type Actor } from "@/lib/permissions";
-import { addDays, daysInMonth, isDate, isTime, localDate, localTime, zonedToUtc } from "@/lib/time";
+import { addDays, daysInMonth, isDate, isTime, localClock, localDate, localTime, zonedToUtc } from "@/lib/time";
 import { audit } from "./audit";
 import { shiftAt } from "./care";
 import { getResident, residentName, type Result } from "./residents";
@@ -46,6 +46,10 @@ const list = z
   .optional()
   .transform((v) => (Array.isArray(v) ? v : (v ?? "").split(/[,\n]/)).map((x) => x.trim()).filter(Boolean));
 
+/** Scheduled times a day for one order, and the smallest gap between them. */
+export const MAX_TIMES = 12;
+export const MIN_GAP_MINUTES = 60;
+
 export const orderSchema = z
   .object({
     name: z.string().trim().min(2, "Enter the medication name.").max(120),
@@ -68,6 +72,13 @@ export const orderSchema = z
     if (v.type === "scheduled") {
       if (!v.times.length) ctx.addIssue({ code: "custom", message: "Pick at least one time, or choose As needed." });
       if (v.times.some((t) => !isTime(t))) ctx.addIssue({ code: "custom", message: "Times must look like 08:00." });
+      else {
+        const minutes = [...new Set(v.times)].sort().map((t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3)));
+        if (minutes.length > MAX_TIMES) ctx.addIssue({ code: "custom", message: `Use at most ${MAX_TIMES} times a day.` });
+        // Includes the gap across midnight (23:30 and 00:15 are 45 minutes apart).
+        const tooClose = minutes.some((m, i) => i > 0 && m - minutes[i - 1] < MIN_GAP_MINUTES) || (minutes.length > 1 && minutes[0] + 1440 - minutes[minutes.length - 1] < MIN_GAP_MINUTES);
+        if (tooClose) ctx.addIssue({ code: "custom", message: "Doses of the same medication must be at least 1 hour apart. Check the times." });
+      }
     } else {
       if (!v.prnReasons.length) ctx.addIssue({ code: "custom", message: "Enter at least one reason to give it." });
       if (!v.prnMinIntervalHours) ctx.addIssue({ code: "custom", message: "Enter the minimum hours between doses." });
@@ -300,11 +311,11 @@ export async function recordScheduledDose(tx: Tx, actor: Actor, raw: unknown, no
   const at = new Date(v.scheduledFor);
   const date = localDate(at, ctx.tz);
   if (!activeOn(ctx.order, date) || !ctx.order.times.includes(localTime(at, ctx.tz))) return { ok: false, error: "That dose isn't on the current order." };
-  if (now.getTime() < at.getTime() - WINDOW_MINUTES * MIN) return { ok: false, error: `This dose isn't due until ${localTime(at, ctx.tz)}. Doses can be given up to ${WINDOW_MINUTES} minutes early.` };
+  if (now.getTime() < at.getTime() - WINDOW_MINUTES * MIN) return { ok: false, error: `This dose isn't due until ${localClock(at, ctx.tz)}. Doses can be given up to ${WINDOW_MINUTES} minutes early.` };
 
   const [existing] = await tx.select({ d: administrations, by: users.name }).from(administrations).leftJoin(users, eq(users.id, administrations.recordedBy)).where(and(eq(administrations.orderId, ctx.order.id), eq(administrations.scheduledFor, at)));
   if (existing) {
-    return { ok: false, stop: "duplicate", error: `Stop. This dose was already recorded at ${localTime(existing.d.recordedAt, ctx.tz)} by ${existing.by ?? "someone else"}.` };
+    return { ok: false, stop: "duplicate", error: `Stop. This dose was already recorded at ${localClock(existing.d.recordedAt, ctx.tz)} by ${existing.by ?? "someone else"}.` };
   }
   const giving = v.outcome === "given";
   const blocked = await safetyStops(tx, actor, ctx, v, giving);
@@ -361,7 +372,7 @@ export async function recordPrnDose(tx: Tx, actor: Actor, raw: unknown, now: Dat
   const gap = ctx.order.prnMinIntervalMinutes ?? 0;
   if (last && now.getTime() - last.recordedAt.getTime() < gap * MIN) {
     const next = new Date(last.recordedAt.getTime() + gap * MIN);
-    return { ok: false, stop: "too_soon", error: `Too soon. The last dose was at ${localTime(last.recordedAt, ctx.tz)}; the next is allowed at ${localTime(next, ctx.tz)}.` };
+    return { ok: false, stop: "too_soon", error: `Too soon. The last dose was at ${localClock(last.recordedAt, ctx.tz)}; the next is allowed at ${localClock(next, ctx.tz)}.` };
   }
   const today = localDate(now, ctx.tz);
   const todayCount = given.filter((d) => localDate(d.recordedAt, ctx.tz) === today).length;
@@ -387,7 +398,7 @@ export async function recordPrnDose(tx: Tx, actor: Actor, raw: unknown, now: Dat
   const dueAt = new Date(now.getTime() + FOLLOWUP_MINUTES * MIN);
   await tx.insert(prnFollowups).values({ orgId: ctx.resident.orgId, administrationId: dose.id, residentId: ctx.resident.id, dueAt });
   await audit(tx, { orgId: ctx.resident.orgId, actorId: actor.id, action: "prn_given", entity: "medication_order", entityId: ctx.order.id, details: { reason: v.reason } });
-  return { ok: true, message: `${ctx.order.name} given for ${ctx.resident.firstName}. Check how it worked at ${localTime(dueAt, ctx.tz)}.` };
+  return { ok: true, message: `${ctx.order.name} given for ${ctx.resident.firstName}. Check how it worked at ${localClock(dueAt, ctx.tz)}.` };
 }
 
 const followupSchema = z.object({
@@ -414,7 +425,7 @@ export async function recordFollowup(tx: Tx, actor: Actor, raw: unknown, now: Da
     .where(eq(administrations.id, f.administrationId));
   const outcome = { effective: "effective", partly_effective: "partly effective", not_effective: "not effective" }[p.data.result];
   const body =
-    `As-needed ${dose.name} ${dose.strength} given at ${localTime(dose.given, dose.tz)}${dose.reason ? ` for ${dose.reason.toLowerCase()}` : ""}: ${outcome}.` +
+    `As-needed ${dose.name} ${dose.strength} given at ${localClock(dose.given, dose.tz)}${dose.reason ? ` for ${dose.reason.toLowerCase()}` : ""}: ${outcome}.` +
     (p.data.note ? ` ${p.data.note}` : "");
   await tx.insert(progressNotes).values({ orgId: f.orgId, residentId: f.residentId, shift: shiftAt(localTime(now, dose.tz)), category: "health", body, recordedBy: actor.id, recordedAt: now });
   await audit(tx, { orgId: f.orgId, actorId: actor.id, action: "prn_followup_recorded", entity: "prn_followup", entityId: f.id, details: { result: p.data.result } });

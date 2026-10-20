@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { localTime } from "@/lib/time";
+import { clock, localClock } from "@/lib/time";
 import type { Slot } from "@/server/meds";
 
 const LABEL: Record<Slot["state"], [string, string]> = {
@@ -20,7 +20,7 @@ export function SlotRow({ slot, tz, canGive, back }: { slot: Slot; tz: string; c
         <b>{slot.order.name}</b> {slot.order.strength}
         <br />
         <span className="small muted">
-          {slot.time} · {slot.order.purpose}
+          {clock(slot.time)} · {slot.order.purpose}
           {slot.order.instructions ? ` · ${slot.order.instructions}` : ""}
           {slot.order.bpCheck ? " · check BP first" : ""}
           {slot.order.stopDate ? ` · last day ${slot.order.stopDate}` : ""}
@@ -29,7 +29,7 @@ export function SlotRow({ slot, tz, canGive, back }: { slot: Slot; tz: string; c
           <>
             <br />
             <span className="small muted">
-              {slot.dose.outcome === "given" ? "Given" : slot.dose.outcome === "refused" ? "Refused" : "Held"} at {localTime(slot.dose.recordedAt, tz)} by {slot.dose.byName ?? "unknown"}
+              {slot.dose.outcome === "given" ? "Given" : slot.dose.outcome === "refused" ? "Refused" : "Held"} at {localClock(slot.dose.recordedAt, tz)} by {slot.dose.byName ?? "unknown"}
               {slot.dose.late ? " · late" : ""}
               {slot.dose.reason ? ` · ${slot.dose.reason}` : ""}
             </span>

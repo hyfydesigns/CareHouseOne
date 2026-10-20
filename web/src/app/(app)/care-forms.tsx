@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { startTransition, useActionState, useEffect, useState, type FormEvent } from "react";
 import { ScanField } from "@/components/scan-field";
 import { ResidentPhoto } from "@/components/resident-photo";
+import { DoseTimes } from "./dose-times";
 import { MedNameField } from "./med-name-field";
 import { Status, type FormState } from "@/components/status";
 
@@ -143,7 +144,6 @@ export function ReadmitForm({ action, today }: { action: Action; today: string }
 }
 
 const ROUTES = ["By mouth", "Under the tongue", "Topical", "Inhaled", "Eye drops", "Ear drops", "Nasal", "Injection", "Rectal", "G-tube", "Patch"];
-const TIMES = ["06:00", "08:00", "12:00", "14:00", "17:00", "20:00", "22:00"];
 
 export function AddOrderForm({ action, today, allergies }: { action: Action; today: string; allergies: string[] }) {
   const [state, formAction, pending] = useActionState(action, {});
@@ -167,10 +167,7 @@ export function AddOrderForm({ action, today, allergies }: { action: Action; tod
       </fieldset>
       {type === "scheduled" ? (
         <>
-          <fieldset className="field" style={{ border: 0, padding: 0, margin: 0 }}>
-            <legend>Times</legend>
-            <div className="row">{TIMES.map((t) => <label key={t} className="check"><input type="checkbox" name="times" value={t} /> {t}</label>)}</div>
-          </fieldset>
+          <DoseTimes />
           <label className="check"><input type="checkbox" name="bpCheck" /> Check blood pressure before each dose (hold if the top number is under 100)</label>
         </>
       ) : (

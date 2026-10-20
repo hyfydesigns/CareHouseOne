@@ -86,3 +86,10 @@ describe("permissions", () => {
     expect(canManage(admin, { id: "o2", role: "owner", facilityIds: [CR] })).toBe(false);
   });
 });
+
+describe("AM/PM display", () => {
+  it("turns stored 24-hour times into AM/PM for people", async () => {
+    const { clock } = await import("@/lib/time");
+    expect(["00:00", "00:30", "08:05", "12:00", "12:45", "13:00", "23:59"].map(clock)).toEqual(["12:00 AM", "12:30 AM", "8:05 AM", "12:00 PM", "12:45 PM", "1:00 PM", "11:59 PM"]);
+  });
+});

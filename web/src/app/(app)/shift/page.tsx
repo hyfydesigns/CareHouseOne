@@ -7,7 +7,7 @@ import { ShiftButton } from "../care/forms";
 import { monthFrom } from "../care/month";
 import Link from "next/link";
 
-const t = (d: Date, tz: string) => d.toLocaleTimeString("en-US", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false });
+const t = (d: Date, tz: string) => d.toLocaleTimeString("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit", hour12: true });
 const day = (d: Date, tz: string) => d.toLocaleDateString("en-US", { timeZone: tz, weekday: "short", month: "short", day: "numeric" });
 
 export default async function ShiftPage({ searchParams }: { searchParams: Promise<{ m?: string }> }) {

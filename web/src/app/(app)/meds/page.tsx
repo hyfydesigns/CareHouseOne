@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { getDb, withTenant } from "@/db/client";
 import { canGiveMeds } from "@/lib/permissions";
 import { requireUser } from "@/lib/session";
-import { localTime } from "@/lib/time";
+import { localClock } from "@/lib/time";
 import { medicationPass } from "@/server/meds";
 import { visibleFacilities } from "@/server/residents";
 import { followupAction } from "../care-actions";
@@ -31,7 +31,7 @@ export default async function MedsPage({ searchParams }: { searchParams: Promise
     <>
       <div className="row">
         <h1>{give ? "Medication & Diagnosis" : "Medication pass"}</h1>
-        <span className="muted">{home.name} · {localTime(now, home.timeZone)} · {due} dose{due === 1 ? "" : "s"} due</span>
+        <span className="muted">{home.name} · {localClock(now, home.timeZone)} · {due} dose{due === 1 ? "" : "s"} due</span>
       </div>
       {homes.length > 1 && (
         <nav className="chips" aria-label="Homes">
@@ -48,7 +48,7 @@ export default async function MedsPage({ searchParams }: { searchParams: Promise
             {overdue.map((f, i) => (
               <span key={f.id}>
                 {i > 0 && "; "}
-                <a href={`#r-${f.rid}`}>{f.who}</a> ({f.medication}, due {localTime(f.dueAt, home.timeZone)})
+                <a href={`#r-${f.rid}`}>{f.who}</a> ({f.medication}, due {localClock(f.dueAt, home.timeZone)})
               </span>
             ))}
             . Check how each dose worked and record it below.
@@ -73,7 +73,7 @@ export default async function MedsPage({ searchParams }: { searchParams: Promise
             </div>
             {openFollowups.map((f) => (
               <div key={f.id} className="dose">
-                <span><b>Check how it worked:</b> {f.medication}<br />{f.dueAt < now ? <span className="pill crit">Overdue since {localTime(f.dueAt, home.timeZone)}</span> : <span className="small muted">Due at {localTime(f.dueAt, home.timeZone)}</span>}</span>
+                <span><b>Check how it worked:</b> {f.medication}<br />{f.dueAt < now ? <span className="pill crit">Overdue since {localClock(f.dueAt, home.timeZone)}</span> : <span className="small muted">Due at {localClock(f.dueAt, home.timeZone)}</span>}</span>
                 <FollowupForm action={followupAction} followupId={f.id} residentId={r.id} />
               </div>
             ))}

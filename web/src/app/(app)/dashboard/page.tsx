@@ -12,7 +12,7 @@ import { homeSummaries } from "@/server/dashboard";
 import { reviewVitalAction } from "../care/actions";
 import { ReviewButton } from "../care/forms";
 
-const clock = (d: Date, tz: string) => d.toLocaleTimeString("en-US", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false });
+const clock = (d: Date, tz: string) => d.toLocaleTimeString("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit", hour12: true });
 
 export default async function DashboardPage() {
   const me = await requireUser();
@@ -99,7 +99,7 @@ export default async function DashboardPage() {
                     <tr key={f.id}>
                       <td><Link href={`/meds?home=${r.facilityId}#r-${r.id}`}><b>{r.firstName} {r.lastName}</b></Link></td>
                       <td>{name}</td>
-                      <td><span className="pill crit">Due {f.dueAt.toLocaleString("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })}</span></td>
+                      <td><span className="pill crit">Due {f.dueAt.toLocaleString("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}</span></td>
                     </tr>
                   );
                 })}
@@ -117,7 +117,7 @@ export default async function DashboardPage() {
               <tbody>
                 {data.review.map(({ v, r, by }) => (
                   <tr key={v.id}>
-                    <td><Link href={`/residents/${r.id}?tab=vitals`}><b>{r.firstName} {r.lastName}</b></Link><br /><span className="small muted">{v.recordedAt.toLocaleString("en-US", { timeZone: data.homes.find((h) => h.id === r.facilityId)?.timeZone, month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })} · {by}</span></td>
+                    <td><Link href={`/residents/${r.id}?tab=vitals`}><b>{r.firstName} {r.lastName}</b></Link><br /><span className="small muted">{v.recordedAt.toLocaleString("en-US", { timeZone: data.homes.find((h) => h.id === r.facilityId)?.timeZone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true })} · {by}</span></td>
                     <td>BP {v.systolic}/{v.diastolic} · pulse {v.pulse}{v.tempTenthsF != null ? ` · ${(v.tempTenthsF / 10).toFixed(1)} °F` : ""}{v.oxygen != null ? ` · O2 ${v.oxygen}%` : ""}<br /><span className="pill crit">Check {v.flags.join(", ")}</span></td>
                     <td style={{ textAlign: "right" }}><ReviewButton action={reviewVitalAction} vitalId={v.id} residentId={r.id} /></td>
                   </tr>

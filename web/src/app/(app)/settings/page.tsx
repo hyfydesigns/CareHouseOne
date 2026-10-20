@@ -23,7 +23,7 @@ export default async function SettingsPage() {
   if (!data.org) redirect("/dashboard");
   const here = await currentDevice();
   const tz = data.homes[0]?.timeZone ?? "UTC";
-  const when = (d: Date | null) => (d ? d.toLocaleString("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) : "—");
+  const when = (d: Date | null) => (d ? d.toLocaleString("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true }) : "—");
   const active = data.devices.filter((r) => !r.d.revokedAt);
   const bill = billingState(data.sub);
   const day = (d: Date | null) => (d ? d.toLocaleDateString("en-US", { timeZone: tz, month: "long", day: "numeric", year: "numeric" }) : "—");

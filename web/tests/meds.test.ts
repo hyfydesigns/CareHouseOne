@@ -147,7 +147,7 @@ describe("medication pass", () => {
 
   it("won't record a dose more than 60 minutes early, and flags late doses", async () => {
     const early = await inOrg((tx) => recordScheduledDose(tx, medCaregiver, { ...base(), orderId: c.orders.sertraline, scheduledFor: at("20:00").toISOString() }, at("08:30")));
-    expect(!early.ok && early.error).toMatch(/isn't due until 20:00/);
+    expect(!early.ok && early.error).toMatch(/isn't due until 8:00 PM/);
     const late = await inOrg((tx) => recordScheduledDose(tx, medCaregiver, { ...base(), orderId: c.orders.sertraline }, at("09:45")));
     expect(late.ok && late.message).toMatch(/Marked late/);
   });
@@ -174,10 +174,10 @@ describe("as-needed doses and follow-ups", () => {
 
   it("gives a dose, creates a follow-up for 60 minutes later, and enforces the gap", async () => {
     const r = await inOrg((tx) => recordPrnDose(tx, medCaregiver, prn(), at("10:00")));
-    expect(r.ok && r.message).toMatch(/Check how it worked at 11:00/);
+    expect(r.ok && r.message).toMatch(/Check how it worked at 11:00 AM/);
     const soon = await inOrg((tx) => recordPrnDose(tx, medCaregiver, prn(), at("13:00")));
     expect(!soon.ok && soon.stop).toBe("too_soon");
-    expect(!soon.ok && soon.error).toMatch(/next is allowed at 16:00/);
+    expect(!soon.ok && soon.error).toMatch(/next is allowed at 4:00 PM/);
     const [f] = await db.select().from(prnFollowups).where(eq(prnFollowups.residentId, c.residents.diego.id));
     expect(f.dueAt.getTime()).toBe(at("11:00").getTime());
     const done = await inOrg((tx) => recordFollowup(tx, medCaregiver, { followupId: f.id, result: "effective", note: "Headache gone" }, at("11:05")));

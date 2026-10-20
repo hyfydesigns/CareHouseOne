@@ -7,7 +7,7 @@ import { getDb, withTenant } from "@/db/client";
 import { facilities, organizations } from "@/db/schema";
 import { canGiveMeds, canManageCare } from "@/lib/permissions";
 import { requireUser } from "@/lib/session";
-import { localDate, localTime } from "@/lib/time";
+import { clock, localClock, localDate } from "@/lib/time";
 import { listOrders, monthRecord, openFollowups, residentSlots } from "@/server/meds";
 import { getResident, visibleFacilities } from "@/server/residents";
 import { addOrderAction, dischargeAction, followupAction, readmitAction, stopOrderAction, updateResidentAction } from "../../care-actions";
@@ -106,7 +106,7 @@ export default async function ResidentPage({ params, searchParams }: { params: P
               <h2>Check how it worked</h2>
               {data.followups.map((f) => (
                 <div key={f.id} className="dose">
-                  <span><b>{f.medication}</b><br />{f.dueAt < now ? <span className="pill crit">Overdue since {localTime(f.dueAt, home.timeZone)}</span> : <span className="small muted">Due at {localTime(f.dueAt, home.timeZone)}</span>}</span>
+                  <span><b>{f.medication}</b><br />{f.dueAt < now ? <span className="pill crit">Overdue since {localClock(f.dueAt, home.timeZone)}</span> : <span className="small muted">Due at {localClock(f.dueAt, home.timeZone)}</span>}</span>
                   <FollowupForm action={followupAction} followupId={f.id} residentId={r.id} />
                 </div>
               ))}
@@ -133,7 +133,7 @@ export default async function ResidentPage({ params, searchParams }: { params: P
                 {data.orders.map(({ order: o, createdByName }) => (
                   <tr key={o.id}>
                     <td><b>{o.name}</b> {o.strength}<br /><span className="small muted">{o.route}{o.bpCheck ? " · check BP first" : ""}{o.instructions ? ` · ${o.instructions}` : ""}</span></td>
-                    <td>{o.type === "prn" ? <>As needed<br /><span className="small muted">{o.prnReasons.join(", ")} · at least {(o.prnMinIntervalMinutes ?? 0) / 60} h apart, {o.prnMaxPerDay} a day</span></> : o.times.join(", ")}</td>
+                    <td>{o.type === "prn" ? <>As needed<br /><span className="small muted">{o.prnReasons.join(", ")} · at least {(o.prnMinIntervalMinutes ?? 0) / 60} h apart, {o.prnMaxPerDay} a day</span></> : o.times.map(clock).join(", ")}</td>
                     <td>{o.purpose}</td>
                     <td className="small">{o.startDate}{o.stopDate ? ` to ${o.stopDate}` : ""}<br /><span className="muted">{o.prescriber ? `${o.prescriber} · ` : ""}entered by {createdByName ?? "unknown"}</span></td>
                     <td>{o.status === "active" ? <span className="pill ok">Active</span> : <span className="pill mute">Stopped</span>}{o.stopReason && <><br /><span className="small muted">{o.stopReason}</span></>}</td>
@@ -165,7 +165,7 @@ export default async function ResidentPage({ params, searchParams }: { params: P
               <tbody>
                 {data.record.rows.map((row) => (
                   <tr key={`${row.order.id}${row.time}`}>
-                    <td><b>{row.order.name}</b> {row.order.strength}<br /><span className="muted">{row.time}</span></td>
+                    <td><b>{row.order.name}</b> {row.order.strength}<br /><span className="muted">{clock(row.time)}</span></td>
                     {row.cells.map((c, i) => (
                       <td key={i} className={`d ${c?.outcome ?? ""}${isCurrent && i + 1 === Number(data.today.slice(8)) ? " today" : ""}`} title={c ? `${c.outcome}${c.late ? " (late)" : ""}` : undefined}>
                         {c ? (c.outcome === "given" ? `${c.by ?? "✓"}${c.late ? "*" : ""}` : c.outcome === "refused" ? "R" : c.outcome === "held" ? "H" : c.outcome === "missed" ? "!" : "•") : ""}
@@ -179,7 +179,7 @@ export default async function ResidentPage({ params, searchParams }: { params: P
           <p className="small muted">Initials = given by · * = late · R = refused · H = held · ! = not recorded · • = due now</p>
           <h2>As-needed doses</h2>
           {data.record.prn.length ? (
-            <div className="tablewrap"><table><tbody>{data.record.prn.map((p) => <tr key={p.dose.id}><td>{p.dose.recordedAt.toLocaleString("en-US", { timeZone: home.timeZone, month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })}</td><td><b>{p.order.name}</b> {p.order.strength}</td><td>{p.dose.reason}</td><td>{p.by}</td></tr>)}</tbody></table></div>
+            <div className="tablewrap"><table><tbody>{data.record.prn.map((p) => <tr key={p.dose.id}><td>{p.dose.recordedAt.toLocaleString("en-US", { timeZone: home.timeZone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}</td><td><b>{p.order.name}</b> {p.order.strength}</td><td>{p.dose.reason}</td><td>{p.by}</td></tr>)}</tbody></table></div>
           ) : <p className="muted">None this month.</p>}
         </section>
       )}

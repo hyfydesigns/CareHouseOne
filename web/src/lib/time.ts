@@ -41,6 +41,21 @@ export function localTime(d: Date, tz: string): string {
   return `${String(p.h).padStart(2, "0")}:${String(p.min).padStart(2, "0")}`;
 }
 
+/**
+ * For display only: "08:00" becomes "8:00 AM", "20:30" becomes "8:30 PM". Times are stored and
+ * compared as 24-hour "HH:MM"; staff see AM/PM.
+ */
+export function clock(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return hhmm;
+  return `${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+}
+
+/** For display: an instant as "8:00 AM" in the home's time zone. */
+export function localClock(d: Date, tz: string): string {
+  return clock(localTime(d, tz));
+}
+
 export function addDays(date: string, n: number): string {
   const d = new Date(`${date}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + n);

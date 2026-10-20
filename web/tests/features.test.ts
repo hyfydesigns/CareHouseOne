@@ -1,10 +1,10 @@
 import { and, eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createTestDb, withTenant, type DB } from "@/db/client";
-import { auditLog, progressNotes, prnFollowups, sessions, shiftPunches, users } from "@/db/schema";
+import { auditLog, medicationOrders, progressNotes, prnFollowups, sessions, shiftPunches, users } from "@/db/schema";
 import type { Actor } from "@/lib/permissions";
 import { zonedToUtc } from "@/lib/time";
-import { medicationPass, recordFollowup, recordPrnDose } from "@/server/meds";
+import { createOrder, medicationPass, recordFollowup, recordPrnDose } from "@/server/meds";
 import { dischargeResident, getResident, listDischarged, listResidents, readmitResident, updateResident } from "@/server/residents";
 import { seedCare, seedDemo, type Seeded, type SeededCare } from "@/server/seed";
 import { inviteStaff, updateStaff } from "@/server/staff";
@@ -136,8 +136,39 @@ describe("as-needed follow-ups", () => {
     expect(r.ok && r.message).toMatch(/progress notes/);
     const notes = await db.select().from(progressNotes).where(eq(progressNotes.residentId, c.residents.diego.id));
     const note = notes.find((n) => n.body.startsWith("As-needed Acetaminophen"));
-    expect(note?.body).toBe("As-needed Acetaminophen 500 mg tablet given at 10:00 for headache: partly effective. Still a mild headache");
+    expect(note?.body).toBe("As-needed Acetaminophen 500 mg tablet given at 10:00 AM for headache: partly effective. Still a mild headache");
     expect(note).toMatchObject({ shift: "day", category: "health", recordedBy: s.users.caregiver.id });
+  });
+});
+
+describe("dose times", () => {
+  const order = (times: string[]) => ({
+    name: "Sertraline",
+    strength: "50 mg tablet",
+    route: "By mouth",
+    purpose: "Mood",
+    type: "scheduled",
+    times,
+    startDate: "2026-10-20",
+  });
+  const add = (times: string[]) => inOrg((tx) => createOrder(tx, owner, s.orgId, c.residents.marcus.id, order(times), at("09:00", "2026-10-20")));
+
+  it("accepts any time of day, stored sorted", async () => {
+    const r = await add(["21:15", "07:30"]);
+    expect(r.ok).toBe(true);
+    const [o] = await db.select().from(medicationOrders).where(eq(medicationOrders.id, r.ok ? r.data!.id : ""));
+    expect(o.times).toEqual(["07:30", "21:15"]);
+  });
+
+  it("refuses times under an hour apart (also across midnight) and more than 12 a day", async () => {
+    const close = await add(["08:00", "08:30"]);
+    expect(!close.ok && close.error).toMatch(/at least 1 hour apart/);
+    const midnight = await add(["23:30", "00:15"]);
+    expect(!midnight.ok && midnight.error).toMatch(/at least 1 hour apart/);
+    const many = await add(["00:00", "01:00", "02:00", "03:00", "04:00", "05:00", "06:00", "07:00", "08:00", "09:00", "10:00", "11:00", "12:00"]);
+    expect(!many.ok && many.error).toMatch(/at most 12/);
+    const bad = await add(["8am"]);
+    expect(!bad.ok && bad.error).toMatch(/Times must look like/);
   });
 });
 
@@ -155,7 +186,7 @@ describe("timesheets", () => {
     const andre = t.people.find((p) => p.userId === cg)!;
     expect(andre).toMatchObject({ shifts: 2, hours: 16.75, problems: 0 });
     const night = t.shifts.find((x) => x.date === "2026-10-13")!;
-    expect(night).toMatchObject({ signedIn: "23:00", signedOut: "07:15 (+1 day)", hours: 8.25 });
+    expect(night).toMatchObject({ signedIn: "11:00 PM", signedOut: "7:15 AM (+1 day)", hours: 8.25 });
     const daniel = t.people.find((p) => p.userId === s.users.manager.id)!;
     expect(daniel).toMatchObject({ shifts: 1, hours: 0, problems: 1 });
     // The 20th is outside the range.
@@ -174,7 +205,7 @@ describe("timesheets", () => {
     const csv = timesheetCsv({
       from: "2026-10-12",
       to: "2026-10-18",
-      shifts: [{ id: "1", userId: "u", name: "=HYPERLINK(\"x\")", role: "caregiver", home: "Cedar Ridge", date: "2026-10-12", signedIn: "07:00", signedOut: "15:00", hours: 8, status: "complete" }],
+      shifts: [{ id: "1", userId: "u", name: "=HYPERLINK(\"x\")", role: "caregiver", home: "Cedar Ridge", date: "2026-10-12", startedAt: new Date(), signedIn: "7:00 AM", signedOut: "3:00 PM", hours: 8, status: "complete" }],
       people: [],
     });
     expect(csv).toContain(`"'=HYPERLINK(""x"")"`);

@@ -2,7 +2,7 @@ import { and, asc, eq, gte, inArray, lt } from "drizzle-orm";
 import type { Tx } from "@/db/client";
 import { facilities, shiftPunches, users, type Role } from "@/db/schema";
 import { canViewAudit, type Actor } from "@/lib/permissions";
-import { addDays, isDate, localDate, localTime, zonedToUtc } from "@/lib/time";
+import { addDays, isDate, localClock, localDate, zonedToUtc } from "@/lib/time";
 
 /** A sign-in with no sign-out after this long is shown as missing a sign-out, not as on shift. */
 export const OPEN_SHIFT_HOURS = 16;
@@ -15,6 +15,8 @@ export interface TimesheetShift {
   role: Role;
   home: string;
   date: string;
+  /** For sorting; the times below are for display ("7:00 AM"). */
+  startedAt: Date;
   signedIn: string;
   signedOut: string | null;
   hours: number | null;
@@ -58,14 +60,15 @@ export async function timesheet(tx: Tx, actor: Actor, q: { facilityId?: string; 
         role,
         home: h.name,
         date: localDate(p.signedInAt, h.timeZone),
-        signedIn: localTime(p.signedInAt, h.timeZone),
-        signedOut: p.signedOutAt ? `${localTime(p.signedOutAt, h.timeZone)}${localDate(p.signedOutAt, h.timeZone) !== localDate(p.signedInAt, h.timeZone) ? " (+1 day)" : ""}` : null,
+        startedAt: p.signedInAt,
+        signedIn: localClock(p.signedInAt, h.timeZone),
+        signedOut: p.signedOutAt ? `${localClock(p.signedOutAt, h.timeZone)}${localDate(p.signedOutAt, h.timeZone) !== localDate(p.signedInAt, h.timeZone) ? " (+1 day)" : ""}` : null,
         hours: p.signedOutAt ? Math.round(((p.signedOutAt.getTime() - p.signedInAt.getTime()) / 3_600_000) * 100) / 100 : null,
         status: open ? (stale ? "no_sign_out" : "on_shift") : "complete",
       });
     }
   }
-  shifts.sort((a, b) => a.name.localeCompare(b.name) || a.date.localeCompare(b.date) || a.signedIn.localeCompare(b.signedIn));
+  shifts.sort((a, b) => a.name.localeCompare(b.name) || a.startedAt.getTime() - b.startedAt.getTime());
   const byPerson = new Map<string, Timesheet["people"][number]>();
   for (const s of shifts) {
     const p = byPerson.get(s.userId) ?? { userId: s.userId, name: s.name, hours: 0, shifts: 0, problems: 0 };

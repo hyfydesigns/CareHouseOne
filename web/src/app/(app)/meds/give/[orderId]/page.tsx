@@ -6,7 +6,7 @@ import { getDb, withTenant } from "@/db/client";
 import { facilities, medicationOrders, organizations } from "@/db/schema";
 import { canGiveMeds } from "@/lib/permissions";
 import { requireUser } from "@/lib/session";
-import { localTime } from "@/lib/time";
+import { localClock } from "@/lib/time";
 import { getResident } from "@/server/residents";
 import { giveAction } from "../../../care-actions";
 import { GiveForm } from "../../../care-forms";
@@ -39,7 +39,7 @@ export default async function GivePage({ params, searchParams }: { params: Promi
       <section className="card" style={{ maxWidth: 640 }}>
         <div>
           <h1>{o.name} {o.strength}</h1>
-          <p className="muted" style={{ margin: 0 }}>{r.firstName} {r.lastName} · Room {r.room} · {localTime(at, tz)} dose · {o.route} · {o.purpose}</p>
+          <p className="muted" style={{ margin: 0 }}>{r.firstName} {r.lastName} · Room {r.room} · {localClock(at, tz)} dose · {o.route} · {o.purpose}</p>
           {o.instructions && <p style={{ margin: "6px 0 0" }}><b>Instructions:</b> {o.instructions}</p>}
         </div>
         {r.allergies.length ? <span className="allergy">Allergies: {r.allergies.join(", ")}</span> : <span className="pill ok">No known allergies</span>}
