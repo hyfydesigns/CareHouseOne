@@ -480,7 +480,8 @@ export type Facility = typeof facilities.$inferSelect;
  * A PayPal subscription. Created when someone approves a subscription on the public site; linked
  * to an organization once they finish setting it up. Organizations created by the developer
  * (invoiced customers, the first client) have none. PayPal only ever sees the organization's
- * name, the billing contact and the resident count, never anything about residents.
+ * name, the billing contact and the monthly amount, never anything about residents. The plan's
+ * unit is $1, so quantity is the monthly total in dollars (see lib/pricing.ts).
  */
 export const subscriptions = pgTable("subscriptions", {
   id: id(),
@@ -500,9 +501,9 @@ export const subscriptions = pgTable("subscriptions", {
   setupTokenHash: text("setup_token_hash").unique(),
   setupExpiresAt: timestamp("setup_expires_at", { withTimezone: true }),
   setupUsedAt: timestamp("setup_used_at", { withTimezone: true }),
-  /** When PayPal needs the payer to approve a new resident count. */
+  /** When PayPal needs the payer to approve a new monthly amount. */
   approvalUrl: text("approval_url"),
-  /** YYYY-MM of the last first-of-month resident count sent to PayPal. */
+  /** YYYY-MM of the last first-of-month amount sent to PayPal. */
   quantitySyncedMonth: text("quantity_synced_month"),
   /** The "your trial ends soon" email went out (once per subscription). */
   trialReminderSentAt: timestamp("trial_reminder_sent_at", { withTimezone: true }),

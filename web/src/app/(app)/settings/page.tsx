@@ -5,7 +5,8 @@ import { currentDevice, requireUser } from "@/lib/session";
 import { and, asc, count, eq } from "drizzle-orm";
 import { facilities, residents } from "@/db/schema";
 import { billingState, orgSubscription } from "@/server/billing";
-import { paypalLive, PRICE_PER_RESIDENT } from "@/server/paypal";
+import { describeBill, INCLUDED_RESIDENTS, monthlyBill, PRICE_PER_EXTRA_RESIDENT, PRICE_PER_HOME, usd } from "@/lib/pricing";
+import { paypalLive } from "@/server/paypal";
 import { CONTACT_EMAIL } from "../../(site)/shell";
 import { listDevices } from "@/server/devices";
 import { getOrg } from "@/server/org";
@@ -18,7 +19,7 @@ export default async function SettingsPage() {
   const actor = { id: me.id, role: me.role, facilityIds: me.facilityIds };
   const data = await withTenant(await getDb(), me.orgId, async (tx) => ({ org: await getOrg(tx, me.orgId), devices: await listDevices(tx, actor), homes: await tx.select().from(facilities).orderBy(asc(facilities.name)),
     sub: await orgSubscription(tx),
-    activeResidents: (await tx.select({ n: count() }).from(residents).where(and(eq(residents.orgId, me.orgId), eq(residents.status, "active"))))[0].n,
+    residentsByHome: await tx.select({ facilityId: residents.facilityId, n: count() }).from(residents).where(and(eq(residents.orgId, me.orgId), eq(residents.status, "active"))).groupBy(residents.facilityId),
   }));
   if (!data.org) redirect("/dashboard");
   const here = await currentDevice();
@@ -26,6 +27,9 @@ export default async function SettingsPage() {
   const when = (d: Date | null) => (d ? d.toLocaleString("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true }) : "—");
   const active = data.devices.filter((r) => !r.d.revokedAt);
   const bill = billingState(data.sub);
+  const byHome = new Map(data.residentsByHome.map((r) => [r.facilityId, r.n]));
+  const homeCounts = data.homes.map((h) => ({ name: h.name, n: byHome.get(h.id) ?? 0 }));
+  const next = monthlyBill(homeCounts.map((h) => h.n));
   const day = (d: Date | null) => (d ? d.toLocaleDateString("en-US", { timeZone: tz, month: "long", day: "numeric", year: "numeric" }) : "—");
   const paypalAccount = paypalLive() ? "https://www.paypal.com/myaccount/autopay/" : "https://www.sandbox.paypal.com/myaccount/autopay/";
   return (
@@ -77,17 +81,34 @@ export default async function SettingsPage() {
         {data.sub ? (
           <>
             <div className="kpis">
-              <div><span className="small muted">Plan</span><br /><b>${PRICE_PER_RESIDENT} per resident per month</b></div>
-              <div><span className="small muted">Residents billed</span><br /><b>{data.sub.quantity}</b></div>
-              <div><span className="small muted">Active residents now</span><br /><b>{data.activeResidents}</b></div>
+              <div><span className="small muted">Plan</span><br /><b>{usd(PRICE_PER_HOME)} per home per month</b></div>
+              <div><span className="small muted">This month</span><br /><b>{usd(data.sub.quantity)}</b></div>
+              <div><span className="small muted">Next month, as of today</span><br /><b>{usd(next.total)}</b><br /><span className="small muted">{describeBill(next)}</span></div>
               <div><span className="small muted">Next payment</span><br /><b>{day(data.sub.nextBillingAt)}</b></div>
+            </div>
+            <div className="tablewrap">
+              <table>
+                <thead><tr><th>Home</th><th>Active residents</th><th>Extra this month</th></tr></thead>
+                <tbody>
+                  {homeCounts.map((h) => {
+                    const extra = Math.max(0, h.n - INCLUDED_RESIDENTS);
+                    return (
+                      <tr key={h.name}>
+                        <td>{h.name}</td>
+                        <td>{h.n} of {INCLUDED_RESIDENTS} included</td>
+                        <td>{extra ? <span className="pill warn">{extra} extra · {usd(extra * PRICE_PER_EXTRA_RESIDENT)}</span> : <span className="muted">None</span>}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
             {bill.warning && <p className={bill.tone === "crit" ? "error" : "notice"} style={{ margin: 0 }}>{bill.warning}</p>}
             {data.sub.approvalUrl && (
-              <a className="btn primary" href={data.sub.approvalUrl} target="_blank" rel="noreferrer" style={{ justifySelf: "start" }}>Approve the new count in PayPal</a>
+              <a className="btn primary" href={data.sub.approvalUrl} target="_blank" rel="noreferrer" style={{ justifySelf: "start" }}>Approve the new amount in PayPal</a>
             )}
             <p className="small muted" style={{ margin: 0 }}>
-              The count is sent to PayPal on the first of each month. Change the payment method or cancel in your PayPal account
+              Each home includes up to {INCLUDED_RESIDENTS} active residents; each one over that is {usd(PRICE_PER_EXTRA_RESIDENT)} a month. The amount is sent to PayPal on the first of each month. Change the payment method or cancel in your PayPal account
               {data.sub.payerEmail ? ` (${data.sub.payerEmail})` : ""}: <a href={paypalAccount} target="_blank" rel="noreferrer">PayPal automatic payments</a>. Care
               records are never locked for a missed payment. CareHouse One never sees or stores card details.
             </p>

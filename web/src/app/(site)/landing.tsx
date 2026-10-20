@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { PRICE_PER_RESIDENT, TRIAL_DAYS } from "@/server/paypal";
+import { INCLUDED_RESIDENTS, monthlyBill, PRICE_PER_EXTRA_RESIDENT, PRICE_PER_HOME, usd } from "@/lib/pricing";
+import { TRIAL_DAYS } from "@/server/paypal";
 import { signupOpen } from "@/server/billing";
 import { demoAction } from "./actions";
 import { DemoForm } from "./demo-form";
@@ -60,7 +61,11 @@ const FEATURES: Array<{ title: string; body: string; d: string }> = [
   },
 ];
 
-const fmt = (n: number) => `$${n.toLocaleString("en-US")}`;
+const EXAMPLES: Array<{ label: string; homes: number[] }> = [
+  { label: "1 home, 6 residents", homes: [6] },
+  { label: "3 homes, 4 to 6 residents each", homes: [4, 6, 5] },
+  { label: "1 home, 12 residents", homes: [12] },
+];
 
 export function Landing() {
   const open = signupOpen();
@@ -134,13 +139,13 @@ export function Landing() {
 
       <section className="site-section" id="pricing" aria-labelledby="pricing-h">
         <div className="site-wrap">
-          <h2 className="title" id="pricing-h">One plan. Priced per resident.</h2>
-          <p className="sub">You pay for the residents you care for, not for logins, so every caregiver can have their own account.</p>
+          <h2 className="title" id="pricing-h">One plan. Priced per home.</h2>
+          <p className="sub">A flat price for each home, not for logins, so every caregiver can have their own account. No contract and no setup fee.</p>
           <div className="site-price">
             <div className="site-plan">
               <div>
-                <div className="amount">{fmt(PRICE_PER_RESIDENT)} <small>per resident per month</small></div>
-                <p className="muted" style={{ margin: "8px 0 0" }}>{TRIAL_DAYS}-day free trial · billed monthly through PayPal · cancel anytime</p>
+                <div className="amount">{usd(PRICE_PER_HOME)} <small>per home per month</small></div>
+                <p className="muted" style={{ margin: "8px 0 0" }}>Up to {INCLUDED_RESIDENTS} residents included · {TRIAL_DAYS}-day free trial · pay by card or PayPal · cancel anytime</p>
               </div>
               <ul>
                 <li>Every feature, in every home</li>
@@ -160,13 +165,14 @@ export function Landing() {
             <div className="stack">
               <h3>What it costs</h3>
               <div className="site-examples">
-                {[6, 13, 25].map((n) => (
-                  <div key={n}><span>{n} residents</span><b>{fmt(n * PRICE_PER_RESIDENT)} a month</b></div>
+                {EXAMPLES.map((x) => (
+                  <div key={x.label}><span>{x.label}</span><b>{usd(monthlyBill(x.homes).total)} a month</b></div>
                 ))}
               </div>
               <p className="small muted" style={{ margin: 0 }}>
-                We count active residents on the first of each month; discharged residents aren&apos;t billed. PayPal sees only your organization&apos;s name, the billing
-                contact and that count, never anything about residents.
+                A home with more than {INCLUDED_RESIDENTS} residents adds {usd(PRICE_PER_EXTRA_RESIDENT)} a month for each extra resident. We count active residents on the
+                first of each month; discharged residents aren&apos;t counted. PayPal sees only your organization&apos;s name, the billing contact and the monthly amount,
+                never anything about residents.
               </p>
             </div>
           </div>
@@ -198,12 +204,15 @@ export function Landing() {
               </p>
             </details>
             <details>
-              <summary>What counts as a resident?</summary>
-              <p>Each active resident on the first of the month. Residents you discharge stop counting from the next month.</p>
+              <summary>What counts as a home, and what if a home has more than {INCLUDED_RESIDENTS} residents?</summary>
+              <p>
+                A home is each house you add in CareHouse One, with its own tablet and shift sign-in. Each home includes up to {INCLUDED_RESIDENTS} active residents; each
+                one over that is {usd(PRICE_PER_EXTRA_RESIDENT)} a month. You can always admit a resident; the bill adjusts on the first of the next month.
+              </p>
             </details>
             <details>
               <summary>Can we cancel?</summary>
-              <p>Anytime, from your PayPal account. Care records and the medication record are never locked because of a missed payment.</p>
+              <p>Anytime, from your PayPal account. There&apos;s no contract. Care records and the medication record are never locked because of a missed payment.</p>
             </details>
           </div>
         </div>

@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { signupOpen } from "@/server/billing";
-import { PRICE_PER_RESIDENT, TRIAL_DAYS } from "@/server/paypal";
+import { INCLUDED_RESIDENTS, PRICE_PER_HOME, usd } from "@/lib/pricing";
+import { TRIAL_DAYS } from "@/server/paypal";
 import { subscribedAction } from "../actions";
 import { Subscribe } from "./subscribe";
 
@@ -27,21 +28,20 @@ export default async function SignupPage() {
         <div>
           <h1>Start your {TRIAL_DAYS}-day free trial</h1>
           <p className="muted">
-            ${PRICE_PER_RESIDENT} per resident per month after the trial, billed through PayPal. Cancel anytime in PayPal before the trial ends and you won&apos;t be
-            charged.
+            {usd(PRICE_PER_HOME)} per home per month, up to {INCLUDED_RESIDENTS} residents each, after the trial. No contract: pay by card or PayPal and cancel anytime.
+            Cancel in PayPal before the trial ends and you won&apos;t be charged.
           </p>
         </div>
         <Subscribe
           clientId={process.env.PAYPAL_CLIENT_ID!}
           planId={process.env.PAYPAL_PLAN_ID!}
           nonce={nonce}
-          price={PRICE_PER_RESIDENT}
           trialDays={TRIAL_DAYS}
           onSubscribed={subscribedAction}
         />
         <p className="small muted" style={{ margin: 0 }}>
           Next you&apos;ll name your organization and homes and accept the <Link href="/terms">Terms of Service</Link> and the{" "}
-          <Link href="/baa">Business Associate Agreement</Link>. PayPal only receives your organization&apos;s billing details and resident count.
+          <Link href="/baa">Business Associate Agreement</Link>. PayPal only receives your organization&apos;s billing details and the monthly amount.
         </p>
       </div>
     </section>

@@ -10,7 +10,7 @@ This is the runbook for production. Every step is done by the developer.
 | Email sender | `CareHouse One <no-reply@carehouseone.com>`, sent through Resend |
 | Domain registrar and DNS | Cloudflare (`carehouseone.com`) |
 | Public site | `https://www.carehouseone.com` (same Cloud Run service; step 9) |
-| Payments | PayPal Subscriptions, $50 per resident per month, 30-day free trial (step 9) |
+| Payments | PayPal Subscriptions, $149 per home per month with up to 8 residents, $15 per extra resident, no contract, 30-day free trial (step 9) |
 
 **No real resident data until the build spec's production plan step 1 (compliance foundation) and step 4 (testing, including a restore test) are complete.**
 
@@ -22,8 +22,8 @@ This is the runbook for production. Every step is done by the developer.
 | Database | Cloud SQL for PostgreSQL 17 `carehouse-db` | Daily backups kept 30 days, point-in-time recovery for 7 days, encrypted connections only, deletion protection. Reached through the Cloud SQL connector, never an open port. |
 | Secrets | Secret Manager | `database-url`, `data-encryption-key`, `cron-secret`, `smtp-url`, `paypal-client-secret`. Only the runtime service account can read them. |
 | Images | Artifact Registry `carehouse` | Tagged with the git commit. |
-| Housekeeping | Cloud Scheduler `carehouse-cron` | Every 5 minutes: retries unsent emails, refreshes PayPal subscriptions (and sends the resident count on the 1st), clears old rate-limit counters. |
-| Payments | PayPal | Sees the organization name, billing contact and resident count only, never resident details. Webhooks go to `/api/paypal/webhook`. |
+| Housekeeping | Cloud Scheduler `carehouse-cron` | Every 5 minutes: retries unsent emails, refreshes PayPal subscriptions (and sends the month's amount on the 1st), clears old rate-limit counters. |
+| Payments | PayPal | Sees the organization name, billing contact and the monthly amount only, never resident details. Webhooks go to `/api/paypal/webhook`. |
 | Email | Resend (SMTP) | Invitation and password-reset links only, never resident details. |
 | DNS | Cloudflare | Every record DNS only (grey cloud), never proxied. |
 | Deploys | GitHub Actions `Deploy` workflow | Manual. Signs in to Google with Workload Identity Federation (no keys), only from `main` of this repository. |
@@ -190,7 +190,7 @@ Demo requests are stored in the `leads` table and emailed to `LEADS_EMAIL`.
 ### 9b. PayPal in sandbox (test money)
 
 1. developer.paypal.com > Apps & Credentials > **Sandbox** > Create App. Copy the client ID and secret.
-2. Create the product and plan (in Cloud Shell, from `~/CareHouseOne/web`). It prints the plan ID:
+2. Create the product and plan (in Cloud Shell, from `~/CareHouseOne/web`). It prints the plan ID. The plan's unit is $1 and the subscription quantity is the monthly total, because PayPal can only multiply one price by a quantity:
 
 ```bash
 PAYPAL_ENV=sandbox PAYPAL_CLIENT_ID='CLIENT_ID' PAYPAL_CLIENT_SECRET='SECRET' npm run paypal:setup
@@ -205,6 +205,8 @@ gcloud secrets add-iam-policy-binding paypal-client-secret --member="serviceAcco
 
 4. In the PayPal app, add a webhook: URL `https://app.carehouseone.com/api/paypal/webhook`, events `BILLING.SUBSCRIPTION.ACTIVATED`, `BILLING.SUBSCRIPTION.UPDATED`, `BILLING.SUBSCRIPTION.CANCELLED`, `BILLING.SUBSCRIPTION.SUSPENDED`, `BILLING.SUBSCRIPTION.EXPIRED`, `BILLING.SUBSCRIPTION.PAYMENT.FAILED` and `PAYMENT.SALE.COMPLETED`. Copy the webhook ID.
 5. GitHub variables: `PAYPAL_ENV` = `sandbox`, `PAYPAL_CLIENT_ID`, `PAYPAL_PLAN_ID`, `PAYPAL_WEBHOOK_ID`. Leave `SIGNUP_OPEN` unset. Run Deploy.
+
+**Changing the price** (as when it moved from $50 per resident to $149 per home): run step 2 again for a new plan, update `PAYPAL_PLAN_ID` (GitHub variable and `.env.local`) and deploy. Subscriptions on an older plan are never re-priced automatically; cancel test ones in PayPal and remove them with `npm run org:remove`.
 
 **Try the whole flow locally** with the sandbox (sign-up is open only on your computer). In `web/.env.local` (never committed):
 
@@ -227,7 +229,7 @@ Then `npm run dev`, open `http://www.localhost:3000/signup`, subscribe with a Pa
 
 **Emails:** right after paying, a setup link; after setup, the owner's invitation; 3 days before the free trial ends, a reminder with the first payment date, the amount and how to cancel in PayPal (with a fresh setup link if they never finished setup); and a notice if a payment fails. PayPal sends its own receipts.
 
-**What customers see:** a billing card in Settings with the plan, the residents billed, the active residents now and the next payment date. If a payment fails, owners and admins get an email and a banner; after 14 days inviting staff, registering tablets and settings changes pause. Care records and the medication record are never blocked. On the first of each month the active resident count is sent to PayPal; if PayPal needs the payer to approve a higher amount, an "Approve the new count in PayPal" button appears.
+**What customers see:** a billing card in Settings with the plan, this month's amount, next month's amount as of today, each home's active residents out of the 8 included (and any extra), and the next payment date. If a payment fails, owners and admins get an email and a banner; after 14 days inviting staff, registering tablets and settings changes pause. Care records and the medication record are never blocked. On the first of each month the amount ($149 per home plus $15 for each active resident over 8 in a home) is sent to PayPal; if PayPal needs the payer to approve a higher amount, an "Approve the new amount in PayPal" button appears. Admitting a resident is never blocked.
 
 ## Routine work
 

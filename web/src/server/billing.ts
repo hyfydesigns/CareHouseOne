@@ -4,8 +4,9 @@ import type { DB, Tx } from "@/db/client";
 import { billingEvents, facilities, residents, subscriptions, users, type Subscription } from "@/db/schema";
 import { randomToken, sha256 } from "@/lib/crypto";
 import { appBaseUrl } from "@/lib/hosts";
+import { describeBill, monthlyBill, PRICE_PER_HOME, usd, type MonthlyBill } from "@/lib/pricing";
 import { audit, sendMail } from "./audit";
-import { getSubscription, paypalConfigured, PRICE_PER_RESIDENT, reviseQuantity, TRIAL_DAYS, type PaypalSubscription } from "./paypal";
+import { getSubscription, paypalConfigured, reviseQuantity, TRIAL_DAYS, type PaypalSubscription } from "./paypal";
 import { provisionOrganization, provisionSchema } from "./provision";
 
 export const SETUP_DAYS = 7;
@@ -46,6 +47,7 @@ export async function registerSubscription(db: DB, subscriptionId: string, appUr
   if (p.plan_id !== process.env.PAYPAL_PLAN_ID) return { ok: false, error: "That isn't a CareHouse One subscription." };
   if (!["APPROVED", "ACTIVE"].includes(p.status)) return { ok: false, error: "PayPal hasn't approved this subscription." };
   const v = fromPaypal(p, now);
+  if (v.quantity < PRICE_PER_HOME) return { ok: false, error: "That subscription's amount doesn't match a CareHouse One plan. Email us and we'll sort it out." };
   const token = randomToken();
   const setup = { setupTokenHash: sha256(token), setupExpiresAt: new Date(now.getTime() + SETUP_DAYS * DAY) };
   const [existing] = await db.select().from(subscriptions).where(eq(subscriptions.paypalSubscriptionId, p.id));
@@ -155,10 +157,22 @@ export async function handleWebhook(db: DB, event: PaypalEvent, now = new Date()
   return "applied";
 }
 
+/** What an organization owes this month: its homes, and each home's active residents over the included number. */
+export async function orgBill(db: DB | Tx, orgId: string): Promise<MonthlyBill> {
+  const homes = await db.select({ id: facilities.id }).from(facilities).where(eq(facilities.orgId, orgId));
+  const counts = await db
+    .select({ facilityId: residents.facilityId, n: count() })
+    .from(residents)
+    .where(and(eq(residents.orgId, orgId), eq(residents.status, "active")))
+    .groupBy(residents.facilityId);
+  const byHome = new Map(counts.map((c) => [c.facilityId, c.n]));
+  return monthlyBill(homes.map((h) => byHome.get(h.id) ?? 0));
+}
+
 /**
  * Housekeeping (from /api/cron): refresh subscriptions every 6 hours in case a webhook was missed,
- * on the first of the month send PayPal the number of active residents, and remind people whose
- * free trial ends within 3 days.
+ * on the first of the month send PayPal the month's amount (homes and extra residents), and
+ * remind people whose free trial ends within 3 days.
  */
 export async function syncSubscriptions(db: DB, now = new Date()): Promise<{ refreshed: number; counted: number; reminded: number }> {
   if (!paypalConfigured()) return { refreshed: 0, counted: 0, reminded: 0 };
@@ -182,18 +196,25 @@ export async function syncSubscriptions(db: DB, now = new Date()): Promise<{ ref
     const due = await db
       .select()
       .from(subscriptions)
-      .where(and(isNotNull(subscriptions.orgId), eq(subscriptions.status, "ACTIVE"), or(isNull(subscriptions.quantitySyncedMonth), lt(subscriptions.quantitySyncedMonth, month))));
+      .where(
+        and(
+          isNotNull(subscriptions.orgId),
+          eq(subscriptions.status, "ACTIVE"),
+          // Only the current plan: on an older plan the quantity meant something else.
+          eq(subscriptions.planId, process.env.PAYPAL_PLAN_ID!),
+          or(isNull(subscriptions.quantitySyncedMonth), lt(subscriptions.quantitySyncedMonth, month)),
+        ),
+      );
     for (const row of due) {
       try {
-        const [{ n }] = await db.select({ n: count() }).from(residents).where(and(eq(residents.orgId, row.orgId!), eq(residents.status, "active")));
-        const quantity = Math.max(1, n);
+        const bill = await orgBill(db, row.orgId!);
         let approvalUrl: string | null = null;
-        if (quantity !== row.quantity) approvalUrl = (await reviseQuantity(row.paypalSubscriptionId, quantity)).approvalUrl;
+        if (bill.total !== row.quantity) approvalUrl = (await reviseQuantity(row.paypalSubscriptionId, bill.total)).approvalUrl;
         await db.update(subscriptions).set({ quantitySyncedMonth: month, approvalUrl }).where(eq(subscriptions.id, row.id));
-        await audit(db, { orgId: row.orgId!, actorId: null, action: "billing_count_sent", entity: "subscription", entityId: row.id, details: { residents: quantity, needsApproval: !!approvalUrl } });
+        await audit(db, { orgId: row.orgId!, actorId: null, action: "billing_count_sent", entity: "subscription", entityId: row.id, details: { ...bill, needsApproval: !!approvalUrl } });
         counted++;
       } catch (e) {
-        console.error(`[billing] resident count failed for ${row.id}: ${(e as Error).message}`);
+        console.error(`[billing] monthly amount failed for ${row.id}: ${(e as Error).message}`);
       }
     }
   }
@@ -226,7 +247,7 @@ async function remindTrialEnding(db: DB, now: Date): Promise<number> {
     if (left <= 0 || left > TRIAL_REMINDER_DAYS * DAY) continue;
     const [home] = row.orgId ? await db.select({ tz: facilities.timeZone }).from(facilities).where(eq(facilities.orgId, row.orgId)).limit(1) : [];
     const day = charge.toLocaleDateString("en-US", { timeZone: home?.tz ?? "America/Chicago", weekday: "long", month: "long", day: "numeric" });
-    const amount = (row.quantity * PRICE_PER_RESIDENT).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+    const covers = row.orgId ? ` (${describeBill(await orgBill(db, row.orgId))})` : "";
     let setupNote = "";
     if (!row.orgId) {
       const token = randomToken();
@@ -240,9 +261,8 @@ async function remindTrialEnding(db: DB, now: Date): Promise<number> {
         to,
         subject: `Your CareHouse One free trial ends on ${day}`,
         body:
-          `Your ${TRIAL_DAYS}-day free trial of CareHouse One ends soon. PayPal will take the first monthly payment of ${amount} ` +
-          `(${row.quantity} resident${row.quantity === 1 ? "" : "s"} at $${PRICE_PER_RESIDENT} each) on ${day}.\n\n` +
-          `To keep using CareHouse One you don't need to do anything. Each month the count updates to your active residents.\n\n` +
+          `Your ${TRIAL_DAYS}-day free trial of CareHouse One ends soon. PayPal will take the first monthly payment of ${usd(row.quantity)}${covers} on ${day}.\n\n` +
+          `To keep using CareHouse One you don't need to do anything. On the 1st of each month the amount updates to your homes and active residents.\n\n` +
           `To cancel before you're charged, sign in to PayPal and go to Settings > Payments > Automatic payments, then cancel CareHouse One.` +
           setupNote,
       });
@@ -280,7 +300,7 @@ export function billingState(s: Subscription | null | undefined, now = new Date(
         : "PayPal couldn't take the latest payment. Update the payment method in PayPal within 14 days to avoid pausing admin features. Care records are never affected.",
     };
   }
-  if (s.approvalUrl) return { managed: false, label: "Approval needed", tone: "warn", adminLocked: false, warning: "Approve this month's resident count in PayPal." };
+  if (s.approvalUrl) return { managed: false, label: "Approval needed", tone: "warn", adminLocked: false, warning: "Approve this month's amount in PayPal." };
   const trial = now.getTime() - s.createdAt.getTime() < TRIAL_DAYS * DAY;
   return { managed: false, label: trial ? "Free trial" : "Active", tone: "ok", adminLocked: false, warning: null };
 }

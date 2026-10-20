@@ -2,6 +2,7 @@
 
 import Script from "next/script";
 import { useEffect, useRef, useState } from "react";
+import { INCLUDED_RESIDENTS, PRICE_PER_EXTRA_RESIDENT, PRICE_PER_HOME, usd } from "@/lib/pricing";
 
 type PaypalButtons = {
   Buttons: (o: {
@@ -13,27 +14,27 @@ type PaypalButtons = {
 };
 
 /**
- * Resident count, then PayPal's subscription button. PayPal opens its own window for the payment;
+ * Number of homes, then PayPal's subscription button. PayPal opens its own window for the payment;
  * when the buyer approves, the server checks the subscription with PayPal before anything happens.
  */
 export function Subscribe(props: {
   clientId: string;
   planId: string;
   nonce?: string;
-  price: number;
   trialDays: number;
   onSubscribed: (subscriptionId: string) => Promise<{ setupUrl?: string; error?: string }>;
 }) {
   const { planId, onSubscribed } = props;
-  const [residents, setResidents] = useState(6);
+  const [homes, setHomes] = useState(1);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const box = useRef<HTMLDivElement>(null);
-  const count = useRef(residents);
+  // PayPal bills $1 units, so the quantity is the monthly amount in dollars.
+  const amount = useRef(homes * PRICE_PER_HOME);
   useEffect(() => {
-    count.current = residents;
-  }, [residents]);
+    amount.current = homes * PRICE_PER_HOME;
+  }, [homes]);
 
   useEffect(() => {
     const pp = (window as unknown as { paypal?: PaypalButtons }).paypal;
@@ -41,7 +42,7 @@ export function Subscribe(props: {
     box.current.innerHTML = "";
     const buttons = pp.Buttons({
       style: { shape: "rect", label: "subscribe", layout: "vertical" },
-      createSubscription: (_d, actions) => actions.subscription.create({ plan_id: planId, quantity: String(count.current) }),
+      createSubscription: (_d, actions) => actions.subscription.create({ plan_id: planId, quantity: String(amount.current) }),
       onApprove: async (data) => {
         setBusy(true);
         const r = await onSubscribed(data.subscriptionID ?? "");
@@ -59,7 +60,7 @@ export function Subscribe(props: {
     };
   }, [ready, planId, onSubscribed]);
 
-  const monthly = residents * props.price;
+  const monthly = homes * PRICE_PER_HOME;
   return (
     <div className="card" style={{ gap: 16 }}>
       <Script
@@ -69,21 +70,22 @@ export function Subscribe(props: {
         onError={() => setError("PayPal couldn't load. Check your connection and refresh.")}
       />
       <div className="field" style={{ maxWidth: 380 }}>
-        <label htmlFor="residents">How many residents live in all your homes right now?</label>
+        <label htmlFor="homes">How many homes do you run?</label>
         <input
-          id="residents"
+          id="homes"
           inputMode="numeric"
-          value={residents}
-          aria-describedby="residentsHint"
+          value={homes}
+          aria-describedby="homesHint"
           style={{ maxWidth: 140 }}
-          onChange={(e) => setResidents(Math.min(500, Math.max(1, Number(e.target.value.replace(/[^0-9]/g, "")) || 1)))}
+          onChange={(e) => setHomes(Math.min(100, Math.max(1, Number(e.target.value.replace(/[^0-9]/g, "")) || 1)))}
         />
-        <span id="residentsHint" className="small muted">
-          You&apos;re billed per resident. The count updates to your active residents on the 1st of each month.
+        <span id="homesHint" className="small muted">
+          {usd(PRICE_PER_HOME)} per home includes up to {INCLUDED_RESIDENTS} residents; each resident over {INCLUDED_RESIDENTS} in a home is {usd(PRICE_PER_EXTRA_RESIDENT)}. The
+          amount updates to your homes and active residents on the 1st of each month.
         </span>
       </div>
       <p style={{ margin: 0 }}>
-        <b>${monthly.toLocaleString("en-US")} a month</b> after {props.trialDays} days free.
+        <b>{usd(monthly)} a month</b> after {props.trialDays} days free.
       </p>
       {busy ? <p className="notice" role="status">Confirming with PayPal…</p> : <div ref={box} aria-label="PayPal subscription button" />}
       {error && <p className="error" role="alert">{error}</p>}

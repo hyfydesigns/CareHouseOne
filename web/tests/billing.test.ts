@@ -3,7 +3,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { createTestDb, withTenant, type DB } from "@/db/client";
 import { auditLog, billingEvents, leads, organizations, outbox, subscriptions } from "@/db/schema";
 import { describeToken } from "@/server/auth";
-import { adminLockedMessage, billingState, completeSetup, describeSetup, handleWebhook, registerSubscription, resendSetupLink, syncSubscriptions } from "@/server/billing";
+import { monthlyBill } from "@/lib/pricing";
+import { adminLockedMessage, billingState, completeSetup, describeSetup, handleWebhook, orgBill, registerSubscription, resendSetupLink, syncSubscriptions } from "@/server/billing";
 import { createLead } from "@/server/leads";
 import { resetPaypalToken } from "@/server/paypal";
 import { seedCare, seedDemo, type Seeded } from "@/server/seed";
@@ -38,7 +39,7 @@ const sub = (id: string, extra: Record<string, unknown> = {}) =>
     id,
     plan_id: PLAN,
     status: "ACTIVE",
-    quantity: "6",
+    quantity: "149",
     subscriber: { email_address: "Payer@Example.test", name: { given_name: "Jordan", surname: "Lee" } },
     billing_info: { next_billing_time: "2026-11-16T10:00:00Z", failed_payments_count: 0 },
     ...extra,
@@ -85,7 +86,7 @@ describe("sign-up", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const token = tokenFrom(r.setupUrl);
-    expect(await describeSetup(db, token)).toMatchObject({ payerEmail: "payer@example.test", payerName: "Jordan Lee", quantity: 6 });
+    expect(await describeSetup(db, token)).toMatchObject({ payerEmail: "payer@example.test", payerName: "Jordan Lee", quantity: 149 });
     const [mail] = await db.select().from(outbox).where(eq(outbox.to, "payer@example.test"));
     expect(mail.body).toContain(r.setupUrl);
 
@@ -111,9 +112,12 @@ describe("sign-up", () => {
     expect(!again.ok && again.error).toMatch(/already set up/);
   });
 
-  it("refuses other plans, unapproved subscriptions and made-up IDs", async () => {
+  it("refuses other plans, unapproved subscriptions, amounts under one home and made-up IDs", async () => {
     sub("I-OTHERPLAN1", { plan_id: "P-SOMETHINGELSE" });
     sub("I-PENDING001", { status: "APPROVAL_PENDING" });
+    sub("I-CHEAP00001", { quantity: "1" });
+    const cheap = await registerSubscription(db, "I-CHEAP00001", APP);
+    expect(!cheap.ok && cheap.error).toMatch(/doesn't match/);
     expect((await registerSubscription(db, "I-OTHERPLAN1", APP)).ok).toBe(false);
     expect((await registerSubscription(db, "I-PENDING001", APP)).ok).toBe(false);
     expect((await registerSubscription(db, "I-NOTREAL0001", APP)).ok).toBe(false);
@@ -154,16 +158,22 @@ describe("billing status", () => {
     expect(await withTenant(db, s.orgId, adminLockedMessage)).toBeNull();
   });
 
-  it("sends the active resident count to PayPal on the first of the month", async () => {
-    // Attach a subscription to the demo organization, which has active residents.
-    sub("I-DEMO000001", { quantity: "1" });
-    await db.insert(subscriptions).values({ orgId: s.orgId, paypalSubscriptionId: "I-DEMO000001", planId: PLAN, status: "ACTIVE", quantity: 1 });
+  it("sends PayPal the month's amount, per home plus extra residents, on the first of the month", async () => {
+    // Attach a subscription to the demo organization, which has two homes with active residents.
+    sub("I-DEMO000001", { quantity: "149" });
+    await db.insert(subscriptions).values({ orgId: s.orgId, paypalSubscriptionId: "I-DEMO000001", planId: PLAN, status: "ACTIVE", quantity: 149 });
+    // A subscription on an older plan (where the quantity meant residents) is left alone.
+    await db.update(subscriptions).set({ planId: "P-OLDPLAN", quantity: 6 }).where(eq(subscriptions.paypalSubscriptionId, "I-GOOD000001"));
+    const bill = await orgBill(db, s.orgId);
+    expect(bill.homes).toBe(2);
     await syncSubscriptions(db, new Date("2026-11-01T12:00:00Z"));
-    const demo = revised.find((r) => r.id === "I-DEMO000001");
-    expect(Number(demo?.quantity)).toBeGreaterThan(1);
+    expect(revised.find((r) => r.id === "I-DEMO000001")?.quantity).toBe(String(bill.total));
+    expect(revised.find((r) => r.id === "I-GOOD000001")).toBeUndefined();
     const [row] = await db.select().from(subscriptions).where(eq(subscriptions.paypalSubscriptionId, "I-DEMO000001"));
     expect(row.quantitySyncedMonth).toBe("2026-11");
     expect(row.approvalUrl).toMatch(/approve/);
+    const [sent] = await db.select().from(auditLog).where(eq(auditLog.action, "billing_count_sent"));
+    expect(sent.details).toMatchObject({ homes: 2, total: bill.total, needsApproval: true });
     // Only once a month.
     revised.length = 0;
     await syncSubscriptions(db, new Date("2026-11-01T18:00:00Z"));
@@ -171,6 +181,18 @@ describe("billing status", () => {
     // The organization only ever sees its own subscription.
     const seen = await withTenant(db, s.orgId, (tx) => tx.select().from(subscriptions));
     expect(seen.map((x) => x.paypalSubscriptionId)).toEqual(["I-DEMO000001"]);
+  });
+});
+
+describe("pricing", () => {
+  it("charges per home, with up to 8 residents included and $15 for each extra", () => {
+    expect(monthlyBill([6])).toEqual({ homes: 1, extraResidents: 0, total: 149 });
+    expect(monthlyBill([8])).toEqual({ homes: 1, extraResidents: 0, total: 149 });
+    expect(monthlyBill([12])).toEqual({ homes: 1, extraResidents: 4, total: 209 });
+    expect(monthlyBill([4, 6, 5])).toEqual({ homes: 3, extraResidents: 0, total: 447 });
+    expect(monthlyBill([9, 0])).toEqual({ homes: 2, extraResidents: 1, total: 313 });
+    // An organization is never billed for less than one home.
+    expect(monthlyBill([]).total).toBe(149);
   });
 });
 
@@ -217,7 +239,7 @@ describe("trial ending reminder", () => {
     expect(result.reminded).toBeGreaterThanOrEqual(1);
     const mails = (await trialMail()).slice(before);
     expect(mails.map((m) => m.to).sort()).toEqual(["lee@trialhomes.test", "payer@example.test"]);
-    expect(mails[0].body).toContain("$300");
+    expect(mails[0].body).toContain("$149 (1 home)");
     expect(mails[0].body).toContain("Automatic payments");
     expect(mails[0].body).not.toContain("/setup/");
 

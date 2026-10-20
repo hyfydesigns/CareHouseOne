@@ -5,10 +5,11 @@
  *   PAYPAL_CLIENT_SECRET  secret (Secret Manager)
  *   PAYPAL_PLAN_ID        the CareHouse One plan, created with scripts/paypal-setup.ts
  *   PAYPAL_WEBHOOK_ID     the webhook registered in the PayPal developer dashboard
- * Only organization names, the billing contact and resident counts are ever sent.
+ * Only organization names, the billing contact and the monthly amount are ever sent.
  */
 
-export const PRICE_PER_RESIDENT = 50;
+import { INCLUDED_RESIDENTS, PRICE_PER_EXTRA_RESIDENT, PRICE_PER_HOME } from "@/lib/pricing";
+
 export const TRIAL_DAYS = 30;
 
 export const paypalLive = () => process.env.PAYPAL_ENV === "live";
@@ -71,7 +72,7 @@ export function getSubscription(id: string): Promise<PaypalSubscription> {
 }
 
 /**
- * Changes the billed resident count. PayPal may need the payer to approve a higher amount;
+ * Changes the monthly amount (the quantity of $1 units). PayPal may need the payer to approve a higher amount;
  * then it returns an "approve" link for the billing screen.
  */
 export async function reviseQuantity(id: string, quantity: number): Promise<{ approvalUrl: string | null }> {
@@ -97,7 +98,11 @@ export async function verifyWebhook(headers: Headers, event: unknown): Promise<b
   return r.verification_status === "SUCCESS";
 }
 
-/** One-time setup (scripts/paypal-setup.ts): the product and the per-resident monthly plan with a free trial. */
+/**
+ * One-time setup (scripts/paypal-setup.ts): the product and the monthly plan with a free trial.
+ * The plan's unit is $1 and the quantity is the monthly total, because PayPal can only multiply
+ * one price by a quantity and the bill is per home plus extra residents.
+ */
 export async function createProductAndPlan(): Promise<{ productId: string; planId: string }> {
   const product = await call<{ id: string }>("POST", "/v1/catalogs/products", {
     name: "CareHouse One",
@@ -107,8 +112,8 @@ export async function createProductAndPlan(): Promise<{ productId: string; planI
   });
   const plan = await call<{ id: string }>("POST", "/v1/billing/plans", {
     product_id: product.id,
-    name: "CareHouse One, per resident",
-    description: `$${PRICE_PER_RESIDENT} per resident per month after a ${TRIAL_DAYS}-day free trial`,
+    name: "CareHouse One",
+    description: `$${PRICE_PER_HOME} per home per month (up to ${INCLUDED_RESIDENTS} residents), $${PRICE_PER_EXTRA_RESIDENT} per extra resident; ${TRIAL_DAYS}-day free trial`,
     status: "ACTIVE",
     quantity_supported: true,
     billing_cycles: [
@@ -118,7 +123,7 @@ export async function createProductAndPlan(): Promise<{ productId: string; planI
         tenure_type: "REGULAR",
         sequence: 2,
         total_cycles: 0,
-        pricing_scheme: { fixed_price: { value: String(PRICE_PER_RESIDENT), currency_code: "USD" } },
+        pricing_scheme: { fixed_price: { value: "1", currency_code: "USD" } },
       },
     ],
     payment_preferences: { auto_bill_outstanding: true, payment_failure_threshold: 3 },

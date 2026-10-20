@@ -25,7 +25,7 @@ Built so far:
 
 5. **Production readiness (in progress):** Docker image and Cloud Run deployment (manual GitHub workflow with keyless sign-in), Cloud SQL with backups and point-in-time recovery, secrets in Secret Manager, migrations at startup, SMTP email with retries, per-IP rate limits, Content Security Policy, breached-password check, health check, and a script to create a customer organization. See [deploy/README.md](deploy/README.md).
 
-6. **Public site and sign-up:** landing page and pricing at www.carehouseone.com ($50 per resident per month, 30-day free trial), demo requests, PayPal Subscriptions with webhooks and a monthly resident count, self-service organization setup, a billing card in Settings, and admin features pausing 14 days after a failed payment (care records never). Sign-up stays closed (`SIGNUP_OPEN`) until the Terms and BAA are final; see runbook step 9.
+6. **Public site and sign-up:** landing page and pricing at www.carehouseone.com ($149 per home per month with up to 8 residents, $15 per extra resident, no contract, 30-day free trial), demo requests, PayPal Subscriptions with webhooks and a monthly amount update, self-service organization setup, a billing card in Settings, and admin features pausing 14 days after a failed payment (care records never). Sign-up stays closed (`SIGNUP_OPEN`) until the Terms and BAA are final; see runbook step 9.
 
 Next: the dry run, compliance foundation, and the security and clinical reviews.
 
