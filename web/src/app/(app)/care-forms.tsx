@@ -51,8 +51,9 @@ function ResidentFields({ homes, v }: { homes: Array<{ id: string; name: string 
         <div className="field" style={{ flex: "1 1 160px" }}><label htmlFor="dateOfBirth">Date of birth</label><input id="dateOfBirth" name="dateOfBirth" type="date" defaultValue={v?.dateOfBirth ?? ""} /></div>
         <div className="field" style={{ flex: "1 1 160px" }}><label htmlFor="admittedOn">Living here since</label><input id="admittedOn" name="admittedOn" type="date" defaultValue={v?.admittedOn ?? ""} /></div>
       </div>
-      <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0, gap: 8 }}>
-        <legend className="small" style={{ fontWeight: 700 }}>Guardian</legend>
+      <fieldset className="form-section">
+        <legend>Guardian</legend>
+        <p className="hint">Name, relationship and phone show on the resident&apos;s page for caregivers. The email is only shown here.</p>
         <div className="row" style={{ alignItems: "start" }}>
           <div className="field" style={{ flex: "2 1 220px" }}><label htmlFor="guardian">Name</label><input id="guardian" name="guardian" autoComplete="off" defaultValue={v?.guardian ?? ""} /></div>
           <div className="field" style={{ flex: "1 1 180px" }}>
@@ -63,8 +64,9 @@ function ResidentFields({ homes, v }: { homes: Array<{ id: string; name: string 
           <div className="field" style={{ flex: "2 1 220px" }}><label htmlFor="guardianEmail">Email</label><input id="guardianEmail" name="guardianEmail" type="email" autoComplete="off" defaultValue={v?.guardianEmail ?? ""} /></div>
         </div>
       </fieldset>
-      <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0, gap: 8 }}>
-        <legend className="small" style={{ fontWeight: 700 }}>Emergency contact (optional, in addition to the guardian)</legend>
+      <fieldset className="form-section">
+        <legend>Emergency contact</legend>
+        <p className="hint">Optional. Someone to call in an emergency, in addition to the guardian.</p>
         <div className="row" style={{ alignItems: "start" }}>
           <div className="field" style={{ flex: "2 1 220px" }}><label htmlFor="emergencyName">Name</label><input id="emergencyName" name="emergencyName" autoComplete="off" defaultValue={v?.emergencyName ?? ""} /></div>
           <div className="field" style={{ flex: "1 1 180px" }}><label htmlFor="emergencyRelationship">Relationship</label><input id="emergencyRelationship" name="emergencyRelationship" autoComplete="off" defaultValue={v?.emergencyRelationship ?? ""} /></div>

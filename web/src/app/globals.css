@@ -159,3 +159,9 @@ td { padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: to
 .stat span { font-size: 13px; color: var(--ink-2); }
 .stat.warn b { color: var(--warn); }
 .stat.crit b { color: var(--crit); }
+
+/* A titled group of fields inside a form card (for example Guardian, Emergency contact). */
+.form-section { border: 0; border-top: 1px solid var(--line); margin: 6px 0 0; padding: 14px 0 0; display: grid; gap: 10px; min-width: 0; }
+.form-section > legend { float: left; width: 100%; padding: 0; font-family: var(--font-display), sans-serif; font-size: 17px; font-weight: 600; color: var(--ink); }
+.form-section > legend + * { clear: left; }
+.form-section .hint { margin: -4px 0 0; font-size: 14px; color: var(--ink-2); }
