@@ -6,13 +6,13 @@ import { facilities, organizations } from "@/db/schema";
 import { canManageCare } from "@/lib/permissions";
 import { requireUser } from "@/lib/session";
 import { clock, localDate, zonedToUtc } from "@/lib/time";
-import { audit } from "@/server/audit";
 import { BP_POSITIONS, CATEGORY_LABEL, monthNotes, monthVitals, SHIFT_LABEL } from "@/server/care";
 import { listDiagnoses } from "@/server/diagnoses";
 import { FOLLOWUP_KINDS, getIncident, INCIDENT_TYPES, listIncidents, SEVERITIES, type FollowupKind, type IncidentType } from "@/server/incidents";
 import { listOrders, monthRecord } from "@/server/meds";
 import { getResident } from "@/server/residents";
 import { monthFrom } from "../../../../(app)/care/month";
+import { recordPrintedAction } from "../../actions";
 import { PrintButton } from "../../print-button";
 
 const SECTIONS = ["mar", "vitals", "notes", "incidents"] as const;
@@ -40,7 +40,6 @@ export default async function PrintResident({ params, searchParams }: { params: 
     const incidentRows = show.has("incidents") ? await listIncidents(tx, me, { residentId: r.id, from, to }) : [];
     const incidentDetails = [];
     for (const row of incidentRows) incidentDetails.push((await getIncident(tx, me, row.i.id))!);
-    await audit(tx, { orgId: r.orgId, actorId: me.id, action: "record_printed", entity: "resident", entityId: r.id, details: { month: `${m.year}-${String(m.month).padStart(2, "0")}`, sections: [...show] } });
     return {
       r,
       home,
@@ -77,7 +76,7 @@ export default async function PrintResident({ params, searchParams }: { params: 
         {[["mar", "Medication record"], ["vitals", "Vital signs"], ["notes", "Progress notes"], ["incidents", "Incidents"]].map(([k, l]) => (
           <Link key={k} className={`btn small ${show.has(k as (typeof SECTIONS)[number]) ? "primary" : ""}`} href={toggle(k)}>{l}</Link>
         ))}
-        <PrintButton />
+        <PrintButton record={recordPrintedAction.bind(null, r.id, `${m.year}-${String(m.month).padStart(2, "0")}`, [...show])} />
       </div>
 
       <header className="print-head">
