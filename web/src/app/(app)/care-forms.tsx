@@ -129,6 +129,35 @@ export function DischargeForm({ action, today, name }: { action: Action; today: 
   );
 }
 
+/** Only offered for residents with no care records yet (a test or a duplicate). */
+export function DeleteResidentForm({ action, name }: { action: Action; name: string }) {
+  const [state, formAction, pending] = useActionState(action, {});
+  const [open, setOpen] = useState(false);
+  if (!open) {
+    return (
+      <div className="stack" style={{ gap: 4 }}>
+        <button className="linkbtn small" style={{ justifySelf: "start", color: "var(--crit)" }} onClick={() => setOpen(true)}>Delete {name} (added by mistake)</button>
+        <span className="small muted">Available until anything is recorded for them.</span>
+      </div>
+    );
+  }
+  return (
+    <form action={formAction} className="card" style={{ borderColor: "var(--crit)" }}>
+      <h2>Delete {name}?</h2>
+      <p className="small muted" style={{ margin: 0 }}>
+        Only for a resident added by mistake, such as a test or a duplicate. They&apos;re removed for good, along with their photo; the audit log keeps who deleted them and why.
+        If {name} really lived here, discharge them instead.
+      </p>
+      <div className="field"><label htmlFor="delReason">Why are you deleting them?</label><input id="delReason" name="reason" required maxLength={300} placeholder="For example: added twice by mistake" /></div>
+      <Status state={state} />
+      <div className="row">
+        <button type="button" className="btn" onClick={() => setOpen(false)}>Cancel</button>
+        <button className="btn danger" disabled={pending}>Delete for good</button>
+      </div>
+    </form>
+  );
+}
+
 export function ReadmitForm({ action, today }: { action: Action; today: string }) {
   const [state, formAction, pending] = useActionState(action, {});
   return (

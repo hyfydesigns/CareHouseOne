@@ -1,11 +1,11 @@
 import { and, eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createTestDb, withTenant, type DB } from "@/db/client";
-import { auditLog, medicationOrders, progressNotes, prnFollowups, sessions, shiftPunches, users } from "@/db/schema";
+import { auditLog, medicationOrders, progressNotes, prnFollowups, residentPhotos, residents, sessions, shiftPunches, users } from "@/db/schema";
 import type { Actor } from "@/lib/permissions";
 import { zonedToUtc } from "@/lib/time";
 import { createOrder, medicationPass, recordFollowup, recordPrnDose } from "@/server/meds";
-import { dischargeResident, getResident, listDischarged, listResidents, readmitResident, updateResident } from "@/server/residents";
+import { createResident, deleteResident, dischargeResident, getResident, hasCareRecords, listDischarged, listResidents, readmitResident, updateResident } from "@/server/residents";
 import { seedCare, seedDemo, type Seeded, type SeededCare } from "@/server/seed";
 import { inviteStaff, updateStaff } from "@/server/staff";
 import { timesheet, timesheetCsv } from "@/server/timesheets";
@@ -97,6 +97,42 @@ describe("editing residents", () => {
     expect((await inOrg((tx) => readmitResident(tx, owner, diego, { date: "2026-10-17" }))).ok).toBe(true);
     const back = await inOrg((tx) => getResident(tx, owner, diego));
     expect(back).toMatchObject({ status: "active", admittedOn: "2026-10-17", dischargedOn: null });
+  });
+});
+
+describe("deleting a resident added by mistake", () => {
+  const add = (firstName: string) =>
+    inOrg(async (tx) => {
+      const r = await createResident(tx, owner, s.orgId, { facilityId: s.facilities.cedarRidge, firstName, lastName: "Test", room: "9" });
+      if (!r.ok) throw new Error(r.error);
+      return r.data!.id;
+    });
+
+  it("lets an owner delete a resident with no care records, with a reason, and audits it", async () => {
+    const id = await add("Dupe");
+    const admin: Actor = { id: s.users.manager.id, role: "admin", facilityIds: both() };
+    expect((await inOrg((tx) => deleteResident(tx, admin, id, { reason: "Added twice" }))).ok).toBe(false);
+    const noReason = await inOrg((tx) => deleteResident(tx, owner, id, { reason: "" }));
+    expect(!noReason.ok && noReason.error).toMatch(/Say why/);
+    await db.insert(residentPhotos).values({ residentId: id, orgId: s.orgId, data: Buffer.from([0xff, 0xd8, 0xff]), contentType: "image/jpeg" });
+    const r = await inOrg((tx) => deleteResident(tx, owner, id, { reason: "Added twice by mistake" }));
+    expect(r.ok).toBe(true);
+    expect(await db.select().from(residents).where(eq(residents.id, id))).toHaveLength(0);
+    expect(await db.select().from(residentPhotos).where(eq(residentPhotos.residentId, id))).toHaveLength(0);
+    const [log] = await db.select().from(auditLog).where(and(eq(auditLog.action, "resident_deleted"), eq(auditLog.entityId, id)));
+    expect(log.details).toMatchObject({ name: "Dupe Test", reason: "Added twice by mistake" });
+  });
+
+  it("refuses once anything is recorded for them", async () => {
+    const id = await add("Real");
+    expect(await inOrg((tx) => hasCareRecords(tx, id))).toBe(false);
+    await inOrg((tx) =>
+      createOrder(tx, owner, s.orgId, id, { name: "Vitamin D", strength: "1000 IU tablet", route: "By mouth", purpose: "Supplement", type: "scheduled", times: ["08:00"], startDate: "2026-10-16" }, at("07:00")),
+    );
+    const r = await inOrg((tx) => deleteResident(tx, owner, id, { reason: "Test" }));
+    expect(!r.ok && r.error).toMatch(/Discharge them instead/);
+    // Seeded residents with medication history can never be deleted either.
+    expect((await inOrg((tx) => deleteResident(tx, owner, c.residents.ben.id, { reason: "Test" }))).ok).toBe(false);
   });
 });
 

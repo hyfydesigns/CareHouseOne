@@ -1,7 +1,18 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import type { Tx } from "@/db/client";
-import { facilities, residents, type Resident } from "@/db/schema";
+import {
+  administrations,
+  facilities,
+  medicationOrders,
+  prnFollowups,
+  progressNotes,
+  residentDiagnoses,
+  residentPhotos,
+  residents,
+  vitals,
+  type Resident,
+} from "@/db/schema";
 import { randomBytes } from "node:crypto";
 import { canManageCare, canSeeFacility, type Actor } from "@/lib/permissions";
 import { isDate } from "@/lib/time";
@@ -202,6 +213,43 @@ export async function dischargeResident(tx: Tx, actor: Actor, residentId: string
   await tx.update(residents).set({ status: "discharged", dischargedOn: p.data.date, dischargeReason: p.data.reason }).where(eq(residents.id, r.id));
   await audit(tx, { orgId: r.orgId, actorId: actor.id, action: "resident_discharged", entity: "resident", entityId: r.id, details: { date: p.data.date, reason: p.data.reason } });
   return { ok: true, message: `${residentName(r)} is discharged. Their records stay available under Residents > Discharged.` };
+}
+
+/**
+ * A resident can only be deleted while nothing has been recorded for them: no medication orders
+ * (so no doses or follow-ups), vital signs, progress notes or diagnoses. Anything else is a care
+ * record that must be kept, so the resident is discharged instead.
+ */
+export async function hasCareRecords(tx: Tx, residentId: string): Promise<boolean> {
+  const tables = [medicationOrders, administrations, prnFollowups, vitals, progressNotes, residentDiagnoses];
+  for (const t of tables) {
+    const [row] = await tx.select({ id: t.residentId }).from(t).where(eq(t.residentId, residentId)).limit(1);
+    if (row) return true;
+  }
+  return false;
+}
+
+/** For a resident added by mistake (a test or a duplicate). Owners only; the audit log keeps who, when and why. */
+export async function deleteResident(tx: Tx, actor: Actor, residentId: string, raw: unknown): Promise<Result> {
+  if (actor.role !== "owner") return { ok: false, error: "Only owners can delete residents." };
+  const r = await getResident(tx, actor, residentId);
+  if (!r) return { ok: false, error: "That resident doesn't exist." };
+  const p = z.object({ reason: z.string().trim().min(3, "Say why, for example: added twice by mistake.").max(300) }).safeParse(raw);
+  if (!p.success) return { ok: false, error: p.error.issues[0].message };
+  if (await hasCareRecords(tx, r.id)) {
+    return { ok: false, error: `${residentName(r)} already has care records, which must be kept. Discharge them instead.` };
+  }
+  await tx.delete(residentPhotos).where(eq(residentPhotos.residentId, r.id));
+  await tx.delete(residents).where(eq(residents.id, r.id));
+  await audit(tx, {
+    orgId: r.orgId,
+    actorId: actor.id,
+    action: "resident_deleted",
+    entity: "resident",
+    entityId: r.id,
+    details: { name: residentName(r), facilityId: r.facilityId, admittedOn: r.admittedOn, reason: p.data.reason },
+  });
+  return { ok: true, message: `${residentName(r)} is deleted.` };
 }
 
 export async function readmitResident(tx: Tx, actor: Actor, residentId: string, raw: unknown): Promise<Result> {

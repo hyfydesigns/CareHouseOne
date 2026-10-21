@@ -7,7 +7,7 @@ import { getDb, withTenant, type Tx } from "@/db/client";
 import type { Actor } from "@/lib/permissions";
 import { requireUser } from "@/lib/session";
 import { adjustCount, createOrder, recordFollowup, recordPrnDose, recordScheduledDose, stopOrder } from "@/server/meds";
-import { createResident, dischargeResident, readmitResident, updateResident } from "@/server/residents";
+import { createResident, deleteResident, dischargeResident, readmitResident, updateResident } from "@/server/residents";
 
 /** Every care action re-checks the signed-in user and runs inside their organization only. */
 async function asMe<T>(fn: (tx: Tx, actor: Actor, orgId: string) => Promise<T>): Promise<T> {
@@ -56,6 +56,13 @@ export async function dischargeAction(residentId: string, _: FormState, fd: Form
   revalidatePath(`/residents/${residentId}`);
   revalidatePath("/residents");
   return r.ok ? { message: r.message } : { error: r.error };
+}
+
+export async function deleteResidentAction(residentId: string, _: FormState, fd: FormData): Promise<FormState> {
+  const r = await asMe((tx, actor) => deleteResident(tx, actor, residentId, obj(fd, ["reason"])));
+  if (!r.ok) return { error: r.error };
+  revalidatePath("/residents");
+  redirect("/residents");
 }
 
 export async function readmitAction(residentId: string, _: FormState, fd: FormData): Promise<FormState> {

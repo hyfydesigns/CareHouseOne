@@ -9,9 +9,9 @@ import { canGiveMeds, canManageCare } from "@/lib/permissions";
 import { requireUser } from "@/lib/session";
 import { clock, localClock, localDate } from "@/lib/time";
 import { fmtCount, isCountable, listOrders, monthRecord, openFollowups, residentSlots, supplyOf } from "@/server/meds";
-import { getResident, visibleFacilities } from "@/server/residents";
-import { addOrderAction, adjustCountAction, dischargeAction, followupAction, readmitAction, stopOrderAction, updateResidentAction } from "../../care-actions";
-import { AddOrderForm, CountAdjust, DischargeForm, EditResidentForm, FollowupForm, ReadmitForm, StopOrderButton } from "../../care-forms";
+import { getResident, hasCareRecords, visibleFacilities } from "@/server/residents";
+import { addOrderAction, adjustCountAction, deleteResidentAction, dischargeAction, followupAction, readmitAction, stopOrderAction, updateResidentAction } from "../../care-actions";
+import { AddOrderForm, CountAdjust, DeleteResidentForm, DischargeForm, EditResidentForm, FollowupForm, ReadmitForm, StopOrderButton } from "../../care-forms";
 import { SlotRow } from "../../meds/slot-row";
 import { PhotoUpload } from "./photo-upload";
 import { DiagnosesPanel, NotesPanel, VitalsPanel } from "../../care/panels";
@@ -64,6 +64,7 @@ export default async function ResidentPage({ params, searchParams }: { params: P
       orders: tab === "orders" ? await listOrders(tx, r.id) : [],
       record: tab === "record" ? await monthRecord(tx, r, y, mo, now) : null,
       homes: tab === "details" ? (await visibleFacilities(tx, actor)).map((h) => ({ id: h.id, name: h.name })) : [],
+      deletable: tab === "details" && me.role === "owner" && !(await hasCareRecords(tx, r.id)),
     };
   });
   if (!data) notFound();
@@ -235,6 +236,7 @@ export default async function ResidentPage({ params, searchParams }: { params: P
           ) : (
             <ReadmitForm action={readmitAction.bind(null, r.id)} today={data.today} />
           )}
+          {data.deletable && <DeleteResidentForm action={deleteResidentAction.bind(null, r.id)} name={r.firstName} />}
         </>
       )}
 
