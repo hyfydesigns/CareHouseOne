@@ -1,7 +1,7 @@
 import { and, asc, count, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import type { Tx } from "@/db/client";
-import { deviceFacilities, devices, facilities, residents, shiftPunches, userFacilities, users } from "@/db/schema";
+import { deviceFacilities, devices, facilities, incidents, residents, shiftPunches, userFacilities, users } from "@/db/schema";
 import type { Actor } from "@/lib/permissions";
 import { validZone } from "@/lib/time-zones";
 import { audit } from "./audit";
@@ -26,8 +26,9 @@ export async function listHomes(tx: Tx) {
     .groupBy(residents.facilityId);
   const ever = await tx.select({ facilityId: residents.facilityId, n: count() }).from(residents).groupBy(residents.facilityId);
   const shifts = await tx.select({ facilityId: shiftPunches.facilityId, n: count() }).from(shiftPunches).groupBy(shiftPunches.facilityId);
+  const reports = await tx.select({ facilityId: incidents.facilityId, n: count() }).from(incidents).groupBy(incidents.facilityId);
   const n = (rows: Array<{ facilityId: string; n: number }>, id: string) => rows.find((r) => r.facilityId === id)?.n ?? 0;
-  return homes.map((h) => ({ ...h, activeResidents: n(active, h.id), removable: homes.length > 1 && n(ever, h.id) === 0 && n(shifts, h.id) === 0 }));
+  return homes.map((h) => ({ ...h, activeResidents: n(active, h.id), removable: homes.length > 1 && n(ever, h.id) === 0 && n(shifts, h.id) === 0 && n(reports, h.id) === 0 }));
 }
 
 /**

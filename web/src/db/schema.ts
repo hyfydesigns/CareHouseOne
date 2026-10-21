@@ -561,3 +561,48 @@ export const residentPhotos = pgTable("resident_photos", {
   updatedBy: uuid("updated_by").references(() => users.id),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * An incident report: a fall, injury, behavior incident, medication error and so on. Permanent
+ * once filed (like progress notes); everything after that, including who was notified and closing
+ * it, is added as a follow-up.
+ */
+export const incidents = pgTable(
+  "incidents",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    facilityId: uuid("facility_id").notNull().references(() => facilities.id),
+    /** The resident involved, if any. */
+    residentId: uuid("resident_id").references(() => residents.id),
+    type: text("type").notNull(),
+    severity: text("severity").notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    location: text("location"),
+    description: text("description").notNull(),
+    actionTaken: text("action_taken").notNull(),
+    injury: boolean("injury").notNull().default(false),
+    injuryDetails: text("injury_details"),
+    witnesses: text("witnesses"),
+    reportedBy: uuid("reported_by").notNull().references(() => users.id),
+    reportedAt: timestamp("reported_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("incidents_facility_idx").on(t.facilityId, t.occurredAt), index("incidents_resident_idx").on(t.residentId, t.occurredAt)],
+);
+
+export type Incident = typeof incidents.$inferSelect;
+
+/** Notifications, notes, closing and reopening an incident: added, never changed. */
+export const incidentFollowups = pgTable(
+  "incident_followups",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    incidentId: uuid("incident_id").notNull().references(() => incidents.id),
+    kind: text("kind").notNull(),
+    details: text("details"),
+    recordedBy: uuid("recorded_by").notNull().references(() => users.id),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("incident_followups_incident_idx").on(t.incidentId, t.recordedAt)],
+);

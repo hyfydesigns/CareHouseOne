@@ -26,6 +26,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <NavLink href="/shift">Sign In / Sign Out</NavLink>
             <NavLink href="/vitals">Vital Signs</NavLink>
             <NavLink href="/notes">Progress Notes</NavLink>
+            <NavLink href="/incidents">Incident Reports</NavLink>
           </>
         ) : (
           <>
@@ -35,6 +36,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <NavLink href="/vitals">Vital signs</NavLink>
             <NavLink href="/notes">Progress notes</NavLink>
             <NavLink href="/shift">Sign in / out</NavLink>
+            <NavLink href="/incidents">Incidents</NavLink>
           </>
         )}
         {canViewStaff(me) && <NavLink href="/staff">Staff</NavLink>}

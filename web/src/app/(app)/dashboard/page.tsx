@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/session";
 import { canManageCare } from "@/lib/permissions";
 import { localDate } from "@/lib/time";
 import { unreviewedVitals } from "@/server/care";
+import { openIncidentCount } from "@/server/incidents";
 import { fmtCount, overdueFollowups, runningLow } from "@/server/meds";
 import { homeSummaries } from "@/server/dashboard";
 import { reviewVitalAction } from "../care/actions";
@@ -26,7 +27,8 @@ export default async function DashboardPage() {
     const review = canManageCare(me) ? await unreviewedVitals(tx, actor) : [];
     const followups = await overdueFollowups(tx, actor, now);
     const low = canManageCare(me) ? await runningLow(tx, actor) : [];
-    return { org, homes, staff, review, followups, low };
+    const incidents = await openIncidentCount(tx, actor);
+    return { org, homes, staff, review, followups, low, incidents };
   });
   return (
     <>
@@ -34,6 +36,11 @@ export default async function DashboardPage() {
         <h1>Good to see you, {me.name.split(" ")[0]}</h1>
         <p className="muted">{data.org?.name}</p>
       </div>
+      {data.incidents > 0 && (
+        <p className="banner offline" role="status" style={{ margin: 0 }}>
+          {data.incidents} open incident report{data.incidents === 1 ? "" : "s"} to follow up. <Link href="/incidents">Review them</Link>
+        </p>
+      )}
       <div className="homes">
         {data.homes.map((h) => {
           const d = h.doses;

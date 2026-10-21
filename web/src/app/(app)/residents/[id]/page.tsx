@@ -93,6 +93,10 @@ export default async function ResidentPage({ params, searchParams }: { params: P
           <span className="spacer" />
           {r.allergies.length ? <span className="allergy">Allergies: {r.allergies.join(", ")}</span> : <span className="pill ok">No known allergies</span>}
         </div>
+        <div className="row" style={{ gap: 6, marginTop: 8 }}>
+          <Link className="btn small" href={`/incidents/new?resident=${r.id}`}>Report an incident</Link>
+          {canManageCare(me) && <Link className="btn small" href={`/print/residents/${r.id}${data.ym ? `?m=${data.ym.y}-${String(data.ym.mo).padStart(2, "0")}` : ""}`} target="_blank">Print month record</Link>}
+        </div>
       </div>
       <nav className="chips" aria-label="Resident sections">
         {TABS.filter(([k]) => (k !== "card" || data.wristbands) && (k !== "details" || canManageCare(me))).map(([k, label]) => (
