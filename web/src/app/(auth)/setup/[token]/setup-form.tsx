@@ -2,16 +2,8 @@
 
 import { useActionState, useState } from "react";
 import { Status, type FormState } from "@/components/status";
+import { ZONES } from "@/lib/time-zones";
 
-const ZONES: Array<[string, string]> = [
-  ["America/New_York", "Eastern"],
-  ["America/Chicago", "Central"],
-  ["America/Denver", "Mountain"],
-  ["America/Phoenix", "Arizona"],
-  ["America/Los_Angeles", "Pacific"],
-  ["America/Anchorage", "Alaska"],
-  ["Pacific/Honolulu", "Hawaii"],
-];
 
 export function SetupForm({
   action,
@@ -45,7 +37,7 @@ export function SetupForm({
     <>
     <h1>Set up your organization</h1>
     <p className="muted">
-      Your free trial has started. Add your organization and homes; you can add more homes later. The owner gets an email to set a password.
+      Your free trial has started. Add your organization and homes; you can add more homes later in Settings. The owner gets an email to set a password.
     </p>
     <form action={formAction} className="stack">
       <div className="field">

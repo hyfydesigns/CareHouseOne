@@ -6,6 +6,7 @@ import { getDb, withTenant } from "@/db/client";
 import { clearCookie, DEVICE_COOKIE, requireUser, setDeviceCookie } from "@/lib/session";
 import { adminLockedMessage } from "@/server/billing";
 import { registerDevice, revokeDevice, updateDeviceHomes } from "@/server/devices";
+import { addHome, removeHome, updateHome } from "@/server/homes";
 import { setResidentCheck } from "@/server/org";
 
 export async function residentCheckAction(_: FormState, fd: FormData): Promise<FormState> {
@@ -51,4 +52,29 @@ export async function forgetThisDeviceAction(): Promise<FormState> {
   await clearCookie(DEVICE_COOKIE);
   revalidatePath("/settings");
   return { message: "This browser is no longer marked as a tablet." };
+}
+
+const homeFields = (fd: FormData) => ({ name: fd.get("name"), timeZone: fd.get("timeZone"), beds: fd.get("beds") || 0 });
+
+export async function addHomeAction(_: FormState, fd: FormData): Promise<FormState> {
+  const me = await requireUser();
+  const locked = await withTenant(await getDb(), me.orgId, adminLockedMessage);
+  if (locked) return { error: locked };
+  const r = await withTenant(await getDb(), me.orgId, (tx) => addHome(tx, me, me.orgId, homeFields(fd)));
+  revalidatePath("/", "layout");
+  return r.ok ? { message: r.message } : { error: r.error };
+}
+
+export async function updateHomeAction(facilityId: string, _: FormState, fd: FormData): Promise<FormState> {
+  const me = await requireUser();
+  const r = await withTenant(await getDb(), me.orgId, (tx) => updateHome(tx, me, facilityId, homeFields(fd)));
+  revalidatePath("/", "layout");
+  return r.ok ? { message: r.message } : { error: r.error };
+}
+
+export async function removeHomeAction(facilityId: string): Promise<FormState> {
+  const me = await requireUser();
+  const r = await withTenant(await getDb(), me.orgId, (tx) => removeHome(tx, me, facilityId));
+  revalidatePath("/", "layout");
+  return r.ok ? { message: r.message } : { error: r.error };
 }

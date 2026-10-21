@@ -1,13 +1,15 @@
 import { and, eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createTestDb, withTenant, type DB } from "@/db/client";
-import { auditLog, medicationOrders, progressNotes, prnFollowups, residentPhotos, residents, sessions, shiftPunches, users } from "@/db/schema";
+import { auditLog, facilities, userFacilities, medicationOrders, progressNotes, prnFollowups, residentPhotos, residents, sessions, shiftPunches, users } from "@/db/schema";
 import type { Actor } from "@/lib/permissions";
 import { zonedToUtc } from "@/lib/time";
 import { createOrder, medicationPass, recordFollowup, recordPrnDose } from "@/server/meds";
 import { createResident, deleteResident, dischargeResident, getResident, hasCareRecords, listDischarged, listResidents, readmitResident, updateResident } from "@/server/residents";
 import { seedCare, seedDemo, type Seeded, type SeededCare } from "@/server/seed";
 import { inviteStaff, updateStaff } from "@/server/staff";
+import { addHome, listHomes, removeHome, updateHome } from "@/server/homes";
+import { orgBill } from "@/server/billing";
 import { timesheet, timesheetCsv } from "@/server/timesheets";
 
 const TZ = "America/New_York";
@@ -245,5 +247,47 @@ describe("timesheets", () => {
       people: [],
     });
     expect(csv).toContain(`"'=HYPERLINK(""x"")"`);
+  });
+});
+
+describe("homes", () => {
+  it("lets owners add a home, assigns the owners to it, and bills it from the next month", async () => {
+    const admin: Actor = { id: s.users.manager.id, role: "admin", facilityIds: both() };
+    expect((await inOrg((tx) => addHome(tx, admin, s.orgId, { name: "Oak House", timeZone: "America/Chicago", beds: 6 }))).ok).toBe(false);
+    expect((await inOrg((tx) => addHome(tx, owner, s.orgId, { name: "Oak House", timeZone: "Mars/Olympus", beds: 6 }))).ok).toBe(false);
+    const dupe = await inOrg((tx) => addHome(tx, owner, s.orgId, { name: "Cedar Ridge", timeZone: "America/Chicago", beds: 6 }));
+    expect(!dupe.ok && dupe.error).toMatch(/already have a home/);
+    const before = await orgBill(db, s.orgId);
+    const r = await inOrg((tx) => addHome(tx, owner, s.orgId, { name: "Oak House", timeZone: "America/Chicago", beds: "6" }));
+    if (!r.ok) throw new Error(r.error);
+    const oak = r.data!.id;
+    const links = await db.select().from(userFacilities).where(eq(userFacilities.facilityId, oak));
+    expect(links.map((l) => l.userId)).toContain(s.users.owner.id);
+    expect((await orgBill(db, s.orgId)).total).toBe(before.total + 149);
+
+    const edit = await inOrg((tx) => updateHome(tx, owner, oak, { name: "Oak House North", timeZone: "America/New_York", beds: 8 }));
+    expect(edit.ok).toBe(true);
+    const [row] = await db.select().from(facilities).where(eq(facilities.id, oak));
+    expect(row).toMatchObject({ name: "Oak House North", timeZone: "America/New_York", beds: 8 });
+    expect((await inOrg((tx) => updateHome(tx, owner, oak, { name: "Maple House", timeZone: "America/Chicago", beds: 8 }))).ok).toBe(false);
+    const [log] = await db.select().from(auditLog).where(and(eq(auditLog.action, "home_updated"), eq(auditLog.entityId, oak)));
+    expect((log.details as { changed: string[] }).changed).toEqual(["name", "timeZone", "beds"]);
+  });
+
+  it("removes only a home added by mistake, and not while someone works only there", async () => {
+    const homes = await inOrg((tx) => listHomes(tx));
+    const oak = homes.find((h) => h.name === "Oak House North")!;
+    expect(oak.removable).toBe(true);
+    expect(homes.find((h) => h.id === s.facilities.cedarRidge)?.removable).toBe(false);
+    expect((await inOrg((tx) => removeHome(tx, owner, s.facilities.cedarRidge))).ok).toBe(false);
+    // A caregiver assigned only to Oak House blocks it until they're moved.
+    const invited = await inOrg((tx) => inviteStaff(tx, owner, s.orgId, { name: "Kai Lin", email: "kai.lin@harborviewliving.test", role: "caregiver", facilityIds: [oak.id] }, "http://localhost"));
+    expect(invited.ok).toBe(true);
+    const blocked = await inOrg((tx) => removeHome(tx, owner, oak.id));
+    expect(!blocked.ok && blocked.error).toMatch(/Kai Lin/);
+    const [kai] = await db.select().from(users).where(eq(users.email, "kai.lin@harborviewliving.test"));
+    expect((await inOrg((tx) => updateStaff(tx, owner, kai.id, { role: "caregiver", facilityIds: [s.facilities.cedarRidge, oak.id] }))).ok).toBe(true);
+    expect((await inOrg((tx) => removeHome(tx, owner, oak.id))).ok).toBe(true);
+    expect(await db.select().from(facilities).where(eq(facilities.id, oak.id))).toHaveLength(0);
   });
 });

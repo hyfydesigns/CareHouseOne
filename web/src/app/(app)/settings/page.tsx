@@ -9,8 +9,10 @@ import { describeBill, INCLUDED_RESIDENTS, monthlyBill, PRICE_PER_EXTRA_RESIDENT
 import { paypalLive } from "@/server/paypal";
 import { CONTACT_EMAIL } from "../../(site)/shell";
 import { listDevices } from "@/server/devices";
+import { canManageHomes, listHomes } from "@/server/homes";
 import { getOrg } from "@/server/org";
-import { deviceHomesAction, forgetThisDeviceAction, registerDeviceAction, residentCheckAction, revokeDeviceAction } from "./actions";
+import { addHomeAction, deviceHomesAction, forgetThisDeviceAction, removeHomeAction, updateHomeAction, registerDeviceAction, residentCheckAction, revokeDeviceAction } from "./actions";
+import { AddHomeForm, HomeRowView } from "./homes-form";
 import { DeviceHomesForm, ForgetDeviceButton, RegisterDeviceForm, ResidentCheckForm, RevokeDeviceButton } from "./settings-form";
 
 export default async function SettingsPage() {
@@ -19,6 +21,7 @@ export default async function SettingsPage() {
   const actor = { id: me.id, role: me.role, facilityIds: me.facilityIds };
   const data = await withTenant(await getDb(), me.orgId, async (tx) => ({ org: await getOrg(tx, me.orgId), devices: await listDevices(tx, actor), homes: await tx.select().from(facilities).orderBy(asc(facilities.name)),
     sub: await orgSubscription(tx),
+    homeRows: canManageHomes(me) ? await listHomes(tx) : [],
     residentsByHome: await tx.select({ facilityId: residents.facilityId, n: count() }).from(residents).where(and(eq(residents.orgId, me.orgId), eq(residents.status, "active"))).groupBy(residents.facilityId),
   }));
   if (!data.org) redirect("/dashboard");
@@ -27,6 +30,8 @@ export default async function SettingsPage() {
   const when = (d: Date | null) => (d ? d.toLocaleString("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true }) : "—");
   const active = data.devices.filter((r) => !r.d.revokedAt);
   const homeOptions = data.homes.map((h) => ({ id: h.id, name: h.name }));
+  const now = new Date();
+  const firstOfNext = `1st of ${new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toLocaleDateString("en-US", { timeZone: "UTC", month: "long" })}`;
   const bill = billingState(data.sub);
   const byHome = new Map(data.residentsByHome.map((r) => [r.facilityId, r.n]));
   const homeCounts = data.homes.map((h) => ({ name: h.name, n: byHome.get(h.id) ?? 0 }));
@@ -39,6 +44,25 @@ export default async function SettingsPage() {
         <h1>Settings</h1>
         <p className="muted">{data.org.name}</p>
       </div>
+      {canManageHomes(me) && (
+        <section className="card" aria-labelledby="homes-h">
+          <h2 id="homes-h">Homes</h2>
+          <div className="tablewrap">
+            <table>
+              <thead><tr><th>Home</th><th>Time zone</th><th>Residents</th><th></th></tr></thead>
+              <tbody>
+                {data.homeRows.map((h) => (
+                  <HomeRowView key={h.id} home={h} update={updateHomeAction.bind(null, h.id)} remove={removeHomeAction.bind(null, h.id)} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <AddHomeForm action={addHomeAction} costNote={data.sub ? `Each home adds ${usd(PRICE_PER_HOME)} a month, from the ${firstOfNext}. You'll be asked to approve the new amount in PayPal.` : null} />
+          <p className="small muted" style={{ margin: 0 }}>
+            A home can only be removed if it was added by mistake: no resident has ever lived there and no shift was worked there.
+          </p>
+        </section>
+      )}
       <section className="card">
         <h2>Home tablets</h2>
         <p className="small muted" style={{ margin: 0 }}>

@@ -3,17 +3,9 @@ import { z } from "zod";
 import type { DB } from "@/db/client";
 import { accountTokens, facilities, organizations, subscriptions, userFacilities, users } from "@/db/schema";
 import { randomToken, sha256 } from "@/lib/crypto";
+import { validZone } from "@/lib/time-zones";
 import { audit, sendMail } from "./audit";
 import { INVITE_DAYS } from "./auth";
-
-const validZone = (tz: string) => {
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: tz });
-    return true;
-  } catch {
-    return false;
-  }
-};
 
 export const provisionSchema = z.object({
   orgName: z.string().trim().min(2).max(120),
