@@ -153,17 +153,28 @@ export function RemoveDiagnosisButton({ action, residentId, diagnosisId, code }:
   );
 }
 
-export function ShiftButton({ action, signedIn, tabletHome }: { action: Action; signedIn: boolean; tabletHome: string | null }) {
+/** `homes`: the tablet's homes this person can start a shift at (null when not on a registered tablet). */
+export function ShiftButton({ action, signedIn, homes }: { action: Action; signedIn: boolean; homes: Array<{ id: string; name: string }> | null }) {
   const [state, formAction, pending] = useActionState(action, {});
-  const blocked = !signedIn && !tabletHome;
+  const blocked = !signedIn && !homes?.length;
   return (
     <form action={formAction} className="stack">
+      <input type="hidden" name="op" value={signedIn ? "out" : "in"} />
       <div className="row">
-        <button className={`btn big ${signedIn ? "" : "primary"}`} name="op" value={signedIn ? "out" : "in"} disabled={pending || blocked} style={{ minWidth: 220 }}>
-          {signedIn ? "Sign out" : tabletHome ? `Sign in at ${tabletHome}` : "Sign in"}
-        </button>
+        {signedIn || blocked ? (
+          <button className={`btn big ${signedIn ? "" : "primary"}`} disabled={pending || blocked} style={{ minWidth: 220 }}>{signedIn ? "Sign out" : "Sign in"}</button>
+        ) : (
+          homes!.map((h) => (
+            <button key={h.id} className="btn big primary" name="facilityId" value={h.id} disabled={pending} style={{ minWidth: 220 }}>Sign in at {h.name}</button>
+          ))
+        )}
       </div>
-      {blocked && <p className="small muted" style={{ margin: 0 }}>Shift sign-in works on the home&apos;s registered tablet, so your hours are recorded at the right home.</p>}
+      {!signedIn && (homes?.length ?? 0) > 1 && <p className="small muted" style={{ margin: 0 }}>Choose the home you&apos;re working at today; your hours are recorded there.</p>}
+      {blocked && (
+        <p className="small muted" style={{ margin: 0 }}>
+          {homes ? "This tablet isn't used at any of your homes. Ask your manager." : "Shift sign-in works on the home's registered tablet, so your hours are recorded at the right home."}
+        </p>
+      )}
       <Status state={state} />
     </form>
   );

@@ -187,18 +187,22 @@ export async function shiftStatus(tx: Tx, actor: Actor) {
   return openPunch(tx, actor.id);
 }
 
+/** The homes someone can start a shift at on this tablet: the tablet's homes they're assigned to. */
+export function shiftHomes(actor: Pick<Actor, "facilityIds">, deviceFacilityIds: string[] | null | undefined): string[] {
+  return (deviceFacilityIds ?? []).filter((id) => actor.facilityIds.includes(id));
+}
+
 /**
- * Starts a shift at one of the actor's homes. Production adds a location check (tablet registered
- * to the home, or geofence) so sign-in only works on site.
+ * Starts a shift at one of the tablet's homes. When the tablet is used at more than one of the
+ * person's homes they choose which; the shift (and the hours) are recorded there.
  */
-/**
- * Shift sign-in is the location check: it only works on a tablet registered to a home, and the
- * shift is recorded at that tablet's home. Pass the device's home, or null for any other browser.
- */
-export async function signInShift(tx: Tx, actor: Actor, orgId: string, deviceFacilityId: string | null, now: Date): Promise<Result> {
-  if (!deviceFacilityId) return { ok: false, error: "Sign in to your shift on the home's tablet." };
-  const facilityId = deviceFacilityId;
-  if (!actor.facilityIds.includes(facilityId)) return { ok: false, error: "You're not assigned to the home this tablet belongs to." };
+export async function signInShift(tx: Tx, actor: Actor, orgId: string, deviceFacilityIds: string[] | null, chosen: string | null, now: Date): Promise<Result> {
+  if (!deviceFacilityIds) return { ok: false, error: "Sign in to your shift on the home's tablet." };
+  const eligible = shiftHomes(actor, deviceFacilityIds);
+  if (!eligible.length) return { ok: false, error: "You're not assigned to any home this tablet is used at." };
+  const facilityId = chosen || (eligible.length === 1 ? eligible[0] : null);
+  if (!facilityId) return { ok: false, error: "Choose the home you're working at." };
+  if (!eligible.includes(facilityId)) return { ok: false, error: "You're not assigned to that home, or this tablet isn't used there." };
   const open = await openPunch(tx, actor.id);
   if (open) return { ok: false, error: "You're already signed in. Sign out first." };
   await tx.insert(shiftPunches).values({ orgId, userId: actor.id, facilityId, signedInAt: now });

@@ -109,13 +109,12 @@ export const sessions = pgTable(
   (t) => [uniqueIndex("sessions_token_uq").on(t.tokenHash), index("sessions_user_idx").on(t.userId)],
 );
 
-/** A shared tablet registered to one home. Shift sign-in only works on a registered device. */
+/** A shared tablet, used at one or more homes (device_facilities). Shift sign-in only works on a registered device. */
 export const devices = pgTable(
   "devices",
   {
     id: id(),
     orgId: uuid("org_id").notNull().references(() => organizations.id),
-    facilityId: uuid("facility_id").notNull().references(() => facilities.id),
     name: text("name").notNull(),
     /** SHA-256 of the long-lived device cookie. */
     tokenHash: text("token_hash").notNull(),
@@ -126,6 +125,17 @@ export const devices = pgTable(
     revokedBy: uuid("revoked_by").references(() => users.id),
   },
   (t) => [uniqueIndex("devices_token_uq").on(t.tokenHash)],
+);
+
+/** The homes a tablet is used at (one or more). Caregivers assigned to any of them can sign in on it. */
+export const deviceFacilities = pgTable(
+  "device_facilities",
+  {
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    deviceId: uuid("device_id").notNull().references(() => devices.id),
+    facilityId: uuid("facility_id").notNull().references(() => facilities.id),
+  },
+  (t) => [primaryKey({ columns: [t.deviceId, t.facilityId] })],
 );
 
 /** A person's quick-unlock PIN on one tablet, valid until the end of their shift. */

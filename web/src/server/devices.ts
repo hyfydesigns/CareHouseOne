@@ -1,7 +1,7 @@
-import { and, asc, eq, gt, isNull } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import type { DB, Tx } from "@/db/client";
-import { devicePins, devices, facilities, sessions, users } from "@/db/schema";
+import { deviceFacilities, devicePins, devices, facilities, sessions, users } from "@/db/schema";
 import { randomToken, sha256 } from "@/lib/crypto";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { canSeeFacility, type Actor } from "@/lib/permissions";
@@ -14,20 +14,51 @@ export function canManageDevices(actor: Pick<Actor, "role">): boolean {
   return actor.role === "owner" || actor.role === "admin";
 }
 
+const homesSchema = z.array(z.string().uuid()).min(1, "Choose at least one home the tablet is used at.");
 const registerSchema = z.object({
-  facilityId: z.string().uuid("Choose a home."),
+  facilityIds: homesSchema,
   name: z.string().trim().min(2, "Name the tablet, for example Cedar Ridge med room.").max(60),
 });
+
+/** The homes a tablet is used at, checked to belong to this organization. */
+async function setHomes(tx: Tx, orgId: string, deviceId: string, facilityIds: string[]): Promise<string | null> {
+  const homes = await tx.select({ id: facilities.id }).from(facilities).where(inArray(facilities.id, facilityIds));
+  if (homes.length !== new Set(facilityIds).size) return "Choose homes from your organization.";
+  await tx.delete(deviceFacilities).where(eq(deviceFacilities.deviceId, deviceId));
+  await tx.insert(deviceFacilities).values(homes.map((h) => ({ orgId, deviceId, facilityId: h.id })));
+  return null;
+}
 
 /** Registers the browser it's called from. The caller stores the returned token in a long-lived cookie. */
 export async function registerDevice(tx: Tx, actor: Actor, orgId: string, raw: unknown): Promise<Result<{ token: string }>> {
   const p = registerSchema.safeParse(raw);
   if (!p.success) return { ok: false, error: p.error.issues[0].message };
   if (!canManageDevices(actor)) return { ok: false, error: "You can't register tablets for that home." };
+  const homes = await tx.select({ id: facilities.id }).from(facilities).where(inArray(facilities.id, p.data.facilityIds));
+  if (homes.length !== new Set(p.data.facilityIds).size) return { ok: false, error: "Choose homes from your organization." };
   const token = randomToken();
-  const [d] = await tx.insert(devices).values({ orgId, facilityId: p.data.facilityId, name: p.data.name, tokenHash: sha256(token), registeredBy: actor.id }).returning();
-  await audit(tx, { orgId, actorId: actor.id, action: "device_registered", entity: "device", entityId: d.id, details: { facilityId: d.facilityId, name: d.name } });
-  return { ok: true, message: `This tablet is now registered to the home as "${d.name}".`, data: { token } };
+  const [d] = await tx.insert(devices).values({ orgId, name: p.data.name, tokenHash: sha256(token), registeredBy: actor.id }).returning();
+  await setHomes(tx, orgId, d.id, p.data.facilityIds);
+  await audit(tx, { orgId, actorId: actor.id, action: "device_registered", entity: "device", entityId: d.id, details: { facilityIds: p.data.facilityIds, name: d.name } });
+  return { ok: true, message: `This tablet is now registered as "${d.name}".`, data: { token } };
+}
+
+/**
+ * Changes the homes a tablet is used at. Everyone signed in on it is signed out, so nobody stays
+ * on a tablet for a home they're no longer allowed at.
+ */
+export async function updateDeviceHomes(tx: Tx, actor: Actor, deviceId: string, raw: unknown): Promise<Result> {
+  if (!canManageDevices(actor)) return { ok: false, error: "You can't manage that tablet." };
+  const p = homesSchema.safeParse(raw);
+  if (!p.success) return { ok: false, error: p.error.issues[0].message };
+  const [d] = await tx.select().from(devices).where(eq(devices.id, deviceId));
+  if (!d || d.revokedAt) return { ok: false, error: "That tablet is removed." };
+  const problem = await setHomes(tx, d.orgId, d.id, p.data);
+  if (problem) return { ok: false, error: problem };
+  await tx.update(sessions).set({ revokedAt: new Date() }).where(and(eq(sessions.deviceId, d.id), isNull(sessions.revokedAt)));
+  await tx.delete(devicePins).where(eq(devicePins.deviceId, d.id));
+  await audit(tx, { orgId: d.orgId, actorId: actor.id, action: "device_homes_changed", entity: "device", entityId: d.id, details: { facilityIds: p.data } });
+  return { ok: true, message: `"${d.name}" is now used at ${p.data.length} home${p.data.length === 1 ? "" : "s"}. Anyone signed in on it was signed out.` };
 }
 
 /** Revoking ends every session opened on the tablet and clears its PINs: a remote lock-out. */
@@ -43,13 +74,20 @@ export async function revokeDevice(tx: Tx, actor: Actor, deviceId: string): Prom
 }
 
 export async function listDevices(tx: Tx, actor: Actor) {
-  const rows = await tx
-    .select({ d: devices, home: facilities.name, by: users.name })
-    .from(devices)
-    .innerJoin(facilities, eq(facilities.id, devices.facilityId))
-    .leftJoin(users, eq(users.id, devices.registeredBy))
-    .orderBy(asc(facilities.name), asc(devices.name));
-  return rows.filter((r) => canSeeFacility(actor, r.d.facilityId));
+  const rows = await tx.select({ d: devices, by: users.name }).from(devices).leftJoin(users, eq(users.id, devices.registeredBy)).orderBy(asc(devices.name));
+  const links = await tx
+    .select({ deviceId: deviceFacilities.deviceId, id: facilities.id, name: facilities.name })
+    .from(deviceFacilities)
+    .innerJoin(facilities, eq(facilities.id, deviceFacilities.facilityId))
+    .orderBy(asc(facilities.name));
+  return rows
+    .map((r) => ({ ...r, homes: links.filter((l) => l.deviceId === r.d.id).map((l) => ({ id: l.id, name: l.name })) }))
+    .filter((r) => r.homes.some((h) => canSeeFacility(actor, h.id)));
+}
+
+/** The homes a tablet is used at. */
+export async function deviceHomeIds(db: DB | Tx, deviceId: string): Promise<string[]> {
+  return (await db.select({ id: deviceFacilities.facilityId }).from(deviceFacilities).where(eq(deviceFacilities.deviceId, deviceId))).map((r) => r.id);
 }
 
 /** Looks up an active device from its cookie (runs before the organization is known). */

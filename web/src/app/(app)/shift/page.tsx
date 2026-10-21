@@ -1,7 +1,7 @@
 import { getDb, withTenant } from "@/db/client";
 import { requireUser } from "@/lib/session";
 import { localDate } from "@/lib/time";
-import { homesFor, myShifts, shiftStatus, todayAtHome } from "@/server/care";
+import { homesFor, myShifts, shiftHomes, shiftStatus, todayAtHome } from "@/server/care";
 import { shiftAction } from "../care/actions";
 import { ShiftButton } from "../care/forms";
 import { monthFrom } from "../care/month";
@@ -18,13 +18,14 @@ export default async function ShiftPage({ searchParams }: { searchParams: Promis
   const data = await withTenant(await getDb(), me.orgId, async (tx) => {
     const homes = await homesFor(tx, actor);
     const open = await shiftStatus(tx, actor);
-    const home = homes.find((h) => h.id === (open?.facilityId ?? me.device?.facilityId)) ?? homes[0];
+    const here = shiftHomes(actor, me.device?.facilityIds);
+    const home = homes.find((h) => h.id === (open?.facilityId ?? here[0])) ?? homes[0];
     if (!home) return null;
     const m = monthFrom(sp.m, localDate(now, home.timeZone));
-    return { homes, open, home, m, today: await todayAtHome(tx, actor, home.id, now), mine: await myShifts(tx, actor, home.id, m.year, m.month) };
+    return { homes, open, home, m, here, today: await todayAtHome(tx, actor, home.id, now), mine: await myShifts(tx, actor, home.id, m.year, m.month) };
   });
   if (!data) return <p className="muted">You&apos;re not assigned to a home yet. Ask your manager.</p>;
-  const { homes, open, home, m, today, mine } = data;
+  const { homes, open, home, m, here, today, mine } = data;
   const tz = home.timeZone;
   return (
     <>
@@ -37,7 +38,7 @@ export default async function ShiftPage({ searchParams }: { searchParams: Promis
             {open ? <span className="pill ok">Signed in at {t(open.signedInAt, tz)} · {homes.find((h) => h.id === open.facilityId)?.name}</span> : <span className="pill mute">Not signed in</span>}
           </span>
         </div>
-        <ShiftButton action={shiftAction} signedIn={!!open} tabletHome={me.device ? (homes.find((h) => h.id === me.device?.facilityId)?.name ?? null) : null} />
+        <ShiftButton action={shiftAction} signedIn={!!open} homes={me.device ? homes.filter((h) => here.includes(h.id)).map((h) => ({ id: h.id, name: h.name })) : null} />
       </section>
       <div className="row" style={{ alignItems: "start" }}>
         <section className="card" style={{ flex: "1 1 340px" }}>

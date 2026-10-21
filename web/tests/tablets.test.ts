@@ -7,7 +7,7 @@ import { currentTotp } from "@/lib/totp";
 import { getSessionUser, signIn, signOut, verifyMfa, DEVICE_LOCK_MINUTES } from "@/server/auth";
 import { signInShift, signOutShift } from "@/server/care";
 import { homeSummaries } from "@/server/dashboard";
-import { checkPin, listDevices, lockSession, registerDevice, resolveDevice, revokeDevice, setPin, unlockWithPin } from "@/server/devices";
+import { checkPin, listDevices, lockSession, registerDevice, resolveDevice, revokeDevice, setPin, unlockWithPin, updateDeviceHomes } from "@/server/devices";
 import { DEMO_PASSWORD, seedCare, seedDemo, type Seeded, type SeededCare } from "@/server/seed";
 import { syncEntries } from "@/server/sync";
 
@@ -47,7 +47,7 @@ beforeAll(async () => {
   other = await seedDemo(db, { orgName: "Other Org", emailDomain: "other.test" });
   owner = { id: s.users.owner.id, role: "owner", facilityIds: [s.facilities.cedarRidge, s.facilities.mapleHouse] };
   caregiver = { id: s.users.caregiver.id, role: "med_caregiver", facilityIds: [s.facilities.cedarRidge] };
-  const r = await inOrg((tx) => registerDevice(tx, owner, s.orgId, { facilityId: s.facilities.cedarRidge, name: "Cedar Ridge med room" }));
+  const r = await inOrg((tx) => registerDevice(tx, owner, s.orgId, { facilityIds: [s.facilities.cedarRidge], name: "Cedar Ridge med room" }));
   if (!r.ok) throw new Error(r.error);
   tabletToken = r.data!.token;
   tabletId = (await resolveDevice(db, tabletToken))!.id;
@@ -55,9 +55,9 @@ beforeAll(async () => {
 
 describe("registering tablets", () => {
   it("is for owners and admins, and checks the name", async () => {
-    const no = await inOrg((tx) => registerDevice(tx, caregiver, s.orgId, { facilityId: s.facilities.cedarRidge, name: "Mine" }));
+    const no = await inOrg((tx) => registerDevice(tx, caregiver, s.orgId, { facilityIds: [s.facilities.cedarRidge], name: "Mine" }));
     expect(!no.ok && no.error).toMatch(/can't register/);
-    const bad = await inOrg((tx) => registerDevice(tx, owner, s.orgId, { facilityId: s.facilities.cedarRidge, name: "x" }));
+    const bad = await inOrg((tx) => registerDevice(tx, owner, s.orgId, { facilityIds: [s.facilities.cedarRidge], name: "x" }));
     expect(bad.ok).toBe(false);
     expect((await inOrg((tx) => listDevices(tx, owner))).map((r) => r.d.name)).toEqual(["Cedar Ridge med room"]);
   });
@@ -95,7 +95,7 @@ describe("who needs two-step verification", () => {
     const away = await signInRaw(s.users.caregiver.email, null);
     expect(away.ok && away.next).toBe("mfa");
     // The caregiver on a tablet registered to a home they don't work at.
-    const r = await inOrg((tx) => registerDevice(tx, owner, s.orgId, { facilityId: s.facilities.mapleHouse, name: "Maple House office" }));
+    const r = await inOrg((tx) => registerDevice(tx, owner, s.orgId, { facilityIds: [s.facilities.mapleHouse], name: "Maple House office" }));
     const maple = (await resolveDevice(db, r.ok ? r.data!.token : ""))!.id;
     const elsewhere = await signInRaw(s.users.caregiver.email, maple);
     expect(elsewhere.ok && elsewhere.next).toBe("mfa");
@@ -110,7 +110,7 @@ describe("PIN and auto-lock on a shared tablet", () => {
   it("asks for a PIN after sign-in and refuses easy ones", async () => {
     const token = await track(await signInOn(s.users.caregiver, tabletId));
     const u = await me(token);
-    expect(u.device?.facilityId).toBe(s.facilities.cedarRidge);
+    expect(u.device?.facilityIds).toEqual([s.facilities.cedarRidge]);
     expect(u.needsPin).toBe(true);
     expect(checkPin("1234")).toMatch(/in a row/);
     expect(checkPin("0000")).toMatch(/same digit/);
@@ -166,11 +166,11 @@ describe("PIN and auto-lock on a shared tablet", () => {
 describe("shift sign-in needs the home's tablet", () => {
   it("refuses other browsers and records the tablet's home", async () => {
     const t = new Date("2026-10-16T11:00:00Z");
-    const away = await inOrg((tx) => signInShift(tx, caregiver, s.orgId, null, t));
+    const away = await inOrg((tx) => signInShift(tx, caregiver, s.orgId, null, null, t));
     expect(!away.ok && away.error).toMatch(/home's tablet/);
-    const wrongHome = await inOrg((tx) => signInShift(tx, caregiver, s.orgId, s.facilities.mapleHouse, t));
+    const wrongHome = await inOrg((tx) => signInShift(tx, caregiver, s.orgId, [s.facilities.mapleHouse], null, t));
     expect(!wrongHome.ok && wrongHome.error).toMatch(/not assigned/);
-    expect((await inOrg((tx) => signInShift(tx, caregiver, s.orgId, s.facilities.cedarRidge, t))).ok).toBe(true);
+    expect((await inOrg((tx) => signInShift(tx, caregiver, s.orgId, [s.facilities.cedarRidge], null, t))).ok).toBe(true);
     // Signing out works anywhere, so a forgotten sign-out never blocks the next shift.
     expect((await inOrg((tx) => signOutShift(tx, caregiver, new Date("2026-10-16T19:00:00Z")))).ok).toBe(true);
   });
@@ -228,5 +228,42 @@ describe("removing a tablet", () => {
     expect((await inOrg((tx) => revokeDevice(tx, owner, tabletId))).ok).toBe(true);
     expect(await getSessionUser(db, token)).toBeNull();
     expect(await resolveDevice(db, tabletToken)).toBeNull();
+  });
+});
+
+describe("a tablet used at more than one home", () => {
+  it("lets caregivers of either home sign in, choose the home for their shift, and follows home changes", async () => {
+    const r = await inOrg((tx) => registerDevice(tx, owner, s.orgId, { facilityIds: [s.facilities.cedarRidge, s.facilities.mapleHouse], name: "Float tablet" }));
+    if (!r.ok) throw new Error(r.error);
+    const sharedId = (await resolveDevice(db, r.data!.token))!.id;
+    const listed = (await inOrg((tx) => listDevices(tx, owner))).find((x) => x.d.id === sharedId);
+    expect(listed?.homes.map((h) => h.id).sort()).toEqual([s.facilities.cedarRidge, s.facilities.mapleHouse].sort());
+    // Both homes' dashboards show it.
+    const homes = await inOrg((tx) => homeSummaries(tx, owner, new Date()));
+    expect(homes.every((h) => h.tablets.some((t) => t.name === "Float tablet"))).toBe(true);
+
+    // Andre works at Cedar Ridge only: signed straight in on the shared tablet.
+    const token = await signInOn(s.users.caregiver, sharedId);
+    expect((await me(token)).device?.facilityIds.sort()).toEqual([s.facilities.cedarRidge, s.facilities.mapleHouse].sort());
+
+    // Someone filling in at both homes picks where they're working.
+    const floater: Actor = { ...caregiver, facilityIds: [s.facilities.cedarRidge, s.facilities.mapleHouse] };
+    const both = [s.facilities.cedarRidge, s.facilities.mapleHouse];
+    const t = new Date("2026-10-17T11:00:00Z");
+    const unchosen = await inOrg((tx) => signInShift(tx, floater, s.orgId, both, null, t));
+    expect(!unchosen.ok && unchosen.error).toMatch(/Choose the home/);
+    expect((await inOrg((tx) => signInShift(tx, caregiver, s.orgId, both, s.facilities.mapleHouse, t))).ok).toBe(false);
+    expect((await inOrg((tx) => signInShift(tx, floater, s.orgId, both, s.facilities.mapleHouse, t))).ok).toBe(true);
+    expect((await inOrg((tx) => signOutShift(tx, floater, new Date("2026-10-17T19:00:00Z")))).ok).toBe(true);
+
+    // Only owners and admins change its homes; doing so signs everyone out of it.
+    expect((await inOrg((tx) => updateDeviceHomes(tx, caregiver, sharedId, [s.facilities.cedarRidge]))).ok).toBe(false);
+    expect((await inOrg((tx) => updateDeviceHomes(tx, owner, sharedId, []))).ok).toBe(false);
+    expect((await inOrg((tx) => updateDeviceHomes(tx, owner, sharedId, [other.facilities.cedarRidge]))).ok).toBe(false);
+    expect((await inOrg((tx) => updateDeviceHomes(tx, owner, sharedId, [s.facilities.mapleHouse]))).ok).toBe(true);
+    expect(await getSessionUser(db, token)).toBeNull();
+    // Now it's a Maple House tablet: Andre (Cedar Ridge) isn't signed in by the tablet any more.
+    const again = await signIn(db, { email: s.users.caregiver.email, password: DEMO_PASSWORD, deviceId: sharedId });
+    expect(again.ok && again.next).not.toBe("done");
   });
 });

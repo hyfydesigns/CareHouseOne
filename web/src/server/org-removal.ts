@@ -5,6 +5,7 @@ import {
   administrations,
   auditLog,
   devicePins,
+  deviceFacilities,
   devices,
   facilities,
   medicationOrders,
@@ -77,13 +78,14 @@ export async function removeTestOrganization(db: DB, orgId: string, confirmName:
   }
   const removed: Record<string, number> = {};
   await db.transaction(async (tx: Tx) => {
-    const del = async (name: string, table: typeof shiftPunches | typeof devicePins | typeof sessions | typeof devices | typeof accountTokens | typeof userFacilities | typeof outbox | typeof subscriptions | typeof auditLog | typeof users | typeof facilities) => {
+    const del = async (name: string, table: typeof shiftPunches | typeof devicePins | typeof sessions | typeof deviceFacilities | typeof devices | typeof accountTokens | typeof userFacilities | typeof outbox | typeof subscriptions | typeof auditLog | typeof users | typeof facilities) => {
       const rows = await tx.delete(table).where(eq(table.orgId, orgId)).returning();
       removed[name] = rows.length;
     };
     await del("shift punches", shiftPunches);
     await del("tablet PINs", devicePins);
     await del("sessions", sessions);
+    await del("tablet homes", deviceFacilities);
     await del("tablets", devices);
     await del("invitation and reset links", accountTokens);
     await del("home assignments", userFacilities);

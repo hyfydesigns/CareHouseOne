@@ -5,6 +5,7 @@ import { getDb, withTenant } from "@/db/client";
 import { canGiveMeds } from "@/lib/permissions";
 import { requireUser } from "@/lib/session";
 import { localClock } from "@/lib/time";
+import { shiftHomes, shiftStatus } from "@/server/care";
 import { medicationPass } from "@/server/meds";
 import { visibleFacilities } from "@/server/residents";
 import { followupAction } from "../care-actions";
@@ -18,7 +19,9 @@ export default async function MedsPage({ searchParams }: { searchParams: Promise
   const sp = await searchParams;
   const data = await withTenant(await getDb(), me.orgId, async (tx) => {
     const homes = await visibleFacilities(tx, actor);
-    const home = homes.find((h) => h.id === sp.home) ?? homes.find((h) => h.id === me.device?.facilityId) ?? homes[0];
+    // The home picked, else the home of the person's shift, else the tablet's first home they work at.
+    const shiftHome = (await shiftStatus(tx, actor))?.facilityId ?? shiftHomes(actor, me.device?.facilityIds)[0];
+    const home = homes.find((h) => h.id === sp.home) ?? homes.find((h) => h.id === shiftHome) ?? homes[0];
     if (!home) return null;
     return { homes, home, pass: (await medicationPass(tx, actor, home.id, now)) ?? [] };
   });

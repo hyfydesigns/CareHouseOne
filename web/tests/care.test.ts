@@ -98,9 +98,9 @@ describe("progress notes", () => {
 
 describe("shift sign-in and sign-out", () => {
   it("signs in at an assigned home once, then signs out with hours", async () => {
-    expect((await inOrg((tx) => signInShift(tx, caregiver, s.orgId, s.facilities.mapleHouse, at("06:50")))).ok).toBe(false);
-    expect((await inOrg((tx) => signInShift(tx, caregiver, s.orgId, s.facilities.cedarRidge, at("06:50")))).ok).toBe(true);
-    const twice = await inOrg((tx) => signInShift(tx, caregiver, s.orgId, s.facilities.cedarRidge, at("06:55")));
+    expect((await inOrg((tx) => signInShift(tx, caregiver, s.orgId, [s.facilities.mapleHouse], null, at("06:50")))).ok).toBe(false);
+    expect((await inOrg((tx) => signInShift(tx, caregiver, s.orgId, [s.facilities.cedarRidge], null, at("06:50")))).ok).toBe(true);
+    const twice = await inOrg((tx) => signInShift(tx, caregiver, s.orgId, [s.facilities.cedarRidge], null, at("06:55")));
     expect(!twice.ok && twice.error).toMatch(/already signed in/);
     const today = await inOrg((tx) => todayAtHome(tx, manager, s.facilities.cedarRidge, at("09:00")));
     expect(today.map((t) => t.name)).toEqual(["Andre Thomas"]);

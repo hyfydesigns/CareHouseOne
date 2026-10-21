@@ -1,6 +1,6 @@
 import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import type { DB } from "@/db/client";
-import { accountTokens, devicePins, devices, sessions, userFacilities, users, type User } from "@/db/schema";
+import { accountTokens, deviceFacilities, devicePins, devices, sessions, userFacilities, users, type User } from "@/db/schema";
 import { decrypt, encrypt, randomToken, sha256 } from "@/lib/crypto";
 import { BREACHED, checkPasswordPolicy, hashPassword, isBreached, verifyPassword } from "@/lib/password";
 import { checkTotp, newTotpSecret, totpUri } from "@/lib/totp";
@@ -59,9 +59,13 @@ async function recordFailure(db: DB, user: User, reason: string): Promise<string
  */
 async function tabletSignIn(db: DB, user: User, deviceId: string | null): Promise<boolean> {
   if (!deviceId || !CAREGIVER_ROLES.includes(user.role)) return false;
-  const [d] = await db.select({ facilityId: devices.facilityId }).from(devices).where(eq(devices.id, deviceId));
-  if (!d) return false;
-  const [link] = await db.select().from(userFacilities).where(and(eq(userFacilities.userId, user.id), eq(userFacilities.facilityId, d.facilityId)));
+  // Assigned to at least one of the homes the tablet is used at.
+  const [link] = await db
+    .select({ facilityId: deviceFacilities.facilityId })
+    .from(deviceFacilities)
+    .innerJoin(userFacilities, and(eq(userFacilities.facilityId, deviceFacilities.facilityId), eq(userFacilities.userId, user.id)))
+    .where(eq(deviceFacilities.deviceId, deviceId))
+    .limit(1);
   return !!link;
 }
 
@@ -178,8 +182,8 @@ export interface SessionUser {
   email: string;
   role: User["role"];
   facilityIds: string[];
-  /** The registered shared tablet this session runs on, if any. */
-  device: { id: string; facilityId: string; name: string } | null;
+  /** The registered shared tablet this session runs on, if any, and the homes it's used at. */
+  device: { id: string; name: string; facilityIds: string[] } | null;
   /** Shared tablet only: locked until the person's PIN is entered. */
   locked: boolean;
   /** Shared tablet only: the person hasn't set a PIN for this tablet yet. */
@@ -215,7 +219,8 @@ export async function getSessionUser(db: DB, token: string): Promise<SessionUser
       .select({ userId: devicePins.userId })
       .from(devicePins)
       .where(and(eq(devicePins.deviceId, row.device.id), eq(devicePins.userId, u.id), gt(devicePins.expiresAt, new Date())));
-    const device = { id: row.device.id, facilityId: row.device.facilityId, name: row.device.name };
+    const homes = await db.select({ id: deviceFacilities.facilityId }).from(deviceFacilities).where(eq(deviceFacilities.deviceId, row.device.id));
+    const device = { id: row.device.id, name: row.device.name, facilityIds: homes.map((h) => h.id) };
     return { sessionId: row.session.id, id: u.id, orgId: u.orgId, name: u.name, email: u.email, role: u.role, facilityIds: await facs(), device, locked, needsPin: !pin };
   }
 

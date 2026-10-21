@@ -1,6 +1,6 @@
 import { and, asc, eq, gte, isNull, lt, sql } from "drizzle-orm";
 import type { Tx } from "@/db/client";
-import { devices, facilities, progressNotes, residents, shiftPunches, users, vitalReviews, vitals } from "@/db/schema";
+import { deviceFacilities, devices, facilities, progressNotes, residents, shiftPunches, users, vitalReviews, vitals } from "@/db/schema";
 import { canSeeFacility, type Actor } from "@/lib/permissions";
 import { addDays, localDate, zonedToUtc } from "@/lib/time";
 import { medicationPass } from "./meds";
@@ -66,7 +66,8 @@ export async function homeSummaries(tx: Tx, actor: Actor, now: Date): Promise<Ho
     const tablets = await tx
       .select({ name: devices.name, lastSeenAt: devices.lastSeenAt })
       .from(devices)
-      .where(and(eq(devices.facilityId, h.id), isNull(devices.revokedAt)))
+      .innerJoin(deviceFacilities, eq(deviceFacilities.deviceId, devices.id))
+      .where(and(eq(deviceFacilities.facilityId, h.id), isNull(devices.revokedAt)))
       .orderBy(asc(devices.name));
 
     out.push({

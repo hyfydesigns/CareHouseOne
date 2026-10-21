@@ -10,8 +10,8 @@ import { paypalLive } from "@/server/paypal";
 import { CONTACT_EMAIL } from "../../(site)/shell";
 import { listDevices } from "@/server/devices";
 import { getOrg } from "@/server/org";
-import { forgetThisDeviceAction, registerDeviceAction, residentCheckAction, revokeDeviceAction } from "./actions";
-import { ForgetDeviceButton, RegisterDeviceForm, ResidentCheckForm, RevokeDeviceButton } from "./settings-form";
+import { deviceHomesAction, forgetThisDeviceAction, registerDeviceAction, residentCheckAction, revokeDeviceAction } from "./actions";
+import { DeviceHomesForm, ForgetDeviceButton, RegisterDeviceForm, ResidentCheckForm, RevokeDeviceButton } from "./settings-form";
 
 export default async function SettingsPage() {
   const me = await requireUser();
@@ -26,6 +26,7 @@ export default async function SettingsPage() {
   const tz = data.homes[0]?.timeZone ?? "UTC";
   const when = (d: Date | null) => (d ? d.toLocaleString("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true }) : "—");
   const active = data.devices.filter((r) => !r.d.revokedAt);
+  const homeOptions = data.homes.map((h) => ({ id: h.id, name: h.name }));
   const bill = billingState(data.sub);
   const byHome = new Map(data.residentsByHome.map((r) => [r.facilityId, r.n]));
   const homeCounts = data.homes.map((h) => ({ name: h.name, n: byHome.get(h.id) ?? 0 }));
@@ -41,8 +42,8 @@ export default async function SettingsPage() {
       <section className="card">
         <h2>Home tablets</h2>
         <p className="small muted" style={{ margin: 0 }}>
-          Caregivers can only sign in to a shift on a registered tablet, and the shift is recorded at that tablet&apos;s home. On a tablet, each person sets a PIN after
-          signing in; the tablet locks after 2 minutes without a touch and hides everything until the PIN is entered.
+          Caregivers can only sign in on a registered tablet used at one of their homes, and their shift is recorded at that home. A tablet can be used at
+          more than one home; caregivers then choose the home when they sign in to their shift. On a tablet, each person sets a PIN after signing in; the tablet locks after 2 minutes without a touch and hides everything until the PIN is entered.
         </p>
         {here ? (
           <div className="row">
@@ -52,17 +53,17 @@ export default async function SettingsPage() {
         ) : (
           <>
             <p className="small" style={{ margin: 0 }}>To register a tablet, open this page on the tablet itself, signed in as an owner or administrator.</p>
-            <RegisterDeviceForm action={registerDeviceAction} homes={data.homes.map((h) => ({ id: h.id, name: h.name }))} />
+            <RegisterDeviceForm action={registerDeviceAction} homes={homeOptions} />
           </>
         )}
         <div className="tablewrap">
           <table>
-            <thead><tr><th>Tablet</th><th>Home</th><th>Registered</th><th>Last used</th><th></th></tr></thead>
+            <thead><tr><th>Tablet</th><th>Used at</th><th>Registered</th><th>Last used</th><th></th></tr></thead>
             <tbody>
-              {active.length ? active.map(({ d, home, by }) => (
+              {active.length ? active.map(({ d, homes, by }) => (
                 <tr key={d.id}>
                   <td>{d.name}{here?.id === d.id && <span className="pill info" style={{ marginLeft: 6 }}>This one</span>}</td>
-                  <td>{home}</td>
+                  <td><DeviceHomesForm action={deviceHomesAction} deviceId={d.id} name={d.name} homes={homeOptions} current={homes} /></td>
                   <td>{when(d.registeredAt)}{by && <span className="small muted"> · {by}</span>}</td>
                   <td>{when(d.lastSeenAt)}</td>
                   <td><RevokeDeviceButton action={revokeDeviceAction} deviceId={d.id} name={d.name} /></td>
