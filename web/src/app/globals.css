@@ -73,7 +73,7 @@ input, select, textarea {
   border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-height: 44px; width: 100%;
 }
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-input[type="checkbox"], input[type="radio"] { width: 20px; min-height: 20px; }
+input[type="checkbox"], input[type="radio"] { width: 24px; height: 24px; min-height: 24px; flex: none; accent-color: var(--accent); cursor: pointer; }
 .check { display: flex; gap: 8px; align-items: center; font-weight: 400; }
 
 .btn {
@@ -154,7 +154,17 @@ td { padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: to
 .grid-mar .missed { background: var(--crit-soft); color: var(--crit); font-weight: 700; }
 .grid-mar .due { background: var(--warn-soft); }
 .grid-mar .today { box-shadow: inset 0 0 0 2px var(--accent); }
-.big { min-height: 52px; font-size: 17px; padding: 10px 22px; }
+/* The shared tablet's main actions: big, bold and easy to hit with a thumb. */
+.big { min-height: 60px; font-size: 18px; padding: 12px 26px; border-radius: 14px; gap: 10px; }
+.btn.primary.big, .btn.give, .btn.danger.big { box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 30%, transparent); }
+.btn.give { background: var(--ok); border-color: var(--ok); color: #fff; }
+.btn.give:hover { background: color-mix(in srgb, var(--ok) 85%, #000); border-color: color-mix(in srgb, var(--ok) 85%, #000); }
+.btn.give.big { box-shadow: 0 4px 14px color-mix(in srgb, var(--ok) 30%, transparent); }
+.btn.danger.big { box-shadow: 0 4px 14px color-mix(in srgb, var(--crit) 30%, transparent); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+@media (max-width: 760px) {
+  .big { width: 100%; }
+}
 .wristband { font-family: ui-monospace, monospace; font-size: 18px; letter-spacing: 0.08em; }
 
 /* Offline and sync banners (stage 4) */

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Icon } from "@/components/icon";
 import { clock, localClock } from "@/lib/time";
 import type { Slot } from "@/server/meds";
 
@@ -39,7 +40,7 @@ export function SlotRow({ slot, tz, canGive, back }: { slot: Slot; tz: string; c
       <span className="row" style={{ flexWrap: "nowrap" }}>
         <span className={`pill ${tone}`}>{label}</span>
         {canGive && (slot.state === "due" || slot.state === "late") && (
-          <Link className="btn primary" href={href}>Give</Link>
+          <Link className="btn give big" href={href}><Icon name="pill" size={20} />Give</Link>
         )}
       </span>
     </div>

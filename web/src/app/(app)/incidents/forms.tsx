@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { Status, type FormState } from "@/components/status";
+import { Icon } from "@/components/icon";
 
 type Action = (s: FormState, fd: FormData) => Promise<FormState>;
 
@@ -104,7 +105,7 @@ export function IncidentForm(props: {
       </div>
       <p className="small muted" style={{ margin: 0 }}>Once filed, a report can&apos;t be changed. The owner or admin adds follow-ups and corrections.</p>
       <Status state={state} />
-      <div className="row"><button className="btn primary big" disabled={pending}>File the report</button></div>
+      <div className="row"><button className="btn primary big" disabled={pending}><Icon name="alert" size={20} />File the report</button></div>
     </form>
   );
 }

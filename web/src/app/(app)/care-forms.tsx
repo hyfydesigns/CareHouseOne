@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { startTransition, useActionState, useEffect, useState, type FormEvent } from "react";
 import { ScanField } from "@/components/scan-field";
+import { Icon } from "@/components/icon";
 import { ResidentPhoto } from "@/components/resident-photo";
 import { DoseTimes } from "./dose-times";
 import { TabletCount } from "./tablet-count";
@@ -376,14 +377,14 @@ export function GiveForm({ action, orderId, scheduledFor, hasPackageCode, bpChec
       <div className="row">
         {outcome === "given" ? (
           <>
-            <button className="btn primary big" name="outcome" value="given" disabled={pending}>Give</button>
-            <button type="button" className="btn" onClick={() => setOutcome("refused")}>Refused</button>
-            <button type="button" className="btn" onClick={() => setOutcome("held")}>Held</button>
+            <button className="btn give big" name="outcome" value="given" disabled={pending}><Icon name="check" size={22} />Give</button>
+            <button type="button" className="btn big" onClick={() => setOutcome("refused")}>Refused</button>
+            <button type="button" className="btn big" onClick={() => setOutcome("held")}>Held</button>
           </>
         ) : (
           <>
-            <button className="btn danger" name="outcome" value={outcome} disabled={pending}>Record as {outcome}</button>
-            <button type="button" className="btn" onClick={() => setOutcome("given")}>Back</button>
+            <button className="btn danger big" name="outcome" value={outcome} disabled={pending}>Record as {outcome}</button>
+            <button type="button" className="btn big" onClick={() => setOutcome("given")}>Back</button>
           </>
         )}
       </div>
@@ -410,7 +411,7 @@ export function PrnForm({ action, orderId, hasPackageCode, reasons, label, back,
       )}
       <div className="field"><label htmlFor="note">Note (optional)</label><input id="note" name="note" /></div>
       <Status state={state} />
-      <div className="row"><button className="btn primary big" disabled={pending}>Give as needed</button></div>
+      <div className="row"><button className="btn give big" disabled={pending}><Icon name="pill" size={20} />Give as needed</button></div>
     </form>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { Icon } from "@/components/icon";
 import type { FormState } from "./actions";
 
 type Action = (state: FormState, fd: FormData) => Promise<FormState>;
@@ -91,7 +92,7 @@ export function SetPinForm({ action }: { action: Action }) {
         <input id="confirm" name="confirm" {...pinInput} />
       </div>
       <Status state={state} />
-      <button className="btn primary" disabled={pending}>Save PIN</button>
+      <button className="btn primary big" disabled={pending}><Icon name="lock" size={20} />Save PIN</button>
     </form>
   );
 }
@@ -105,7 +106,7 @@ export function UnlockForm({ action }: { action: Action }) {
         <input id="pin" name="pin" {...pinInput} autoFocus />
       </div>
       <Status state={state} />
-      <button className="btn primary" disabled={pending}>{pending ? "Checking…" : "Unlock"}</button>
+      <button className="btn primary big" disabled={pending}><Icon name="lock" size={20} />{pending ? "Checking…" : "Unlock"}</button>
     </form>
   );
 }

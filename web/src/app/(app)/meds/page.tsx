@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Icon } from "@/components/icon";
 import { ResidentPhoto, residentPhotoUrl } from "@/components/resident-photo";
 import { redirect } from "next/navigation";
 import { getDb, withTenant } from "@/db/client";
@@ -112,7 +113,7 @@ export default async function MedsPage({ searchParams }: { searchParams: Promise
             {prnOrders.map((o) => (
               <div key={o.id} className="dose">
                 <span><b>{o.name}</b> {o.strength} <span className="pill info">As needed</span><br /><span className="small muted">{o.prnReasons.join(", ")}</span></span>
-                {give && <Link className="btn" href={`/meds/as-needed/${o.id}?back=${encodeURIComponent(back)}`}>Give as needed</Link>}
+                {give && <Link className="btn big" style={{ whiteSpace: "nowrap" }} href={`/meds/as-needed/${o.id}?back=${encodeURIComponent(back)}`}><Icon name="pill" size={20} />Give as needed</Link>}
               </div>
             ))}
             {!shown.length && !prnOrders.length && !openFollowups.length && <p className="small muted">Nothing due right now.</p>}

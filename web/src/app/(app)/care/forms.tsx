@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { useOfflineSubmit } from "@/components/offline";
+import { Icon } from "@/components/icon";
 import { Status, type FormState } from "@/components/status";
 
 type Action = (s: FormState, fd: FormData) => Promise<FormState>;
@@ -43,7 +44,7 @@ export function VitalsForm({ action, residentId, lastReading }: { action: Action
       </div>
       <p className="small muted" style={{ margin: 0 }}>Blood pressure and pulse are required. Readings outside the usual range are flagged for review; tell the nurse right away.</p>
       <Status state={offline.saved ? { message: offline.saved } : state} />
-      <div className="row"><button className="btn primary big" disabled={pending}>Save vital signs</button></div>
+      <div className="row"><button className="btn primary big" disabled={pending}><Icon name="pulse" size={20} />Save vital signs</button></div>
     </form>
   );
 }
@@ -72,7 +73,7 @@ export function NoteForm({ action, residentId, shift, firstName }: { action: Act
         <textarea id="body" name="body" rows={4} required placeholder={`Write facts: what you saw, what you did, and how ${firstName} responded.`} />
       </div>
       <Status state={offline.saved ? { message: offline.saved } : state} />
-      <div className="row"><button className="btn primary big" disabled={pending}>Save note</button></div>
+      <div className="row"><button className="btn primary big" disabled={pending}><Icon name="notes" size={20} />Save note</button></div>
     </form>
   );
 }
@@ -162,10 +163,10 @@ export function ShiftButton({ action, signedIn, homes }: { action: Action; signe
       <input type="hidden" name="op" value={signedIn ? "out" : "in"} />
       <div className="row">
         {signedIn || blocked ? (
-          <button className={`btn big ${signedIn ? "" : "primary"}`} disabled={pending || blocked} style={{ minWidth: 220 }}>{signedIn ? "Sign out" : "Sign in"}</button>
+          <button className={`btn big ${signedIn ? "" : "primary"}`} disabled={pending || blocked} style={{ minWidth: 220 }}><Icon name={signedIn ? "logout" : "clock"} size={20} />{signedIn ? "Sign out" : "Sign in"}</button>
         ) : (
           homes!.map((h) => (
-            <button key={h.id} className="btn big primary" name="facilityId" value={h.id} disabled={pending} style={{ minWidth: 220 }}>Sign in at {h.name}</button>
+            <button key={h.id} className="btn big primary" name="facilityId" value={h.id} disabled={pending} style={{ minWidth: 220 }}><Icon name="clock" size={20} />Sign in at {h.name}</button>
           ))
         )}
       </div>

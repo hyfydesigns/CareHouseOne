@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { Status, type FormState } from "@/components/status";
+import { Icon } from "@/components/icon";
 
 type Action = (s: FormState, fd: FormData) => Promise<FormState>;
 
@@ -22,7 +23,7 @@ export function HandoffForm({ action, facilityId, home }: { action: Action; faci
         <textarea id="handoff" name="body" rows={3} required maxLength={2000} placeholder="For example: Ben didn't eat lunch, offer a snack. Lena's daughter is visiting at 6. Van needs gas." />
       </div>
       <Status state={state} />
-      <div className="row"><button className="btn primary" disabled={pending}>Save handoff note</button></div>
+      <div className="row"><button className="btn primary big" disabled={pending}><Icon name="notes" size={20} />Save handoff note</button></div>
     </form>
   );
 }

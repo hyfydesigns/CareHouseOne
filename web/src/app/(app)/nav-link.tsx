@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { Icon, type IconName } from "@/components/icon";
 
 /** Each section has its own icon color, so the menu is easy to scan on a tablet. */
-const COLORS: Record<IconName, string> = {
+const COLORS: Partial<Record<IconName, string>> = {
   home: "#5b4bdb",
   pill: "#e07a2e",
   residents: "#1c9c7a",

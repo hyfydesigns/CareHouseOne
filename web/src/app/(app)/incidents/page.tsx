@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Icon } from "@/components/icon";
 import { getDb, withTenant } from "@/db/client";
 import { canManageCare } from "@/lib/permissions";
 import { requireUser } from "@/lib/session";
@@ -20,7 +21,7 @@ export default async function IncidentsPage({ searchParams }: { searchParams: Pr
           <p className="muted">{reviewer ? "Every report filed at your homes." : "Reports you've filed."}</p>
         </div>
         <span className="spacer" />
-        <Link className="btn primary big" href="/incidents/new">Report an incident</Link>
+        <Link className="btn primary big" href="/incidents/new"><Icon name="alert" size={20} />Report an incident</Link>
       </div>
       <div className="row" style={{ gap: 6 }}>
         {[["open", "Open"], ["closed", "Closed"], ["all", "All"]].map(([k, l]) => (
