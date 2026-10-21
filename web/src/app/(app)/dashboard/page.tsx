@@ -77,7 +77,7 @@ export default async function DashboardPage() {
               <div>
                 <h3 className="small" style={{ margin: "4px 0" }}>Medications today</h3>
                 <div className="stat-row">
-                  <span className="stat"><b>{done}/{d.total}</b><span>done</span></span>
+                  <span className={`stat ${d.total && done === d.total ? "good" : "info"}`}><b>{done}/{d.total}</b><span>done</span></span>
                   <span className={`stat ${d.late ? "crit" : ""}`}><b>{d.late}</b><span>late, not recorded</span></span>
                   <span className={`stat ${d.due ? "warn" : ""}`}><b>{d.due}</b><span>due now</span></span>
                   <span className="stat"><b>{d.refused + d.held}</b><span>refused or held</span></span>
@@ -87,9 +87,9 @@ export default async function DashboardPage() {
               <div>
                 <h3 className="small" style={{ margin: "4px 0" }}>Records today</h3>
                 <div className="stat-row">
-                  <span className="stat"><b>{h.vitalsToday}</b><span>vital signs</span></span>
+                  <span className={`stat ${h.vitalsToday ? "info" : ""}`}><b>{h.vitalsToday}</b><span>vital signs</span></span>
                   <span className={`stat ${h.readingsToReview ? "crit" : ""}`}><b>{h.readingsToReview}</b><span>readings to review</span></span>
-                  <span className="stat"><b>{h.notesToday}</b><span>progress notes</span></span>
+                  <span className={`stat ${h.notesToday ? "info" : ""}`}><b>{h.notesToday}</b><span>progress notes</span></span>
                 </div>
               </div>
               <div>

@@ -18,7 +18,7 @@
 .site-kicker { display: inline-block; font-weight: 700; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; }
 
 /* The illustrative tablet in the hero: a stylized medication pass, not a screenshot. */
-.site-tablet { background: var(--side); border-radius: 26px; padding: 14px; box-shadow: 0 24px 60px rgba(16, 50, 61, 0.25); }
+.site-tablet { background: #221c4a; border-radius: 26px; padding: 14px; box-shadow: 0 24px 60px rgba(34, 28, 74, 0.25); }
 .site-tablet .screen { background: var(--bg); border-radius: 14px; padding: 16px; display: grid; gap: 10px; }
 .site-tablet .bar { display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 14px; }
 .site-tablet .dose { background: var(--surface); border-radius: 10px; padding: 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px; border: 1px solid var(--line); }

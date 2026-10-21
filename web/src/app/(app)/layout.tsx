@@ -22,28 +22,28 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {isCaregiver ? (
           <>
             {/* The shared-tablet menu: only what caregivers need on shift. */}
-            <NavLink href="/meds">Medication &amp; Diagnosis</NavLink>
-            <NavLink href="/shift">Sign In / Sign Out</NavLink>
-            <NavLink href="/vitals">Vital Signs</NavLink>
-            <NavLink href="/notes">Progress Notes</NavLink>
-            <NavLink href="/incidents">Incident Reports</NavLink>
+            <NavLink href="/meds" icon="pill">Medication &amp; Diagnosis</NavLink>
+            <NavLink href="/shift" icon="clock">Sign In / Sign Out</NavLink>
+            <NavLink href="/vitals" icon="pulse">Vital Signs</NavLink>
+            <NavLink href="/notes" icon="notes">Progress Notes</NavLink>
+            <NavLink href="/incidents" icon="alert">Incident Reports</NavLink>
           </>
         ) : (
           <>
-            <NavLink href="/dashboard">Home</NavLink>
-            <NavLink href="/meds">Medication pass</NavLink>
-            <NavLink href="/residents">Residents</NavLink>
-            <NavLink href="/vitals">Vital signs</NavLink>
-            <NavLink href="/notes">Progress notes</NavLink>
-            <NavLink href="/shift">Sign in / out</NavLink>
-            <NavLink href="/incidents">Incidents</NavLink>
+            <NavLink href="/dashboard" icon="home">Home</NavLink>
+            <NavLink href="/meds" icon="pill">Medication pass</NavLink>
+            <NavLink href="/residents" icon="residents">Residents</NavLink>
+            <NavLink href="/vitals" icon="pulse">Vital signs</NavLink>
+            <NavLink href="/notes" icon="notes">Progress notes</NavLink>
+            <NavLink href="/shift" icon="clock">Sign in / out</NavLink>
+            <NavLink href="/incidents" icon="alert">Incidents</NavLink>
           </>
         )}
-        {canViewStaff(me) && <NavLink href="/staff">Staff</NavLink>}
-        {canViewAudit(me) && <NavLink href="/safety">Safety checks</NavLink>}
-        {canViewAudit(me) && <NavLink href="/timesheets">Timesheets</NavLink>}
-        {canViewAudit(me) && <NavLink href="/audit">Audit log</NavLink>}
-        {canViewAudit(me) && <NavLink href="/settings">Settings</NavLink>}
+        {canViewStaff(me) && <NavLink href="/staff" icon="staff">Staff</NavLink>}
+        {canViewAudit(me) && <NavLink href="/safety" icon="shield">Safety checks</NavLink>}
+        {canViewAudit(me) && <NavLink href="/timesheets" icon="calendar">Timesheets</NavLink>}
+        {canViewAudit(me) && <NavLink href="/audit" icon="list">Audit log</NavLink>}
+        {canViewAudit(me) && <NavLink href="/settings" icon="settings">Settings</NavLink>}
         <div className="foot">
           <span>
             Signed in as <b>{me.name}</b>
