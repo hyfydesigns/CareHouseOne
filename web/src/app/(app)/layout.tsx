@@ -53,6 +53,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               </>
             )}
           </span>
+          {!me.device && <Link href="/account">Account</Link>}
           {me.device && (
             <form action={lockAction}>
               <button className="linkbtn">Lock</button>

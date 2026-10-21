@@ -1,5 +1,5 @@
 import { getDb } from "@/db/client";
-import { usesTwoStep } from "@/lib/permissions";
+import { signsInAnywhere } from "@/lib/permissions";
 import { describeToken } from "@/server/auth";
 import { acceptInviteAction, forgotAction } from "../../actions";
 import { EmailForm, NewPasswordForm } from "../../forms";
@@ -21,8 +21,8 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
       <h1>{info.purpose === "invite" ? `Welcome, ${info.name.split(" ")[0]}` : `Welcome back, ${info.name.split(" ")[0]}`}</h1>
       <p className="muted">
         Set a password for {info.email}.{" "}
-        {usesTwoStep(info.role)
-          ? "Next you'll set up two-step verification."
+        {signsInAnywhere(info.role)
+          ? "You'll be signed straight in."
           : "You'll use it to sign in on your home's CareHouse One tablet, where you'll also choose a PIN."}
       </p>
       <NewPasswordForm action={acceptInviteAction.bind(null, token)} submit="Set password" />

@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { Tx } from "@/db/client";
 import { accountTokens, facilities, sessions, userFacilities, users, type Role } from "@/db/schema";
 import { randomToken, sha256 } from "@/lib/crypto";
-import { canInvite, canManage, ROLE_LABEL, usesTwoStep, type Actor, type StaffTarget } from "@/lib/permissions";
+import { canInvite, canManage, ROLE_LABEL, signsInAnywhere, type Actor, type StaffTarget } from "@/lib/permissions";
 import { audit, sendMail } from "./audit";
 import { INVITE_DAYS } from "./auth";
 
@@ -89,8 +89,8 @@ async function issueLink(tx: Tx, actor: Actor, user: { id: string; orgId: string
     orgId: user.orgId,
     to: user.email,
     subject: purpose === "invite" ? "You're invited to CareHouse One" : "Your CareHouse One account was reactivated",
-    body: usesTwoStep(user.role)
-      ? `Hi ${user.name},\n\nUse this link to set your password and turn on two-step verification. It works once and expires in ${INVITE_DAYS} days.\n\n${appUrl}/invite/${token}`
+    body: signsInAnywhere(user.role)
+      ? `Hi ${user.name},\n\nUse this link to set your password. It works once and expires in ${INVITE_DAYS} days. Once you're in, we recommend turning on two-step verification under Account.\n\n${appUrl}/invite/${token}`
       : `Hi ${user.name},\n\nUse this link to set your password. It works once and expires in ${INVITE_DAYS} days. Open it on your home's CareHouse One tablet if you can; you'll then sign in on that tablet with your password and a PIN you choose.\n\n${appUrl}/invite/${token}`,
   });
   return expiresAt;
@@ -146,8 +146,8 @@ const updateSchema = z.object({
 
 /**
  * Changes someone's role or homes. A role change signs them out everywhere, so they sign in again
- * under the new rules (for example, a caregiver who becomes an admin then sets up two-step
- * verification). Nobody can change their own role, and the last owner can't be demoted.
+ * under the new rules (for example, an admin who becomes a caregiver can then only sign in on a
+ * tablet). Nobody can change their own role, and the last owner can't be demoted.
  */
 export async function updateStaff(tx: Tx, actor: Actor, userId: string, raw: unknown): Promise<Result> {
   const p = updateSchema.safeParse(raw);
@@ -217,5 +217,5 @@ export async function reactivateStaff(tx: Tx, actor: Actor, userId: string, appU
   await tx.update(users).set({ status: "invited", passwordHash: null, mfaEnabled: false, mfaSecretEnc: null }).where(eq(users.id, t.id));
   await issueLink(tx, actor, t.user, "reactivate", appUrl);
   await audit(tx, { orgId: t.user.orgId, actorId: actor.id, action: "user_reactivated", entity: "user", entityId: t.id });
-  return { ok: true, message: `${t.user.name} will get an email to set a new password${usesTwoStep(t.user.role) ? " and two-step verification" : ""}.` };
+  return { ok: true, message: `${t.user.name} will get an email to set a new password.` };
 }

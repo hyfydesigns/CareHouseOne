@@ -150,7 +150,7 @@ export function Landing() {
               <ul>
                 <li>Every feature, in every home</li>
                 <li>Unlimited staff accounts and homes</li>
-                <li>Two-step verification for owners and admins; caregivers sign in only on the home&apos;s tablet, with a personal PIN</li>
+                <li>Caregivers sign in only on the home&apos;s tablet, with a personal PIN; optional two-step verification for everyone</li>
                 <li>Automatic tablet lock and an audit log nobody can edit</li>
                 <li>Daily backups</li>
                 <li>A Business Associate Agreement with every subscription</li>
@@ -186,8 +186,8 @@ export function Landing() {
             <details>
               <summary>Is CareHouse One built for HIPAA?</summary>
               <p>
-                Yes. Data is encrypted in transit and at rest. Owners and admins use two-step verification; caregivers don&apos;t need an
-                authenticator app, because they can only sign in on a tablet you&apos;ve registered to their home, which then locks with their personal PIN.
+                Yes. Data is encrypted in transit and at rest. Caregivers can only sign in on a tablet you&apos;ve registered to their home, which then locks
+                with their personal PIN. Anyone can turn on two-step verification with an authenticator app, and we recommend it for owners and admins.
                 Sessions end automatically, and every change is kept in an audit log nobody can edit. It runs on Google Cloud services covered by Google&apos;s Business Associate
                 Agreement, and we sign one with every customer.
               </p>

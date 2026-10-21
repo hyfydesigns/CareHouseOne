@@ -9,7 +9,7 @@ export default async function VerifyPage() {
   return (
     <>
       <h1>Two-step verification</h1>
-      <p className="muted">Enter the 6-digit code from your authenticator app. Two-step verification is required for every account.</p>
+      <p className="muted">Enter the 6-digit code from your authenticator app. You turned on two-step verification for this account.</p>
       <CodeForm action={verifyAction} label="Verify" />
       <Link href="/sign-in">Back to sign in</Link>
     </>

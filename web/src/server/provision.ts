@@ -34,7 +34,7 @@ export type ProvisionInput = z.input<typeof provisionSchema>;
 
 /**
  * Creates a customer organization, its homes and an invitation for its owner, who then sets a
- * password and two-step verification and invites everyone else from the app. Used by the
+ * password and invites everyone else from the app. Used by the
  * developer (scripts/create-org.ts) and by self-service sign-up after a PayPal subscription
  * (billing.ts), which passes the setup link's hash to claim that subscription.
  */
@@ -72,7 +72,7 @@ export async function provisionOrganization(
       orgId: org.id,
       to: owner.email,
       subject: "Your CareHouse One account is ready",
-      body: `Hi ${owner.name},\n\nCareHouse One is set up for ${org.name}. Use this link to set your password and turn on two-step verification. It works once and expires in ${INVITE_DAYS} days.\n\n${inviteLink}\n\nThen add your staff from the Staff page and register each home's tablet in Settings.`,
+      body: `Hi ${owner.name},\n\nCareHouse One is set up for ${org.name}. Use this link to set your password. It works once and expires in ${INVITE_DAYS} days.\n\n${inviteLink}\n\nThen add your staff from the Staff page and register each home's tablet in Settings.`,
     });
     await audit(tx, { orgId: org.id, actorId: null, action: "organization_created", entity: "organization", entityId: org.id, details: { homes: homes.map((h) => h.name) } });
     return { orgId: org.id, inviteLink };

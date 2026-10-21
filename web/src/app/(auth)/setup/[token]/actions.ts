@@ -24,7 +24,7 @@ export async function setupAction(token: string, _: FormState, fd: FormData): Pr
   );
   if (!r.ok) return { error: r.error.startsWith("[") ? "Check the details and try again." : r.error };
   await deliverNow(db);
-  return { message: `Done. We've emailed ${r.email} a link to set your password and two-step verification. It expires in 7 days.` };
+  return { message: `Done. We've emailed ${r.email} a link to set your password. It expires in 7 days.` };
 }
 
 /** "Send me a new setup link" on an expired setup page. Same answer whether or not there's a sign-up. */

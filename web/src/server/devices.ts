@@ -88,7 +88,7 @@ export async function lockSession(db: DB, user: SessionUser): Promise<void> {
   await db.update(sessions).set({ lockedAt: new Date() }).where(eq(sessions.id, user.sessionId));
 }
 
-/** Too many wrong PINs end the session, so the next try needs the password and two-step code. */
+/** Too many wrong PINs end the session, so the next try needs the password again. */
 export async function unlockWithPin(db: DB, user: SessionUser, pin: string): Promise<{ ok: true } | { ok: false; error: string; signedOut?: boolean }> {
   if (!user.device) return { ok: false, error: "This isn't a registered tablet.", signedOut: true };
   const [row] = await db

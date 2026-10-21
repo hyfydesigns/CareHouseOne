@@ -9,6 +9,7 @@ import {
   beginEnrollment,
   confirmEnrollment,
   describeToken,
+  disableMfa,
   getSessionUser,
   requestPasswordReset,
   resetPassword,
@@ -156,22 +157,40 @@ describe("staff lifecycle", () => {
     expect((await acceptInvite(db, link, "harbor sunrise walk 2026")).ok).toBe(false);
   });
 
-  it("has admins set a password and two-step verification", async () => {
+  it("signs admins straight in, with two-step verification optional from Account", async () => {
     const owner = actor(s.users.owner, "owner", [s.facilities.cedarRidge, s.facilities.mapleHouse]);
-    await withTenant(db, s.orgId, (tx) =>
-      inviteStaff(tx, owner, s.orgId, { name: "Ruth Adeyemi", email: "ruth.adeyemi@harborviewliving.test", role: "admin", facilityIds: [s.facilities.cedarRidge] }, APP),
-    );
-    const link = await lastLink("ruth.adeyemi@harborviewliving.test");
-    const [invite] = await db.select().from(outbox).where(eq(outbox.to, "ruth.adeyemi@harborviewliving.test"));
-    expect(invite.body).toMatch(/two-step verification/);
-    const acc = await acceptInvite(db, link, "harbor sunrise walk 2026");
-    expect(acc.ok && acc.next).toBe("enroll");
+    const email = "ruth.adeyemi@harborviewliving.test";
+    const password = "harbor sunrise walk 2026";
+    await withTenant(db, s.orgId, (tx) => inviteStaff(tx, owner, s.orgId, { name: "Ruth Adeyemi", email, role: "admin", facilityIds: [s.facilities.cedarRidge] }, APP));
+    const [invite] = await db.select().from(outbox).where(eq(outbox.to, email));
+    expect(invite.body).toMatch(/set your password/);
+    const acc = await acceptInvite(db, await lastLink(email), password);
+    expect(acc.ok && acc.next).toBe("done");
     if (!acc.ok || acc.next === "tablet-only") return;
-    const enr = await beginEnrollment(db, acc.token);
+    const me = await getSessionUser(db, acc.token);
+    expect(me?.role).toBe("admin");
+
+    // Password alone signs her in until she turns two-step verification on.
+    const plain = await signIn(db, { email, password });
+    expect(plain.ok && plain.next).toBe("done");
+
+    const enr = await beginEnrollment(db, me!.id);
     expect(enr?.uri).toMatch(/^otpauth:\/\/totp\//);
-    const done = await confirmEnrollment(db, acc.token, await currentTotp(enr!.secret));
-    expect(done.ok).toBe(true);
-    expect((await getSessionUser(db, acc.token))?.role).toBe("admin");
+    expect((await confirmEnrollment(db, me!.id, "000000")).ok).toBe(false);
+    expect((await confirmEnrollment(db, me!.id, await currentTotp(enr!.secret))).ok).toBe(true);
+    const withCode = await signIn(db, { email, password });
+    expect(withCode.ok && withCode.next).toBe("mfa");
+    if (!withCode.ok) return;
+    expect(await getSessionUser(db, withCode.token)).toBeNull();
+    expect((await verifyMfa(db, withCode.token, await currentTotp(enr!.secret))).ok).toBe(true);
+
+    // Turning it off needs a current code, and emails her.
+    expect((await disableMfa(db, me!.id, "000000")).ok).toBe(false);
+    expect((await disableMfa(db, me!.id, await currentTotp(enr!.secret))).ok).toBe(true);
+    const off = await db.select().from(outbox).where(eq(outbox.subject, "Two-step verification was turned off"));
+    expect(off.map((m) => m.to)).toEqual([email]);
+    const again = await signIn(db, { email, password });
+    expect(again.ok && again.next).toBe("done");
   });
 
   it("stops managers adding other roles, other homes, or duplicate emails", async () => {

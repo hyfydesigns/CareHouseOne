@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { appBaseUrl, isSiteHost, SITE_PATHS, siteUrl } from "@/lib/hosts";
 
 /** Pages that need a session cookie at all; requireUser() on the server does the real check. */
-const SIGNED_IN = ["/dashboard", "/pin", "/locked", "/staff", "/timesheets", "/audit", "/residents", "/meds", "/settings", "/vitals", "/notes", "/shift"];
+const SIGNED_IN = ["/dashboard", "/pin", "/locked", "/staff", "/timesheets", "/audit", "/residents", "/meds", "/settings", "/vitals", "/notes", "/shift", "/account"];
 
 /**
  * Content Security Policy with a fresh nonce per request: only the app's own scripts (which

@@ -1,9 +1,10 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getDb } from "@/db/client";
-import { appUrl, clearCookie, clientIp, currentDevice, currentUser, PENDING_COOKIE, readCookie, requireSession, SESSION_COOKIE, setCookie, userAgent } from "@/lib/session";
-import { acceptInvite, confirmEnrollment, requestPasswordReset, resetPassword, signIn, signOut, verifyMfa } from "@/server/auth";
+import { appUrl, clearCookie, clientIp, currentDevice, currentUser, PENDING_COOKIE, readCookie, requireSession, requireUser, SESSION_COOKIE, setCookie, userAgent } from "@/lib/session";
+import { acceptInvite, confirmEnrollment, disableMfa, requestPasswordReset, resetPassword, signIn, signOut, verifyMfa } from "@/server/auth";
 import { lockSession, setPin, unlockWithPin } from "@/server/devices";
 import { deliverNow } from "@/server/mailer";
 import { hit, tooMany, type LimitName } from "@/server/rate-limit";
@@ -27,10 +28,10 @@ export async function signInAction(_: FormState, fd: FormData): Promise<FormStat
   const device = await currentDevice();
   const r = await signIn(await getDb(), { email, password, userAgent: await userAgent(), deviceId: device?.id ?? null });
   if (!r.ok) return { error: r.error };
-  // A caregiver on their home's tablet is signed in already (the PIN comes next).
+  // Signed in already, unless they turned on two-step verification (on a tablet, the PIN comes next).
   if (r.next === "done") return finish(r.token, r.expiresAt);
   await setCookie(PENDING_COOKIE, r.token, r.expiresAt);
-  redirect(r.next === "mfa" ? "/sign-in/verify" : "/sign-in/setup");
+  redirect("/sign-in/verify");
 }
 
 async function finish(token: string, expiresAt: Date): Promise<never> {
@@ -55,14 +56,26 @@ export async function verifyAction(_: FormState, fd: FormData): Promise<FormStat
   return finish(token, r.expiresAt);
 }
 
-export async function confirmSetupAction(_: FormState, fd: FormData): Promise<FormState> {
-  const token = await readCookie(PENDING_COOKIE);
-  if (!token) redirect("/sign-in");
+/** Account page: turn two-step verification on with the code from the newly added app. */
+export async function enableTwoStepAction(_: FormState, fd: FormData): Promise<FormState> {
+  const me = await requireUser();
   const busy = await limited("twoStep");
   if (busy) return { error: busy };
-  const r = await confirmEnrollment(await getDb(), token, str(fd, "code"));
+  const r = await confirmEnrollment(await getDb(), me.id, str(fd, "code"));
   if (!r.ok) return { error: r.error };
-  return finish(token, r.expiresAt);
+  revalidatePath("/account");
+  return { message: "Two-step verification is on. Every sign-in now asks for a code from your app." };
+}
+
+export async function disableTwoStepAction(_: FormState, fd: FormData): Promise<FormState> {
+  const me = await requireUser();
+  const busy = await limited("twoStep");
+  if (busy) return { error: busy };
+  const r = await disableMfa(await getDb(), me.id, str(fd, "code"));
+  if (!r.ok) return { error: r.error };
+  await deliverNow(await getDb());
+  revalidatePath("/account");
+  return { message: "Two-step verification is off." };
 }
 
 export async function forgotAction(_: FormState, fd: FormData): Promise<FormState> {
@@ -98,9 +111,7 @@ export async function acceptInviteAction(token: string, _: FormState, fd: FormDa
   const r = await acceptInvite(await getDb(), token, pw, await userAgent(), device?.id ?? null);
   if (!r.ok) return { error: r.error };
   if (r.next === "tablet-only") redirect("/sign-in?tablet=1");
-  if (r.next === "done") return finish(r.token, r.expiresAt);
-  await setCookie(PENDING_COOKIE, r.token, r.expiresAt);
-  redirect("/sign-in/setup");
+  return finish(r.token, r.expiresAt);
 }
 
 export async function signOutAction(): Promise<void> {

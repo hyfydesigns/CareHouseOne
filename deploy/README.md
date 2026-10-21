@@ -119,7 +119,7 @@ Until `app.carehouseone.com` works (step 8), set `APP_URL` to the `run.app` addr
 }
 ```
 
-The owner gets an email, sets a password and two-step verification, invites their staff from the Staff page and registers each home's tablet in Settings (on the tablet itself). Add `--print-link` only if email isn't working; the link is a secret, so give it to the owner directly. Stop the proxy afterwards (`kill %1`) and close Cloud Shell.
+The owner gets an email, sets a password (two-step verification is optional, under Account), invites their staff from the Staff page and registers each home's tablet in Settings (on the tablet itself). Add `--print-link` only if email isn't working; the link is a secret, so give it to the owner directly. Stop the proxy afterwards (`kill %1`) and close Cloud Shell.
 
 ## 6. Monitoring
 

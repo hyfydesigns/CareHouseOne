@@ -35,7 +35,7 @@ export function SetupForm({
         <h1>You&apos;re all set</h1>
         <p className="notice" style={{ margin: 0 }}>{state.message}</p>
         <p className="muted" style={{ margin: 0 }}>
-          Open that email to set your password and two-step verification, then sign in. You can close this page. Not there after a few minutes? Check spam.
+          Open that email to set your password; you&apos;ll be signed straight in. You can close this page. Not there after a few minutes? Check spam.
           Wrong address? Email <a href={`mailto:${contact}`}>{contact}</a>.
         </p>
       </div>
@@ -45,8 +45,7 @@ export function SetupForm({
     <>
     <h1>Set up your organization</h1>
     <p className="muted">
-      Your free trial has started. Add your organization and homes; you can add more homes later. The owner gets an email to set a password and two-step
-      verification.
+      Your free trial has started. Add your organization and homes; you can add more homes later. The owner gets an email to set a password.
     </p>
     <form action={formAction} className="stack">
       <div className="field">

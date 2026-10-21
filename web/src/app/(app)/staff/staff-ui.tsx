@@ -47,8 +47,8 @@ export function InviteForm({ action, roles, homes }: { action: Action; roles: Ar
         </div>
       </fieldset>
       <p className="muted small">
-        They&apos;ll get an email with a link to set their password; it expires in 7 days. Owners and admins also turn on two-step verification. Caregivers
-        sign in on their home&apos;s registered tablet with their password and a PIN, so they don&apos;t need an authenticator app.
+        They&apos;ll get an email with a link to set their password; it expires in 7 days. Owners and admins can sign in from any browser and can turn on
+        two-step verification under Account. Caregivers sign in on their home&apos;s registered tablet with their password and a PIN.
       </p>
       <Status state={state} />
       <div className="row">
