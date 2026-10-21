@@ -108,7 +108,7 @@ jobs:
             --set-env-vars "^|^$ENV" \
             --no-invoker-iam-check \
             --execution-environment gen2 \
-            --cpu 1 --memory 1Gi --cpu-boost \
+            --cpu 2 --memory 2Gi --cpu-boost \
             --concurrency 40 --min-instances 0 --max-instances 1 \
             --timeout 300 \
             --startup-probe "httpGet.path=/api/health,initialDelaySeconds=5,periodSeconds=5,failureThreshold=24,timeoutSeconds=4" \
