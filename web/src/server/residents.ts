@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Tx } from "@/db/client";
 import {
   administrations,
+  appointments,
   facilities,
   incidents,
   medicationOrders,
@@ -218,11 +219,11 @@ export async function dischargeResident(tx: Tx, actor: Actor, residentId: string
 
 /**
  * A resident can only be deleted while nothing has been recorded for them: no medication orders
- * (so no doses or follow-ups), vital signs, progress notes, diagnoses or incident reports. Anything else is a care
+ * (so no doses or follow-ups), vital signs, progress notes, diagnoses, incident reports or appointments. Anything else is a care
  * record that must be kept, so the resident is discharged instead.
  */
 export async function hasCareRecords(tx: Tx, residentId: string): Promise<boolean> {
-  const tables = [medicationOrders, administrations, prnFollowups, vitals, progressNotes, residentDiagnoses, incidents];
+  const tables = [medicationOrders, administrations, prnFollowups, vitals, progressNotes, residentDiagnoses, incidents, appointments];
   for (const t of tables) {
     const [row] = await tx.select({ id: t.residentId }).from(t).where(eq(t.residentId, residentId)).limit(1);
     if (row) return true;

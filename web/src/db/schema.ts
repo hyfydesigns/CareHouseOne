@@ -606,3 +606,86 @@ export const incidentFollowups = pgTable(
   },
   (t) => [index("incident_followups_incident_idx").on(t.incidentId, t.recordedAt)],
 );
+
+/** What the next shift needs to know at a home. Permanent, like progress notes. */
+export const handoffNotes = pgTable(
+  "handoff_notes",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    facilityId: uuid("facility_id").notNull().references(() => facilities.id),
+    shift: shiftEnum("shift").notNull(),
+    body: text("body").notNull(),
+    recordedBy: uuid("recorded_by").notNull().references(() => users.id),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("handoff_facility_idx").on(t.facilityId, t.recordedAt)],
+);
+
+/** Fire drills and other safety checks at a home. Permanent once recorded. */
+export const safetyChecks = pgTable(
+  "safety_checks",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    facilityId: uuid("facility_id").notNull().references(() => facilities.id),
+    kind: text("kind").notNull(),
+    performedAt: timestamp("performed_at", { withTimezone: true }).notNull(),
+    shift: shiftEnum("shift"),
+    participants: integer("participants"),
+    durationMinutes: integer("duration_minutes"),
+    issues: text("issues"),
+    recordedBy: uuid("recorded_by").notNull().references(() => users.id),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("safety_facility_idx").on(t.facilityId, t.kind, t.performedAt)],
+);
+
+/** A resident's appointments: doctor, dentist, therapy and so on, and what came of them. */
+export const appointments = pgTable(
+  "appointments",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    residentId: uuid("resident_id").notNull().references(() => residents.id),
+    facilityId: uuid("facility_id").notNull().references(() => facilities.id),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
+    provider: text("provider").notNull(),
+    purpose: text("purpose").notNull(),
+    location: text("location"),
+    notes: text("notes"),
+    /** scheduled, done, cancelled or missed. */
+    status: text("status").notNull().default("scheduled"),
+    outcome: text("outcome"),
+    followUp: text("follow_up"),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedBy: uuid("updated_by").references(() => users.id),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (t) => [index("appointments_resident_idx").on(t.residentId, t.scheduledAt), index("appointments_facility_idx").on(t.facilityId, t.scheduledAt)],
+);
+
+/** Staff training and certifications (CPR, first aid, medication certification...) with expiry dates. */
+export const staffCertifications = pgTable(
+  "staff_certifications",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    kind: text("kind").notNull(),
+    label: text("label"),
+    issuedOn: text("issued_on"),
+    /** YYYY-MM-DD, or null for training that doesn't expire. */
+    expiresOn: text("expires_on"),
+    notes: text("notes"),
+    recordedBy: uuid("recorded_by").notNull().references(() => users.id),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+    removedAt: timestamp("removed_at", { withTimezone: true }),
+    removedBy: uuid("removed_by").references(() => users.id),
+    /** The 30-day and on-expiry reminder emails went out (once each). */
+    remindedSoonAt: timestamp("reminded_soon_at", { withTimezone: true }),
+    remindedExpiredAt: timestamp("reminded_expired_at", { withTimezone: true }),
+  },
+  (t) => [index("certifications_user_idx").on(t.userId)],
+);

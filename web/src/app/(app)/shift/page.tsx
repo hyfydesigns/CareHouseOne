@@ -4,6 +4,10 @@ import { localDate } from "@/lib/time";
 import { homesFor, myShifts, shiftHomes, shiftStatus, todayAtHome } from "@/server/care";
 import { shiftAction } from "../care/actions";
 import { ShiftButton } from "../care/forms";
+import { handoffAction } from "../ops-actions";
+import { HandoffForm } from "../ops-forms";
+import { recentHandoffs } from "@/server/operations";
+import { SHIFT_LABEL } from "@/server/care";
 import { monthFrom } from "../care/month";
 import Link from "next/link";
 
@@ -22,10 +26,10 @@ export default async function ShiftPage({ searchParams }: { searchParams: Promis
     const home = homes.find((h) => h.id === (open?.facilityId ?? here[0])) ?? homes[0];
     if (!home) return null;
     const m = monthFrom(sp.m, localDate(now, home.timeZone));
-    return { homes, open, home, m, here, today: await todayAtHome(tx, actor, home.id, now), mine: await myShifts(tx, actor, home.id, m.year, m.month) };
+    return { homes, open, home, m, here, today: await todayAtHome(tx, actor, home.id, now), mine: await myShifts(tx, actor, home.id, m.year, m.month), handoffs: await recentHandoffs(tx, actor, home.id, now) };
   });
   if (!data) return <p className="muted">You&apos;re not assigned to a home yet. Ask your manager.</p>;
-  const { homes, open, home, m, here, today, mine } = data;
+  const { homes, open, home, m, here, today, mine, handoffs } = data;
   const tz = home.timeZone;
   return (
     <>
@@ -39,6 +43,24 @@ export default async function ShiftPage({ searchParams }: { searchParams: Promis
           </span>
         </div>
         <ShiftButton action={shiftAction} signedIn={!!open} homes={me.device ? homes.filter((h) => here.includes(h.id)).map((h) => ({ id: h.id, name: h.name })) : null} />
+      </section>
+      <section className="card" aria-labelledby="handoff-h">
+        <div className="row">
+          <h2 id="handoff-h" style={{ margin: 0 }}>Shift handoff · {home.name}</h2>
+          <span className="spacer" />
+          <Link className="btn small" href="/safety">Record a fire drill</Link>
+        </div>
+        {handoffs.length ? (
+          <ul className="stack" style={{ margin: 0, paddingLeft: 18 }}>
+            {handoffs.map(({ n, by }) => (
+              <li key={n.id}>
+                <span className="small muted">{SHIFT_LABEL[n.shift]} shift · {by} · {t(n.recordedAt, tz)}</span>
+                <div style={{ whiteSpace: "pre-wrap" }}>{n.body}</div>
+              </li>
+            ))}
+          </ul>
+        ) : <p className="muted" style={{ margin: 0 }}>No handoff notes from the last 16 hours.</p>}
+        <HandoffForm action={handoffAction} facilityId={home.id} home={home.name} />
       </section>
       <div className="row" style={{ alignItems: "start" }}>
         <section className="card" style={{ flex: "1 1 340px" }}>

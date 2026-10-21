@@ -27,6 +27,8 @@ Built so far:
 
 6. **Public site and sign-up:** landing page and pricing at www.carehouseone.com ($149 per home per month with up to 8 residents, $15 per extra resident, no contract, 30-day free trial), demo requests, PayPal Subscriptions with webhooks and a monthly amount update, self-service organization setup, a billing card in Settings, and admin features pausing 14 days after a failed payment (care records never). Sign-up stays closed (`SIGNUP_OPEN`) until the Terms and BAA are final; see runbook step 9.
 
+7. **Inspection-ready operations:** permanent incident reports with notifications and close-out, a printable monthly record per resident (medication record, vitals, notes, incidents), shift handoff notes, fire drills and safety checks with due dates per shift, resident appointments with outcomes and follow-ups, and staff training and certifications with expiry reminders.
+
 Next: the dry run, compliance foundation, and the security and clinical reviews.
 
 **No real resident information may be entered until the production checklist in the build spec is complete** (BAAs signed, security review, backups verified).

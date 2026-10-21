@@ -1,7 +1,8 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getDb, withTenant } from "@/db/client";
 import { facilities, roleEnum } from "@/db/schema";
-import { canInvite, canViewStaff, ROLE_LABEL } from "@/lib/permissions";
+import { canInvite, canManageCare, canViewStaff, ROLE_LABEL } from "@/lib/permissions";
 import { requireUser } from "@/lib/session";
 import { listStaff } from "@/server/staff";
 import { inviteAction, staffAction } from "./actions";
@@ -25,6 +26,8 @@ export default async function StaffPage() {
       <div className="row">
         <h1>Staff</h1>
         <span className="muted">{rows.filter((r) => r.status === "active").length} active</span>
+        <span className="spacer" />
+        {canManageCare(me) && <Link className="btn" href="/staff/training">Training and certifications</Link>}
       </div>
       {roles.length > 0 && <InviteForm action={inviteAction} roles={roles} homes={myHomes} />}
       <section className="card" aria-labelledby="list-h">

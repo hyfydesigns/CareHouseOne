@@ -5,9 +5,12 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { requireUser } from "@/lib/session";
 import { canManageCare } from "@/lib/permissions";
-import { localDate } from "@/lib/time";
 import { unreviewedVitals } from "@/server/care";
 import { openIncidentCount } from "@/server/incidents";
+import { appointmentFollowUps, upcomingAppointments } from "@/server/appointments";
+import { overdueSafety } from "@/server/operations";
+import { trainingOverview } from "@/server/training";
+import { localDate } from "@/lib/time";
 import { fmtCount, overdueFollowups, runningLow } from "@/server/meds";
 import { homeSummaries } from "@/server/dashboard";
 import { reviewVitalAction } from "../care/actions";
@@ -28,7 +31,12 @@ export default async function DashboardPage() {
     const followups = await overdueFollowups(tx, actor, now);
     const low = canManageCare(me) ? await runningLow(tx, actor) : [];
     const incidents = await openIncidentCount(tx, actor);
-    return { org, homes, staff, review, followups, low, incidents };
+    const ids = homes.map((h) => h.id);
+    const appts = await upcomingAppointments(tx, actor, ids, now, 7);
+    const apptFollowUps = await appointmentFollowUps(tx, actor, now);
+    const safety = await overdueSafety(tx, actor, homes, now);
+    const training = canManageCare(me) ? (await trainingOverview(tx, localDate(now, homes[0]?.timeZone ?? "America/Chicago"))).filter((p) => p.worst !== "ok") : [];
+    return { org, homes, staff, review, followups, low, incidents, appts, apptFollowUps, safety, training };
   });
   return (
     <>
@@ -36,6 +44,16 @@ export default async function DashboardPage() {
         <h1>Good to see you, {me.name.split(" ")[0]}</h1>
         <p className="muted">{data.org?.name}</p>
       </div>
+      {data.safety.length > 0 && (
+        <p className="banner offline" role="status" style={{ margin: 0 }}>
+          Safety checks due: {data.safety.map((s) => `${s.home} (${s.overdue.join(", ").toLowerCase()})`).join("; ")}. <Link href="/safety">Record them</Link>
+        </p>
+      )}
+      {data.training.length > 0 && (
+        <p className="banner offline" role="status" style={{ margin: 0 }}>
+          Training expired or expiring within 30 days: {data.training.map((p) => p.name).join(", ")}. <Link href="/staff/training">See training</Link>
+        </p>
+      )}
       {data.incidents > 0 && (
         <p className="banner offline" role="status" style={{ margin: 0 }}>
           {data.incidents} open incident report{data.incidents === 1 ? "" : "s"} to follow up. <Link href="/incidents">Review them</Link>
@@ -115,6 +133,37 @@ export default async function DashboardPage() {
             </table>
           </div>
           <p className="small muted" style={{ margin: 0 }}>A caregiver on shift should check how each dose worked and record it on the medication screen.</p>
+        </section>
+      )}
+      {(data.appts.length > 0 || data.apptFollowUps.length > 0) && (
+        <section className="card" aria-labelledby="appt-h">
+          <h2 id="appt-h">Appointments</h2>
+          {data.appts.length > 0 && (
+            <div className="tablewrap">
+              <table>
+                <tbody>
+                  {data.appts.map((x) => (
+                    <tr key={x.a.id}>
+                      <td>{x.a.scheduledAt.toLocaleString("en-US", { timeZone: x.tz, weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}</td>
+                      <td><Link href={`/residents/${x.a.residentId}?tab=appointments`}><b>{x.resident}</b></Link> · {x.home}</td>
+                      <td>{x.a.provider} · {x.a.purpose}</td>
+                      <td>{x.needsOutcome && <span className="pill warn">Record how it went</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {data.apptFollowUps.length > 0 && (
+            <>
+              <h3 style={{ margin: 0 }}>Follow-ups from recent appointments</h3>
+              <ul className="stack" style={{ margin: 0, paddingLeft: 18 }}>
+                {data.apptFollowUps.map((x) => (
+                  <li key={x.a.id}><Link href={`/residents/${x.a.residentId}?tab=appointments`}>{x.resident}</Link> ({x.a.provider}): {x.a.followUp}</li>
+                ))}
+              </ul>
+            </>
+          )}
         </section>
       )}
       {data.low.length > 0 && (

@@ -5,7 +5,11 @@ import { getDb, withTenant } from "@/db/client";
 import { canGiveMeds } from "@/lib/permissions";
 import { requireUser } from "@/lib/session";
 import { localClock } from "@/lib/time";
-import { shiftHomes, shiftStatus } from "@/server/care";
+import { SHIFT_LABEL, shiftHomes, shiftStatus } from "@/server/care";
+import { upcomingAppointments } from "@/server/appointments";
+import { recentHandoffs } from "@/server/operations";
+import { medCertExpired } from "@/server/training";
+import { localDate } from "@/lib/time";
 import { medicationPass } from "@/server/meds";
 import { visibleFacilities } from "@/server/residents";
 import { followupAction } from "../care-actions";
@@ -23,10 +27,19 @@ export default async function MedsPage({ searchParams }: { searchParams: Promise
     const shiftHome = (await shiftStatus(tx, actor))?.facilityId ?? shiftHomes(actor, me.device?.facilityIds)[0];
     const home = homes.find((h) => h.id === sp.home) ?? homes.find((h) => h.id === shiftHome) ?? homes[0];
     if (!home) return null;
-    return { homes, home, pass: (await medicationPass(tx, actor, home.id, now)) ?? [] };
+    const today = localDate(now, home.timeZone);
+    const appts = (await upcomingAppointments(tx, actor, [home.id], now, 1)).filter((x) => localDate(x.a.scheduledAt, home.timeZone) === today);
+    return {
+      homes,
+      home,
+      pass: (await medicationPass(tx, actor, home.id, now)) ?? [],
+      handoff: (await recentHandoffs(tx, actor, home.id, now))[0] ?? null,
+      appts,
+      certExpired: me.role === "med_caregiver" && (await medCertExpired(tx, me.id, today)),
+    };
   });
   if (!data) redirect("/dashboard");
-  const { homes, home, pass } = data;
+  const { homes, home, pass, handoff, appts, certExpired } = data;
   const give = canGiveMeds(me);
   const back = `/meds?home=${home.id}`;
   const due = pass.reduce((n, p) => n + p.slots.filter((s) => s.state === "due" || s.state === "late").length, 0);
@@ -42,6 +55,20 @@ export default async function MedsPage({ searchParams }: { searchParams: Promise
         </nav>
       )}
       {!give && <p className="notice">You can see the medication pass, but only med-certified caregivers can give medications.</p>}
+      {certExpired && <p className="banner error" role="alert">Your medication certification on file has expired. Tell the owner or admin before giving medications.</p>}
+      {handoff && (
+        <p className="notice" style={{ margin: 0 }}>
+          <b>Handoff ({SHIFT_LABEL[handoff.n.shift].toLowerCase()} shift, {handoff.by}):</b> {handoff.n.body} <Link href="/shift">All handoff notes</Link>
+        </p>
+      )}
+      {appts.length > 0 && (
+        <p className="notice" style={{ margin: 0 }}>
+          <b>Appointments today:</b>{" "}
+          {appts.map((x, i) => (
+            <span key={x.a.id}>{i > 0 && "; "}<Link href={`/residents/${x.a.residentId}?tab=appointments`}>{x.resident}</Link>, {localClock(x.a.scheduledAt, home.timeZone)} with {x.a.provider}</span>
+          ))}
+        </p>
+      )}
       {(() => {
         const overdue = pass.flatMap((p) => p.openFollowups.filter((f) => f.dueAt < now).map((f) => ({ ...f, who: `${p.resident.firstName} ${p.resident.lastName}`, rid: p.resident.id })));
         if (!overdue.length) return null;

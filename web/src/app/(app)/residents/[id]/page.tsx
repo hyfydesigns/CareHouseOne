@@ -7,9 +7,12 @@ import { getDb, withTenant } from "@/db/client";
 import { facilities, organizations } from "@/db/schema";
 import { canGiveMeds, canManageCare } from "@/lib/permissions";
 import { requireUser } from "@/lib/session";
-import { clock, localClock, localDate } from "@/lib/time";
+import { clock, localClock, localDate, localTime } from "@/lib/time";
 import { fmtCount, isCountable, listOrders, monthRecord, openFollowups, residentSlots, supplyOf } from "@/server/meds";
 import { getResident, hasCareRecords, visibleFacilities } from "@/server/residents";
+import { APPOINTMENT_STATUS, residentAppointments, type AppointmentStatus } from "@/server/appointments";
+import { appointmentOutcomeAction, rescheduleAppointmentAction, scheduleAppointmentAction } from "../../ops-actions";
+import { AppointmentForm, OutcomeButton, RescheduleButton } from "../../ops-forms";
 import { addOrderAction, adjustCountAction, deleteResidentAction, dischargeAction, followupAction, readmitAction, stopOrderAction, updateResidentAction } from "../../care-actions";
 import { AddOrderForm, CountAdjust, DeleteResidentForm, DischargeForm, EditResidentForm, FollowupForm, ReadmitForm, StopOrderButton } from "../../care-forms";
 import { SlotRow } from "../../meds/slot-row";
@@ -17,7 +20,7 @@ import { PhotoUpload } from "./photo-upload";
 import { DiagnosesPanel, NotesPanel, VitalsPanel } from "../../care/panels";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const TABS = [["today", "Today"], ["orders", "Medication orders"], ["record", "Medication record"], ["diagnoses", "Diagnoses"], ["vitals", "Vital signs"], ["notes", "Progress notes"], ["card", "Wristband card"], ["details", "Details"]] as const;
+const TABS = [["today", "Today"], ["orders", "Medication orders"], ["record", "Medication record"], ["diagnoses", "Diagnoses"], ["vitals", "Vital signs"], ["notes", "Progress notes"], ["appointments", "Appointments"], ["card", "Wristband card"], ["details", "Details"]] as const;
 
 /** A contact in the resident header: name, relationship and a tap-to-call number (email stays on Details). */
 function Contact({ label, name, relationship, phone }: { label: string; name: string | null; relationship: string | null; phone: string | null }) {
@@ -64,6 +67,7 @@ export default async function ResidentPage({ params, searchParams }: { params: P
       orders: tab === "orders" ? await listOrders(tx, r.id) : [],
       record: tab === "record" ? await monthRecord(tx, r, y, mo, now) : null,
       homes: tab === "details" ? (await visibleFacilities(tx, actor)).map((h) => ({ id: h.id, name: h.name })) : [],
+      appts: tab === "appointments" ? await residentAppointments(tx, r.id) : [],
       deletable: tab === "details" && me.role === "owner" && !(await hasCareRecords(tx, r.id)),
     };
   });
@@ -242,6 +246,45 @@ export default async function ResidentPage({ params, searchParams }: { params: P
           )}
           {data.deletable && <DeleteResidentForm action={deleteResidentAction.bind(null, r.id)} name={r.firstName} />}
         </>
+      )}
+
+      {tab === "appointments" && (
+        <section className="card">
+          <h2>Appointments</h2>
+          {canManageCare(me) && r.status === "active" && <AppointmentForm action={scheduleAppointmentAction.bind(null, r.id)} today={data.today} />}
+          <div className="tablewrap">
+            <table>
+              <thead><tr><th>When</th><th>With</th><th>What for</th><th>Status</th><th>Outcome</th><th></th></tr></thead>
+              <tbody>
+                {data.appts.length ? data.appts.map(({ a, by }) => {
+                  const date = localDate(a.scheduledAt, home.timeZone);
+                  const time = localTime(a.scheduledAt, home.timeZone);
+                  return (
+                    <tr key={a.id}>
+                      <td>{a.scheduledAt.toLocaleString("en-US", { timeZone: home.timeZone, weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}</td>
+                      <td>{a.provider}{a.location && <div className="small muted">{a.location}</div>}</td>
+                      <td>{a.purpose}{a.notes && <div className="small muted">{a.notes}</div>}</td>
+                      <td><span className={`pill ${a.status === "done" ? "ok" : a.status === "scheduled" ? "info" : "warn"}`}>{APPOINTMENT_STATUS[a.status as AppointmentStatus] ?? a.status}</span></td>
+                      <td>
+                        {a.outcome && <div style={{ whiteSpace: "pre-wrap" }}>{a.outcome}</div>}
+                        {a.followUp && <div className="small"><b>Follow-up:</b> {a.followUp}</div>}
+                        {a.outcome && by && <div className="small muted">{by}</div>}
+                      </td>
+                      <td>
+                        {a.status === "scheduled" && (
+                          <div className="stack" style={{ gap: 6 }}>
+                            <OutcomeButton action={appointmentOutcomeAction.bind(null, a.id, r.id)} id={a.id} />
+                            {canManageCare(me) && <RescheduleButton action={rescheduleAppointmentAction.bind(null, a.id, r.id)} id={a.id} v={{ date, time, provider: a.provider, purpose: a.purpose, location: a.location, notes: a.notes }} />}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                }) : <tr><td colSpan={6} className="muted">No appointments yet.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
 
       {tab === "vitals" && <VitalsPanel resident={r} me={me} mParam={sp.m} base={`/residents/${r.id}?tab=vitals`} />}
