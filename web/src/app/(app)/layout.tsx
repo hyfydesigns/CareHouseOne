@@ -7,6 +7,7 @@ import { IdleLock } from "@/components/idle-lock";
 import { OfflineProvider } from "@/components/offline";
 import { idleLockAction, lockAction, signOutAction } from "../(auth)/actions";
 import { NavLink } from "./nav-link";
+import { SideNav } from "./side-nav";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const me = await requireUser();
@@ -15,10 +16,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const billing = canViewAudit(me) ? billingState(await withTenant(await getDb(), me.orgId, orgSubscription)) : null;
   return (
     <div className="shell">
-      <nav className="side" aria-label="Main">
-        <div className="brand">
-          <span className="mark" aria-hidden="true">C1</span>CareHouse One
-        </div>
+      <SideNav>
         {isCaregiver ? (
           <>
             {/* The shared-tablet menu: only what caregivers need on shift. */}
@@ -66,7 +64,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <button className="linkbtn">Sign out</button>
           </form>
         </div>
-      </nav>
+      </SideNav>
       <main className="main" id="main">
         <OfflineProvider userId={me.id}>
           {process.env.DEMO_MODE === "true" && (

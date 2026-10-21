@@ -28,8 +28,8 @@ export default async function ResidentsPage() {
             <h2 id={`h-${h.id}`}>{h.name}</h2>
             {list.length ? (
               <div className="tablewrap">
-                <table>
-                  <thead><tr><th>Name</th><th>Room</th><th>Allergies</th><th>Diet</th></tr></thead>
+                <table className="fit-sm">
+                  <thead><tr><th>Name</th><th>Room</th><th>Allergies</th><th className="hide-sm">Diet</th></tr></thead>
                   <tbody>
                     {list.map((r) => (
                       <tr key={r.id}>
@@ -41,7 +41,7 @@ export default async function ResidentsPage() {
                         </td>
                         <td>{r.room}</td>
                         <td>{r.allergies.length ? <span className="pill crit">{r.allergies.join(", ")}</span> : <span className="muted">None known</span>}</td>
-                        <td>{r.diet}</td>
+                        <td className="hide-sm">{r.diet}</td>
                       </tr>
                     ))}
                   </tbody>
