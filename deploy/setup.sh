@@ -9,7 +9,8 @@
 #   - Cloud SQL for PostgreSQL 17 with daily backups, point-in-time recovery, encrypted-only
 #     connections and deletion protection
 #   - Secrets: database-url, data-encryption-key, cron-secret (and smtp-url if SMTP_URL is set)
-#   - A runtime service account for Cloud Run and a deploy service account for GitHub Actions,
+#   - A runtime service account for Cloud Run, one with no permissions for the public demo,
+#     and a deploy service account for GitHub Actions,
 #     trusted only from the hyfydesigns/CareHouseOne repository (no keys are created)
 #   - A Cloud Scheduler job that calls /api/cron every 5 minutes
 #
@@ -27,6 +28,7 @@ DB_USER="${DB_USER:-carehouse_app}"
 GITHUB_REPO="${GITHUB_REPO:-hyfydesigns/CareHouseOne}"
 RUN_SA="carehouse-run@${PROJECT_ID}.iam.gserviceaccount.com"
 DEPLOY_SA="carehouse-deploy@${PROJECT_ID}.iam.gserviceaccount.com"
+DEMO_SA="carehouse-demo@${PROJECT_ID}.iam.gserviceaccount.com"
 
 say() { printf '\n== %s\n' "$*"; }
 exists() { "$@" >/dev/null 2>&1; }
@@ -115,6 +117,12 @@ for role in roles/run.admin roles/artifactregistry.writer; do  # run.admin: need
     --role="$role" --condition=None >/dev/null
 done
 gcloud iam service-accounts add-iam-policy-binding "$RUN_SA" --member="serviceAccount:${DEPLOY_SA}" \
+  --role=roles/iam.serviceAccountUser >/dev/null
+
+# The public demo runs as its own service account with no roles at all: no secrets, no database.
+exists gcloud iam service-accounts describe "$DEMO_SA" ||
+  gcloud iam service-accounts create carehouse-demo --display-name="CareHouse One public demo (no permissions)"
+gcloud iam service-accounts add-iam-policy-binding "$DEMO_SA" --member="serviceAccount:${DEPLOY_SA}" \
   --role=roles/iam.serviceAccountUser >/dev/null
 
 say "GitHub Actions sign-in (Workload Identity Federation, no keys)"

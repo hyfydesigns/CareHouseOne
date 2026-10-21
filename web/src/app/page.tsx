@@ -16,7 +16,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 /** www.carehouseone.com shows the landing page; the app's own address goes straight to the app. */
 export default async function Home() {
-  if (!isSiteHost((await headers()).get("host"))) redirect("/dashboard");
+  if (!isSiteHost((await headers()).get("host"))) redirect(process.env.DEMO_MODE === "true" ? "/demo" : "/dashboard");
   return (
     <SiteShell>
       <Landing />

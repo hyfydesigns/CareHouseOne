@@ -15,9 +15,13 @@ export function safeEqual(a: string, b: string): boolean {
   return x.length === y.length && timingSafeEqual(x, y);
 }
 
+let demoKey: Buffer | null = null;
+
 function dataKey(): Buffer {
   const raw = process.env.DATA_ENCRYPTION_KEY;
   if (!raw) {
+    // The public demo's in-memory data only lives as long as the instance: a throwaway key will do.
+    if (process.env.DEMO_MODE === "true") return (demoKey ??= randomBytes(32));
     if (process.env.NODE_ENV === "production") throw new Error("DATA_ENCRYPTION_KEY is required in production");
     // Development and tests only: a fixed key so local data survives restarts.
     return createHash("sha256").update("carehouse-one-local-development-key").digest();

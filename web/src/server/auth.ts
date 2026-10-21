@@ -99,6 +99,22 @@ export async function signIn(db: DB, input: { email: string; password: string; u
   return { ok: true, token, next: "mfa", expiresAt };
 }
 
+/**
+ * The public demo only (DEMO_MODE): signs a visitor straight in as one of the made-up demo
+ * accounts, without a password or two-step code. Refuses everywhere else.
+ */
+export async function demoSignIn(db: DB, email: string, deviceId: string | null, userAgent?: string): Promise<{ token: string; expiresAt: Date }> {
+  if (process.env.DEMO_MODE !== "true") throw new Error("Not the demo app.");
+  const user = await findActiveByEmail(db, email);
+  if (!user || !email.endsWith(".test")) throw new Error("That isn't a demo account.");
+  const token = randomToken();
+  const [session] = await db
+    .insert(sessions)
+    .values({ orgId: user.orgId, userId: user.id, tokenHash: sha256(token), mfaPassed: false, expiresAt: minutes(PENDING_MINUTES), userAgent: userAgent?.slice(0, 300), deviceId })
+    .returning();
+  return { token, expiresAt: await completeSession(db, session.id, user, "sign_in_demo") };
+}
+
 /** A tablet registered to another organization is treated as an ordinary browser. */
 async function deviceForOrg(db: DB, deviceId: string, orgId: string): Promise<string | null> {
   const [d] = await db.select({ id: devices.id }).from(devices).where(and(eq(devices.id, deviceId), eq(devices.orgId, orgId), isNull(devices.revokedAt)));

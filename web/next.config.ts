@@ -14,6 +14,8 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   // A self-contained server for the Docker image (see Dockerfile).
   output: "standalone",
+  // The public demo runs PGlite in memory: make sure its WebAssembly files are in the image.
+  outputFileTracingIncludes: { "**": ["./node_modules/@electric-sql/pglite/dist/**/*"] },
   // Locally the public site is http://www.localhost:3000 (src/lib/hosts.ts).
   allowedDevOrigins: ["www.localhost", "app.localhost"],
   // Keep the development badge away from the sidebar's Sign out button.

@@ -67,6 +67,7 @@ jobs:
           if [ -n "${{ vars.PAYPAL_CLIENT_ID }}" ]; then SECRETS="$SECRETS,PAYPAL_CLIENT_SECRET=paypal-client-secret:latest"; fi
           ENV="APP_URL=${{ vars.APP_URL }}|MAIL_FROM=${{ vars.MAIL_FROM }}|SESSION_IDLE_MINUTES=15"
           ENV="$ENV|SITE_URL=${{ vars.SITE_URL || 'https://www.carehouseone.com' }}|CONTACT_EMAIL=${{ vars.CONTACT_EMAIL || 'hello@carehouseone.com' }}|LEADS_EMAIL=${{ vars.LEADS_EMAIL }}|OPS_EMAIL=${{ vars.OPS_EMAIL }}"
+          ENV="$ENV|DEMO_URL=${{ vars.DEMO_URL }}"
           ENV="$ENV|SIGNUP_OPEN=${{ vars.SIGNUP_OPEN || 'false' }}|PAYPAL_ENV=${{ vars.PAYPAL_ENV || 'sandbox' }}|PAYPAL_CLIENT_ID=${{ vars.PAYPAL_CLIENT_ID }}|PAYPAL_PLAN_ID=${{ vars.PAYPAL_PLAN_ID }}|PAYPAL_WEBHOOK_ID=${{ vars.PAYPAL_WEBHOOK_ID }}"
           gcloud run deploy carehouse-one \
             --image "$IMAGE" \
@@ -90,4 +91,35 @@ jobs:
             sleep 6
           done
           echo "Health check failed" >&2
+          exit 1
+
+      # The public demo (deploy/README.md step 10): the same image with DEMO_MODE, its own
+      # in-memory database, no secrets, no Cloud SQL, and a service account with no permissions.
+      # One instance at most, so every visitor sees the same demo company.
+      - name: Deploy the public demo
+        if: ${{ vars.DEMO_URL != '' }}
+        run: |
+          ENV="DEMO_MODE=true|APP_URL=${{ vars.DEMO_URL }}|SESSION_IDLE_MINUTES=60"
+          ENV="$ENV|SITE_URL=${{ vars.SITE_URL || 'https://www.carehouseone.com' }}|CONTACT_EMAIL=${{ vars.CONTACT_EMAIL || 'hello@carehouseone.com' }}|SIGNUP_OPEN=false"
+          gcloud run deploy carehouse-demo \
+            --image "$IMAGE" \
+            --region "${{ vars.GCP_REGION }}" \
+            --service-account "${{ vars.GCP_DEMO_SA }}" \
+            --set-env-vars "^|^$ENV" \
+            --no-invoker-iam-check \
+            --execution-environment gen2 \
+            --cpu 1 --memory 1Gi --cpu-boost \
+            --concurrency 40 --min-instances 0 --max-instances 1 \
+            --timeout 300 \
+            --startup-probe "httpGet.path=/api/health,initialDelaySeconds=5,periodSeconds=5,failureThreshold=24,timeoutSeconds=4" \
+            --quiet
+
+      - name: Check the demo
+        if: ${{ vars.DEMO_URL != '' }}
+        run: |
+          for i in $(seq 1 10); do
+            if curl -fsS "${{ vars.DEMO_URL }}/api/health"; then exit 0; fi
+            sleep 6
+          done
+          echo "Demo health check failed" >&2
           exit 1

@@ -231,6 +231,37 @@ Then `npm run dev`, open `http://www.localhost:3000/signup`, subscribe with a Pa
 
 **What customers see:** a billing card in Settings with the plan, this month's amount, next month's amount as of today, each home's active residents out of the 8 included (and any extra), and the next payment date. If a payment fails, owners and admins get an email and a banner; after 14 days inviting staff, registering tablets and settings changes pause. Care records and the medication record are never blocked. On the first of each month the amount ($149 per home plus $15 for each active resident over 8 in a home) is sent to PayPal; if PayPal needs the payer to approve a higher amount, an "Approve the new amount in PayPal" button appears. Admitting a resident is never blocked.
 
+## 10. Public demo: demo.carehouseone.com
+
+A demo you can show prospects or link from the website: the same app with `DEMO_MODE=true`, filled with a made-up company (Harborview Community Living, two homes, four residents, three weeks of history). Visitors click **Be the owner** or **Be the caregiver**; there are no passwords. It runs as a separate Cloud Run service, `carehouse-demo`, that is walled off from the real app:
+
+- Its database is in memory, inside the one demo instance. It never connects to Cloud SQL. The app refuses to start in demo mode if `DATABASE_URL` is set.
+- It has no secrets, and its service account (`carehouse-demo`) has no roles.
+- It never sends email, and sign-up is off.
+- A banner on every page says it's a demo with made-up people.
+- **Resets:** the data starts fresh whenever the instance starts, which happens after about 15 minutes with no visitors. It also starts fresh when someone opens the demo and the data is more than 12 hours old.
+
+Setup (once, in Cloud Shell):
+
+1. Create the demo's service account (re-running setup is safe):
+
+```bash
+cd ~/CareHouseOne && git pull && PROJECT_ID=carehouseone bash deploy/setup.sh
+```
+
+2. GitHub variables: `DEMO_URL` = `https://demo.carehouseone.com` and `GCP_DEMO_SA` = `carehouse-demo@carehouseone.iam.gserviceaccount.com`. Run Deploy. It now also deploys `carehouse-demo`, and the website shows **Try the live demo**.
+3. Map the address:
+
+```bash
+gcloud beta run domain-mappings create --service carehouse-demo --domain demo.carehouseone.com --region us-central1
+```
+
+4. In Cloudflare DNS, add a CNAME record: name `demo`, target `ghs.googlehosted.com`, proxy status **DNS only** (grey cloud). The certificate is ready 15 to 60 minutes later.
+
+**Presenting:** open demo.carehouseone.com and click **Be the owner** for the dashboard, or **Be the caregiver** for the tablet. The caregiver chooses a 4-digit PIN first. The banner's **Switch between owner and caregiver** link goes back to the choice.
+
+To turn the demo off, delete the `DEMO_URL` variable and run `gcloud run services delete carehouse-demo --region us-central1`.
+
 ## Routine work
 
 - **Yearly ICD-10-CM update** (before October 1): download the CMS order file, then with the proxy running `npm run icd:import -- icd10cm_order_2028.txt "FY 2028"`.

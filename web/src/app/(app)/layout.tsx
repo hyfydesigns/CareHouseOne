@@ -69,6 +69,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </nav>
       <main className="main" id="main">
         <OfflineProvider userId={me.id}>
+          {process.env.DEMO_MODE === "true" && (
+            <div className="banner" role="note">
+              <b>Demo.</b> Everyone here is made up, and it all goes back to the start on its own. Please don&apos;t enter real information.
+              <Link href="/demo" style={{ marginLeft: 6 }}>Switch between owner and caregiver</Link>
+            </div>
+          )}
           {billing?.warning && (
             <div className={`banner ${billing.tone === "crit" ? "error" : "offline"}`} role="status">
               {billing.warning} <Link href="/settings#billing" style={{ marginLeft: 6 }}>Billing</Link>

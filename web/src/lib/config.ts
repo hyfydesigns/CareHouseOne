@@ -1,6 +1,13 @@
 /** Fails fast at startup when production is missing settings it can't run safely without. */
 export function checkProductionConfig(): void {
   if (process.env.NODE_ENV !== "production") return;
+  if (process.env.DEMO_MODE === "true") {
+    // The public demo runs on its own in-memory database with no secrets; it must never point at real data.
+    if (process.env.DATABASE_URL) throw new Error("The demo app must not have DATABASE_URL: it keeps its own in-memory database.");
+    if (process.env.SIGNUP_OPEN === "true") throw new Error("The demo app can't take sign-ups: set SIGNUP_OPEN=false.");
+    if (!process.env.APP_URL?.startsWith("https://")) throw new Error("APP_URL must use https in production");
+    return;
+  }
   const missing = ["DATABASE_URL", "DATA_ENCRYPTION_KEY", "APP_URL", "CRON_SECRET"].filter((k) => !process.env[k]);
   if (missing.length) throw new Error(`Missing required settings: ${missing.join(", ")}`);
   const key = Buffer.from(process.env.DATA_ENCRYPTION_KEY!, "base64");

@@ -31,6 +31,8 @@ async function smtpTransport(): Promise<Transport | null> {
  * committed) and every few minutes by Cloud Scheduler to retry failures. Runs outside a tenant.
  */
 export async function deliverOutbox(db: DB, transport?: Transport | null, limit = 20): Promise<{ sent: number; failed: number }> {
+  // The public demo never sends email: its addresses are made up.
+  if (process.env.DEMO_MODE === "true") return { sent: 0, failed: 0 };
   const t = transport === undefined ? await smtpTransport() : transport;
   if (!t) return { sent: 0, failed: 0 };
   const from = process.env.MAIL_FROM || "CareHouse One <no-reply@localhost>";

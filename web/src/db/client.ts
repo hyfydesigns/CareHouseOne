@@ -58,12 +58,14 @@ const g = globalThis as unknown as { __ch1Db?: Promise<DB> };
 /**
  * The app database. With DATABASE_URL set it connects to PostgreSQL (Cloud SQL in production,
  * where migrations run as a separate deploy step). Without it, a local file-backed PGlite
- * database is used for development and migrated automatically.
+ * database is used for development and migrated automatically. The public demo (DEMO_MODE) keeps
+ * an in-memory PGlite database that lives only as long as the server instance.
  */
 export function getDb(): Promise<DB> {
   if (!g.__ch1Db) {
     const url = process.env.DATABASE_URL;
-    g.__ch1Db = url ? openPostgres(url) : openPglite(process.env.PGLITE_DIR || path.join(process.cwd(), ".data", "pglite"));
+    const demo = process.env.DEMO_MODE === "true";
+    g.__ch1Db = url ? openPostgres(url) : openPglite(demo ? undefined : process.env.PGLITE_DIR || path.join(process.cwd(), ".data", "pglite"));
   }
   return g.__ch1Db;
 }

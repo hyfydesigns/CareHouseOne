@@ -9,6 +9,9 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
   return (
     <>
       <h1>Sign in</h1>
+      {process.env.DEMO_MODE === "true" && (
+        <Link className="btn primary big" href="/demo">Try the demo without signing in</Link>
+      )}
       {device && <p className="pill ok" style={{ alignSelf: "start" }}>Registered tablet · {device.name}</p>}
       {reset && <p className="notice" role="status">Password changed. You&apos;ve been signed out on all other devices.</p>}
       {locked && <p className="notice" role="status">You were signed out of the tablet. Sign in with your password to continue.</p>}

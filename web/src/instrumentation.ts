@@ -12,6 +12,11 @@ export async function register() {
     await migrateDatabase(url);
     console.info("[startup] database migrations are up to date");
   }
+  if (process.env.DEMO_MODE === "true") {
+    // The public demo: fill its database with made-up data before taking requests.
+    const [{ getDb }, { seedDemoIfEmpty }] = await Promise.all([import("./db/client"), import("./server/demo")]);
+    if (await seedDemoIfEmpty(await getDb())) console.info("[startup] demo data loaded");
+  }
 }
 
 /** Server errors go to Cloud Logging with the route and error only, never request bodies (they can hold resident details). */
