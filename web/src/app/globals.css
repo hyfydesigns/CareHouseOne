@@ -248,6 +248,19 @@ td { padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: to
 .grid-mar td.adl-refused { background: var(--crit-soft); color: var(--crit); font-weight: 700; }
 .grid-mar td.adl-not_needed { color: var(--ink-2); }
 
+/* Progress note attachments: chips while picking, thumbnails on saved notes. */
+.btn.disabled { opacity: 0.5; pointer-events: none; }
+label.btn { cursor: pointer; }
+.attach-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.attach-chip { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); max-width: 100%; }
+.attach-chip img, .attach-pdf { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; flex: none; }
+.attach-pdf { display: grid; place-items: center; background: var(--crit-soft); color: var(--crit); font-weight: 700; font-size: 12px; }
+.attach-thumbs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.attach-thumbs a { display: flex; align-items: center; gap: 6px; text-decoration: none; border: 1px solid var(--line); border-radius: 10px; padding: 4px; background: var(--surface); }
+.attach-thumbs img { width: 96px; height: 72px; object-fit: cover; border-radius: 7px; display: block; }
+.attach-thumbs .attach-pdf { width: 72px; height: 72px; }
+.attach-thumbs .name { font-size: 13px; padding-right: 6px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* Label / value pairs, for example an incident report. */
 .details { display: grid; grid-template-columns: max-content 1fr; gap: 10px 18px; margin: 0; }
 .details dt { font-weight: 700; color: var(--ink-2); }

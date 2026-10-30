@@ -12,6 +12,8 @@ import { FOLLOWUP_KINDS, getIncident, INCIDENT_TYPES, listIncidents, SEVERITIES,
 import { listOrders, monthRecord } from "@/server/meds";
 import { getResident } from "@/server/residents";
 import { monthAdl } from "@/server/adl";
+import { attachmentsFor } from "@/server/attachments";
+import { AttachmentThumbs } from "../../../../(app)/care/attachment-thumbs";
 import { AdlGrid } from "../../../../(app)/adl/grid";
 import { monthFrom } from "../../../../(app)/care/month";
 import { recordPrintedAction } from "../../actions";
@@ -42,7 +44,9 @@ export default async function PrintResident({ params, searchParams }: { params: 
     const incidentRows = show.has("incidents") ? await listIncidents(tx, me, { residentId: r.id, from, to }) : [];
     const incidentDetails = [];
     for (const row of incidentRows) incidentDetails.push((await getIncident(tx, me, row.i.id))!);
+    const noteRows = show.has("notes") ? await monthNotes(tx, r, m.year, m.month) : null;
     return {
+      noteFiles: noteRows ? await attachmentsFor(tx, noteRows.rows.map((x) => x.n.id)) : new Map(),
       r,
       home,
       org: org.name,
@@ -51,7 +55,7 @@ export default async function PrintResident({ params, searchParams }: { params: 
       orders: (await listOrders(tx, r.id)).filter((o) => o.order.status === "active"),
       record: show.has("mar") ? await monthRecord(tx, r, m.year, m.month, now) : null,
       vitals: show.has("vitals") ? await monthVitals(tx, r, m.year, m.month) : null,
-      notes: show.has("notes") ? await monthNotes(tx, r, m.year, m.month) : null,
+      notes: noteRows,
       adl: show.has("adl") ? await monthAdl(tx, r, m.year, m.month) : null,
       incidents: incidentDetails,
     };
@@ -190,6 +194,7 @@ export default async function PrintResident({ params, searchParams }: { params: 
               <div key={n.id} className="print-note">
                 <div className="small"><b>{dt(n.recordedAt)}</b> · {SHIFT_LABEL[n.shift]} shift · {CATEGORY_LABEL[n.category]} · {by}{n.addendumTo ? " · Addendum" : ""}</div>
                 <div style={{ whiteSpace: "pre-wrap" }}>{n.body}</div>
+                <AttachmentThumbs items={data.noteFiles.get(n.id)} />
               </div>
             ))
           ) : <p>No notes this month.</p>}

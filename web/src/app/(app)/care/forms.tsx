@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { useOfflineSubmit } from "@/components/offline";
 import { Icon } from "@/components/icon";
 import { Status, type FormState } from "@/components/status";
@@ -51,11 +52,70 @@ export function VitalsForm({ action, residentId, lastReading }: { action: Action
 
 const CATEGORIES: Array<[string, string]> = [["general", "General"], ["activity", "Activity"], ["health", "Health"], ["behavior", "Behavior"], ["family_contact", "Family contact"]];
 
+/** Up to this many photos or files per note, each under 9 MB (checked again on the server). */
+const MAX_FILES = 6;
+const MAX_FILE_MB = 9;
+
+type Picked = { file: File; preview: string | null };
+
 export function NoteForm({ action, residentId, shift, firstName }: { action: Action; residentId: string; shift: string; firstName: string }) {
   const [state, formAction, pending] = useActionState(action, {});
   const offline = useOfflineSubmit("note");
+  const [files, setFiles] = useState<Picked[]>([]);
+  const [upload, setUpload] = useState<{ busy: boolean; message?: string; error?: string }>({ busy: false });
+  const uploadedFor = useRef<string | null>(null);
+  const router = useRouter();
+
+  const add = (list: FileList | null) => {
+    if (!list) return;
+    const picked = [...list].slice(0, MAX_FILES - files.length);
+    const tooBig = picked.find((f) => f.size > MAX_FILE_MB * 1024 * 1024);
+    if (tooBig) return setUpload({ busy: false, error: `${tooBig.name} is too large. Use files under ${MAX_FILE_MB} MB.` });
+    setUpload({ busy: false });
+    setFiles((cur) => [...cur, ...picked.map((file) => ({ file, preview: file.type.startsWith("image/") ? URL.createObjectURL(file) : null }))]);
+  };
+  const remove = (i: number) =>
+    setFiles((cur) => {
+      const gone = cur[i];
+      if (gone?.preview) URL.revokeObjectURL(gone.preview);
+      return cur.filter((_, k) => k !== i);
+    });
+
+  // Once the note is saved, send each photo or file to it, one request each.
+  useEffect(() => {
+    const noteId = state.id;
+    if (!noteId || uploadedFor.current === noteId || !files.length) return;
+    uploadedFor.current = noteId;
+    const queue = files;
+    (async () => {
+      setUpload({ busy: true, message: `Attaching ${queue.length} file${queue.length === 1 ? "" : "s"}…` });
+      const failed: string[] = [];
+      for (const { file } of queue) {
+        const body = new FormData();
+        body.append("file", file, file.name || "photo.jpg");
+        const res = await fetch(`/api/notes/${noteId}/attachments`, { method: "POST", body }).catch(() => null);
+        if (!res?.ok) failed.push((await res?.json().catch(() => null))?.error ?? `${file.name} didn't upload.`);
+      }
+      queue.forEach((f) => f.preview && URL.revokeObjectURL(f.preview));
+      setFiles([]);
+      setUpload(failed.length ? { busy: false, error: `Note saved, but: ${failed.join(" ")}` } : { busy: false, message: `Note saved with ${queue.length} attachment${queue.length === 1 ? "" : "s"}.` });
+      // The note list was drawn when the note saved, before its files arrived.
+      router.refresh();
+    })();
+  }, [state.id, files, router]);
+
+  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
+    if (files.length && !navigator.onLine) {
+      e.preventDefault();
+      setUpload({ busy: false, error: "Photos and files need a connection. Save the note without them now, and attach them when you're back online." });
+      return;
+    }
+    offline.onSubmit(e);
+  };
+
+  const status = offline.saved ? { message: offline.saved } : upload.error ? { error: upload.error } : upload.message ? { message: upload.message } : state;
   return (
-    <form action={formAction} onSubmit={offline.onSubmit} className="card">
+    <form action={formAction} onSubmit={onSubmit} className="card">
       <h2>New progress note</h2>
       <input type="hidden" name="residentId" value={residentId} />
       <div className="row" style={{ alignItems: "start" }}>
@@ -72,8 +132,35 @@ export function NoteForm({ action, residentId, shift, firstName }: { action: Act
         <label htmlFor="body">Note</label>
         <textarea id="body" name="body" rows={4} required placeholder={`Write facts: what you saw, what you did, and how ${firstName} responded.`} />
       </div>
-      <Status state={offline.saved ? { message: offline.saved } : state} />
-      <div className="row"><button className="btn primary big" disabled={pending}><Icon name="notes" size={20} />Save note</button></div>
+      <div className="stack" style={{ gap: 8 }}>
+        <span className="small" style={{ fontWeight: 700 }}>Photos and documents (optional)</span>
+        <div className="row" style={{ gap: 8 }}>
+          {/* The file inputs have no name: files go to the note after it's saved, not with the form. */}
+          <label className={`btn${files.length >= MAX_FILES ? " disabled" : ""}`}>
+            <Icon name="camera" size={20} />Take a photo
+            <input type="file" accept="image/*" capture="environment" hidden disabled={files.length >= MAX_FILES} onChange={(e) => { add(e.target.files); e.target.value = ""; }} />
+          </label>
+          <label className={`btn${files.length >= MAX_FILES ? " disabled" : ""}`}>
+            <Icon name="paperclip" size={20} />Add a file
+            <input type="file" accept="image/*,application/pdf" multiple hidden disabled={files.length >= MAX_FILES} onChange={(e) => { add(e.target.files); e.target.value = ""; }} />
+          </label>
+          <span className="small muted">Scan a paper form, a doctor&apos;s note or a wound with the camera. Up to {MAX_FILES}, under {MAX_FILE_MB} MB each.</span>
+        </div>
+        {files.length > 0 && (
+          <ul className="attach-list">
+            {files.map((f, i) => (
+              <li key={`${f.file.name}-${i}`} className="attach-chip">
+                {/* eslint-disable-next-line @next/next/no-img-element -- a local preview of a file not uploaded yet */}
+                {f.preview ? <img src={f.preview} alt="" /> : <span className="attach-pdf" aria-hidden="true">PDF</span>}
+                <span className="small">{f.file.name || "Photo"}</span>
+                <button type="button" className="linkbtn small" onClick={() => remove(i)} aria-label={`Remove ${f.file.name || "photo"}`}>Remove</button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <Status state={status} />
+      <div className="row"><button className="btn primary big" disabled={pending || upload.busy}><Icon name="notes" size={20} />{upload.busy ? "Attaching…" : "Save note"}</button></div>
     </form>
   );
 }

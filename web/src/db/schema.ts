@@ -730,3 +730,25 @@ export const adlActivities = pgTable(
   },
   (t) => [index("adl_activities_org_idx").on(t.orgId, t.position)],
 );
+
+/**
+ * Photos and scanned documents attached to a progress note (taken with the tablet's camera or a
+ * file). Kept in the database like resident photos; images are re-encoded with metadata (GPS
+ * included) stripped. Permanent once saved, like the note itself.
+ */
+export const noteAttachments = pgTable(
+  "note_attachments",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    noteId: uuid("note_id").notNull().references(() => progressNotes.id),
+    residentId: uuid("resident_id").notNull().references(() => residents.id),
+    filename: text("filename").notNull(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    data: bytea("data").notNull(),
+    uploadedBy: uuid("uploaded_by").notNull().references(() => users.id),
+    uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("note_attachments_note_idx").on(t.noteId)],
+);

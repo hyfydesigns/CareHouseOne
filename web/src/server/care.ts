@@ -150,7 +150,7 @@ export const noteSchema = z.object({
   addendumTo: z.preprocess((v) => (v === "" ? undefined : v), z.string().uuid().optional()),
 });
 
-export async function addNote(tx: Tx, actor: Actor, raw: unknown, now: Date, opts: EntryOpts = {}): Promise<Result> {
+export async function addNote(tx: Tx, actor: Actor, raw: unknown, now: Date, opts: EntryOpts = {}): Promise<Result<{ id: string }>> {
   const p = noteSchema.safeParse(raw);
   if (!p.success) return { ok: false, error: p.error.issues[0].message };
   const v = p.data;
@@ -160,9 +160,9 @@ export async function addNote(tx: Tx, actor: Actor, raw: unknown, now: Date, opt
     const [orig] = await tx.select().from(progressNotes).where(eq(progressNotes.id, v.addendumTo));
     if (!orig || orig.residentId !== r.id) return { ok: false, error: "The note you're adding to isn't available." };
   }
-  await tx.insert(progressNotes).values({ orgId: r.orgId, residentId: r.id, shift: v.shift, category: v.category, body: v.body, addendumTo: v.addendumTo ?? null, recordedBy: actor.id, recordedAt: now, clientId: opts.clientId ?? null });
+  const [note] = await tx.insert(progressNotes).values({ orgId: r.orgId, residentId: r.id, shift: v.shift, category: v.category, body: v.body, addendumTo: v.addendumTo ?? null, recordedBy: actor.id, recordedAt: now, clientId: opts.clientId ?? null }).returning({ id: progressNotes.id });
   await audit(tx, { orgId: r.orgId, actorId: actor.id, action: v.addendumTo ? "note_addendum" : "note_added", entity: "resident", entityId: r.id, details: opts.clientId ? { offline: true } : undefined });
-  return { ok: true, message: v.addendumTo ? "Addendum saved." : "Progress note saved." };
+  return { ok: true, message: v.addendumTo ? "Addendum saved." : "Progress note saved.", data: { id: note.id } };
 }
 
 export async function monthNotes(tx: Tx, resident: Resident, year: number, month: number) {

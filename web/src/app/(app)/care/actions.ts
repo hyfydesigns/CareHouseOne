@@ -30,8 +30,14 @@ export async function reviewVitalAction(_: FormState, fd: FormData) {
   return run((tx, a) => reviewVital(tx, a, String(fd.get("vitalId")), String(fd.get("note") ?? "")), ["/dashboard", ...residentPaths(fd)]);
 }
 
-export async function noteAction(_: FormState, fd: FormData) {
-  return run((tx, a) => onShiftOnly(tx, a, { residentId: fd.get("residentId") }, () => addNote(tx, a, pick(fd, ["residentId", "shift", "category", "body", "addendumTo"]), new Date())), residentPaths(fd));
+/** Saves the note; returns its id so the form can then upload any photos or files to it. */
+export async function noteAction(_: FormState, fd: FormData): Promise<FormState> {
+  const me = await requireUser();
+  const r = await withTenant(await getDb(), me.orgId, (tx) =>
+    onShiftOnly(tx, me, { residentId: fd.get("residentId") }, () => addNote(tx, me, pick(fd, ["residentId", "shift", "category", "body", "addendumTo"]), new Date())),
+  );
+  residentPaths(fd).forEach((p) => revalidatePath(p));
+  return r.ok ? { message: r.message, id: r.data?.id } : { error: r.error };
 }
 
 export async function addDiagnosisAction(_: FormState, fd: FormData) {

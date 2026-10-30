@@ -16,6 +16,7 @@ import {
   facilities,
   incidents,
   medicationOrders,
+  noteAttachments,
   organizations,
   outbox,
   prnFollowups,
@@ -67,7 +68,7 @@ export async function listUnclaimedSubscriptions(db: DB) {
 }
 
 /** Tables whose rows are care records. Any row here means the organization isn't a test one. */
-const CARE_TABLES = [residents, medicationOrders, administrations, prnFollowups, vitals, vitalReviews, progressNotes, residentDiagnoses, incidents, appointments, handoffNotes, safetyChecks, adlEntries] as const;
+const CARE_TABLES = [residents, medicationOrders, administrations, prnFollowups, vitals, vitalReviews, progressNotes, residentDiagnoses, incidents, appointments, handoffNotes, safetyChecks, adlEntries, noteAttachments] as const;
 
 /**
  * Permanently removes a TEST organization: one that has never had a resident or any care record.

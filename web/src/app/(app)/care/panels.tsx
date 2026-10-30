@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { attachmentsFor } from "@/server/attachments";
+import { AttachmentThumbs } from "./attachment-thumbs";
 import { eq } from "drizzle-orm";
 import { getDb, withTenant } from "@/db/client";
 import { facilities, type Resident } from "@/db/schema";
@@ -79,7 +81,10 @@ export async function NotesPanel({ resident: r, me, mParam, base }: { resident: 
   const tz = await homeTz(r.facilityId, me.orgId);
   const now = new Date();
   const m = monthFrom(mParam, localDate(now, tz));
-  const data = await withTenant(await getDb(), me.orgId, (tx) => monthNotes(tx, r, m.year, m.month));
+  const data = await withTenant(await getDb(), me.orgId, async (tx) => {
+    const notes = await monthNotes(tx, r, m.year, m.month);
+    return { ...notes, files: await attachmentsFor(tx, notes.rows.map((x) => x.n.id)) };
+  });
   const byId = new Map(data.rows.map((x) => [x.n.id, x]));
   return (
     <>
@@ -97,6 +102,7 @@ export async function NotesPanel({ resident: r, me, mParam, base }: { resident: 
               <span className="small muted">{by}</span>
             </div>
             <span style={{ whiteSpace: "pre-wrap" }}>{n.body}</span>
+            <AttachmentThumbs items={data.files.get(n.id)} />
             {m.isCurrent && !n.addendumTo && <AddendumButton action={noteAction} residentId={r.id} noteId={n.id} shift={n.shift} category={n.category} />}
           </div>
         )) : <p className="muted">No notes this month.</p>}

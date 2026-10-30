@@ -11,6 +11,7 @@ import {
   incidentFollowups,
   incidents,
   medicationCatalog,
+  noteAttachments,
   medicationOrders,
   organizations,
   progressNotes,
@@ -173,6 +174,14 @@ async function seedShowcase(db: DB, s: Seeded, c: SeededCare, now: Date): Promis
     await db.insert(progressNotes).values({ orgId, residentId: rid, shift, category, body, recordedBy: andre, recordedAt: at(d, shift === "day" ? "13:20" : "19:45") });
   }
 
+  // A note with a scanned document attached, as a caregiver would take it with the tablet's camera.
+  const [visit] = await db
+    .insert(progressNotes)
+    .values({ orgId, residentId: R.marcus.id, shift: "day", category: "health", body: "Back from Dr. Chen (neurology). No seizures in 6 months, same plan. Visit summary scanned and attached; blood test in 2 weeks.", recordedBy: andre, recordedAt: at(8, "11:40") })
+    .returning({ id: progressNotes.id });
+  const scan = visitSummaryPdf(addDays(today, -8));
+  await db.insert(noteAttachments).values({ orgId, noteId: visit.id, residentId: R.marcus.id, filename: "Visit summary.pdf", contentType: "application/pdf", sizeBytes: scan.length, data: scan, uploadedBy: andre, uploadedAt: at(8, "11:41") });
+
   const [fall] = await db
     .insert(incidents)
     .values({ orgId, facilityId: cr, residentId: R.lena.id, type: "fall", severity: "moderate", occurredAt: at(1, "06:50"), location: "Bathroom", description: "Found Lena sitting on the bathroom floor next to the sink. She said she slipped while reaching for a towel.", actionTaken: "Checked her for injuries, helped her up with a second staff member, and stayed with her while she dressed.", injury: true, injuryDetails: "Small bruise on her left elbow, no swelling. She said the pain was 2 out of 10.", witnesses: "None", reportedBy: andre, reportedAt: at(1, "07:05") })
@@ -238,4 +247,50 @@ export async function registerDemoTablet(db: DB): Promise<{ id: string; token: s
   const [d] = await db.insert(devices).values({ orgId: owner.orgId, name: "Demo tablet", tokenHash: sha256(token), registeredBy: owner.id }).returning();
   await db.insert(deviceFacilities).values({ orgId: owner.orgId, deviceId: d.id, facilityId: cedar.id });
   return { id: d.id, token };
+}
+
+/**
+ * A made-up clinic visit summary as a one-page PDF, the way a scanned document would arrive. Built
+ * by hand with the standard PDF fonts, so it needs no font files on the server.
+ */
+function visitSummaryPdf(date: string): Buffer {
+  const esc = (t: string) => t.replace(/[\\()]/g, (c) => `\\${c}`);
+  const rows: Array<[string, string]> = [
+    ["Patient", "Marcus Bell"],
+    ["Date of visit", date],
+    ["Seen by", "Dr. Chen, neurology"],
+    ["Reason", "Seizure medication review"],
+    ["Findings", "No seizures reported in 6 months."],
+    ["Plan", "Continue current medication. No changes."],
+    ["Follow-up", "Blood test in 2 weeks; next visit in 6 months."],
+  ];
+  let y = 640;
+  const body = [
+    "BT /F2 22 Tf 60 720 Td (Riverside Neurology Clinic) Tj ET",
+    "BT /F1 12 Tf 60 696 Td (After-visit summary - demo document, not a real patient) Tj ET",
+    ...rows.flatMap(([k, v]) => {
+      const out = [`BT /F2 12 Tf 60 ${y} Td (${esc(k)}) Tj ET`, `BT /F1 12 Tf 200 ${y} Td (${esc(v)}) Tj ET`, `0.8 G 60 ${y - 8} m 552 ${y - 8} l S`];
+      y -= 34;
+      return out;
+    }),
+    "BT /F1 10 Tf 60 80 Td (Riverside Clinic - 100 Example Street - \\(555\\) 010-0100) Tj ET",
+  ].join("\n");
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>",
+    `<< /Length ${Buffer.byteLength(body)} >>\nstream\n${body}\nendstream`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>",
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets: number[] = [];
+  objects.forEach((o, i) => {
+    offsets.push(Buffer.byteLength(pdf));
+    pdf += `${i + 1} 0 obj\n${o}\nendobj\n`;
+  });
+  const xref = Buffer.byteLength(pdf);
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.map((n) => `${String(n).padStart(10, "0")} 00000 n \n`).join("")}`;
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(pdf, "latin1");
 }
