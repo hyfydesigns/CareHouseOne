@@ -233,15 +233,27 @@ td { padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: to
 .combo-empty { padding: 10px 12px; color: var(--ink-2); font-size: 14px; }
 
 /* Daily care (ADLs): big choices per activity, and colors in the month grid. */
-.adl-rows { display: grid; gap: 14px; }
-.adl-row { border: 0; padding: 0; margin: 0; min-width: 0; }
-.adl-row legend { font-weight: 700; margin-bottom: 6px; }
-.adl-levels { display: flex; flex-wrap: wrap; gap: 6px; }
-.adl-level { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-weight: 700; font-size: 14.5px; cursor: pointer; }
+/* Daily care: each activity is its own block with a heading; the levels inside are colored tiles
+   (green = does it alone, amber = needs help, red = refused), so the two never look alike. */
+.adl-rows { display: grid; gap: 12px; }
+.adl-row { --lv: var(--line); border: 1px solid var(--line); border-left: 6px solid var(--lv); border-radius: var(--radius); padding: 12px 14px 14px; margin: 0; min-width: 0; background: var(--surface); }
+.adl-row legend { float: left; width: 100%; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 12px; padding: 0; margin-bottom: 10px; }
+.adl-row legend + * { clear: both; }
+.adl-name { font-size: 17px; font-weight: 800; color: var(--ink); }
+.adl-status { display: inline-flex; align-items: center; gap: 4px; font-size: 13.5px; color: var(--ink-2); }
+.adl-row.done .adl-status { color: var(--lv); font-weight: 700; }
+.adl-levels { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(160px, calc(50% - 4px)), 1fr)); gap: 8px; }
+.adl-level { display: flex; align-items: center; gap: 10px; min-height: 50px; padding: 6px 10px 6px 8px; border: 1px solid transparent; border-radius: 10px; line-height: 1.2; background: var(--bg); color: var(--ink-2); font-weight: 600; font-size: 14.5px; cursor: pointer; }
+.adl-level:hover { border-color: var(--lv); }
 .adl-level input { position: absolute; opacity: 0; width: 1px; height: 1px; }
-.adl-level.on { background: var(--accent); border-color: var(--accent); color: #fff; }
-.adl-level.refused.on { background: var(--crit); border-color: var(--crit); }
+.adl-letter { display: inline-grid; place-items: center; flex: none; width: 30px; height: 30px; border-radius: 8px; background: var(--lv-soft); color: var(--lv); font-weight: 800; font-size: 15px; }
+.adl-level.on { background: var(--lv-soft); border-color: var(--lv); box-shadow: inset 0 0 0 1px var(--lv); color: var(--ink); font-weight: 800; }
+.adl-level.on .adl-letter { background: var(--lv); color: var(--surface); }
 .adl-level:has(input:focus-visible) { outline: 3px solid var(--accent); outline-offset: 2px; }
+.lv-independent, .lv-supervision { --lv: var(--ok); --lv-soft: var(--ok-soft); }
+.lv-limited, .lv-extensive, .lv-total { --lv: var(--warn); --lv-soft: var(--warn-soft); }
+.lv-refused { --lv: var(--crit); --lv-soft: var(--crit-soft); }
+.lv-not_needed { --lv: var(--ink-2); --lv-soft: var(--line); }
 .grid-mar td.adl-independent, .grid-mar td.adl-supervision { color: var(--ok); font-weight: 700; }
 .grid-mar td.adl-limited, .grid-mar td.adl-extensive { color: var(--warn); font-weight: 700; }
 .grid-mar td.adl-total { background: var(--warn-soft); color: var(--warn); font-weight: 700; }

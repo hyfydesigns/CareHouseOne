@@ -35,7 +35,7 @@ export default async function AdlPage({ searchParams }: { searchParams: Promise<
             firstName={r.firstName}
             shift={shift.shift}
             activities={activities.filter((a) => !a.hidden).map((a) => [a.key, a.name])}
-            levels={Object.entries(SUPPORT_LEVELS).map(([k, v]) => [k, v.label])}
+            levels={Object.entries(SUPPORT_LEVELS).map(([k, v]) => [k, v.label, v.letter])}
             current={Object.fromEntries([...shift.latest].map(([a, v]) => [a, v.support]))}
           />
           <section className="card">
