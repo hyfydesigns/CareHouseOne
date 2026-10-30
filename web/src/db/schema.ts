@@ -689,3 +689,24 @@ export const staffCertifications = pgTable(
   },
   (t) => [index("certifications_user_idx").on(t.userId)],
 );
+
+/**
+ * Activities of daily living: how much help a resident needed with bathing, dressing, eating and
+ * so on, recorded by shift. Permanent once saved (like progress notes); a later entry for the same
+ * shift and activity is the one shown.
+ */
+export const adlEntries = pgTable(
+  "adl_entries",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    residentId: uuid("resident_id").notNull().references(() => residents.id),
+    shift: shiftEnum("shift").notNull(),
+    activity: text("activity").notNull(),
+    support: text("support").notNull(),
+    note: text("note"),
+    recordedBy: uuid("recorded_by").notNull().references(() => users.id),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("adl_resident_idx").on(t.residentId, t.recordedAt)],
+);

@@ -23,6 +23,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <NavLink href="/meds" icon="pill">Medication &amp; Diagnosis</NavLink>
             <NavLink href="/shift" icon="clock">Sign In / Sign Out</NavLink>
             <NavLink href="/vitals" icon="pulse">Vital Signs</NavLink>
+            <NavLink href="/adl" icon="heart">Daily Care</NavLink>
             <NavLink href="/notes" icon="notes">Progress Notes</NavLink>
             <NavLink href="/incidents" icon="alert">Incident Reports</NavLink>
           </>
@@ -32,6 +33,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <NavLink href="/meds" icon="pill">Medication pass</NavLink>
             <NavLink href="/residents" icon="residents">Residents</NavLink>
             <NavLink href="/vitals" icon="pulse">Vital signs</NavLink>
+            <NavLink href="/adl" icon="heart">Daily care</NavLink>
             <NavLink href="/notes" icon="notes">Progress notes</NavLink>
             <NavLink href="/shift" icon="clock">Sign in / out</NavLink>
             <NavLink href="/incidents" icon="alert">Incidents</NavLink>

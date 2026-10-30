@@ -1,6 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { DB } from "@/db/client";
 import {
+  adlEntries,
   administrations,
   appointments,
   deviceFacilities,
@@ -130,6 +131,37 @@ async function seedShowcase(db: DB, s: Seeded, c: SeededCare, now: Date): Promis
     }
   }
   await db.insert(vitals).values({ orgId, residentId: R.marcus.id, systolic: 124, diastolic: 80, pulse: 84, bloodSugar: 268, bpPosition: "sitting", flags: ["blood sugar"], recordedBy: andre, recordedAt: at(0, "07:40") });
+
+  // Three weeks of daily care (ADLs), day and evening shifts, with each resident's usual needs.
+  type Plan = Record<"bathing" | "dressing" | "grooming" | "toileting" | "continence" | "eating" | "mobility", string>;
+  const plans: Array<[string, Plan]> = [
+    [R.lena.id, { bathing: "supervision", dressing: "independent", grooming: "independent", toileting: "independent", continence: "independent", eating: "independent", mobility: "independent" }],
+    [R.diego.id, { bathing: "limited", dressing: "supervision", grooming: "supervision", toileting: "independent", continence: "independent", eating: "independent", mobility: "limited" }],
+    [R.marcus.id, { bathing: "supervision", dressing: "supervision", grooming: "limited", toileting: "independent", continence: "independent", eating: "supervision", mobility: "independent" }],
+    [R.ben.id, { bathing: "extensive", dressing: "limited", grooming: "limited", toileting: "supervision", continence: "supervision", eating: "supervision", mobility: "supervision" }],
+  ];
+  const adlRows: Array<typeof adlEntries.$inferInsert> = [];
+  for (let d = 21; d >= 1; d--) {
+    for (const [rid, plan] of plans) {
+      for (const [shift, time] of [["day", "09:30"], ["evening", "20:30"]] as const) {
+        for (const [activity, usual] of Object.entries(plan)) {
+          // Showers on the day shift every other day; otherwise bathing isn't needed.
+          let support = activity === "bathing" ? (shift === "day" && d % 2 === 0 ? usual : "not_needed") : usual;
+          let note: string | null = null;
+          if (rid === R.marcus.id && activity === "bathing" && d === 6 && shift === "day") {
+            support = "refused";
+            note = "Marcus refused his shower. Offered again after lunch and he agreed to wash up at the sink.";
+          }
+          if (rid === R.diego.id && activity === "mobility" && d <= 2) support = "extensive"; // sore knee this week
+          adlRows.push({ orgId, residentId: rid, shift, activity, support, note, recordedBy: andre, recordedAt: at(d, time) });
+        }
+      }
+    }
+  }
+  for (const [activity, support] of Object.entries(plans[0][1])) {
+    if (["grooming", "dressing", "eating", "toileting"].includes(activity)) adlRows.push({ orgId, residentId: R.lena.id, shift: "day", activity, support, recordedBy: andre, recordedAt: at(0, "08:30") });
+  }
+  for (let i = 0; i < adlRows.length; i += 500) await db.insert(adlEntries).values(adlRows.slice(i, i + 500));
 
   const notes: Array<[string, number, "day" | "evening", "general" | "activity" | "health" | "behavior" | "family_contact", string]> = [
     [R.lena.id, 2, "day", "activity", "Lena joined the morning walk to the park and talked with neighbors. Good mood all day."],

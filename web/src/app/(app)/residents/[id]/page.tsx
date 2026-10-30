@@ -10,6 +10,8 @@ import { requireUser } from "@/lib/session";
 import { clock, localClock, localDate, localTime } from "@/lib/time";
 import { fmtCount, isCountable, listOrders, monthRecord, openFollowups, residentSlots, supplyOf } from "@/server/meds";
 import { getResident, hasCareRecords, visibleFacilities } from "@/server/residents";
+import { monthAdl } from "@/server/adl";
+import { AdlGrid } from "../../adl/grid";
 import { APPOINTMENT_STATUS, residentAppointments, type AppointmentStatus } from "@/server/appointments";
 import { appointmentOutcomeAction, rescheduleAppointmentAction, scheduleAppointmentAction } from "../../ops-actions";
 import { AppointmentForm, OutcomeButton, RescheduleButton } from "../../ops-forms";
@@ -20,7 +22,7 @@ import { PhotoUpload } from "./photo-upload";
 import { DiagnosesPanel, NotesPanel, VitalsPanel } from "../../care/panels";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const TABS = [["today", "Today"], ["orders", "Medication orders"], ["record", "Medication record"], ["diagnoses", "Diagnoses"], ["vitals", "Vital signs"], ["notes", "Progress notes"], ["appointments", "Appointments"], ["card", "Wristband card"], ["details", "Details"]] as const;
+const TABS = [["today", "Today"], ["orders", "Medication orders"], ["record", "Medication record"], ["diagnoses", "Diagnoses"], ["vitals", "Vital signs"], ["notes", "Progress notes"], ["adl", "Daily care"], ["appointments", "Appointments"], ["card", "Wristband card"], ["details", "Details"]] as const;
 
 /** A contact in the resident header: name, relationship and a tap-to-call number (email stays on Details). */
 function Contact({ label, name, relationship, phone }: { label: string; name: string | null; relationship: string | null; phone: string | null }) {
@@ -66,6 +68,7 @@ export default async function ResidentPage({ params, searchParams }: { params: P
       followups: tab === "today" ? await openFollowups(tx, r.id) : [],
       orders: tab === "orders" ? await listOrders(tx, r.id) : [],
       record: tab === "record" ? await monthRecord(tx, r, y, mo, now) : null,
+      adl: tab === "adl" ? await monthAdl(tx, r, y, mo) : null,
       homes: tab === "details" ? (await visibleFacilities(tx, actor)).map((h) => ({ id: h.id, name: h.name })) : [],
       appts: tab === "appointments" ? await residentAppointments(tx, r.id) : [],
       deletable: tab === "details" && me.role === "owner" && !(await hasCareRecords(tx, r.id)),
@@ -246,6 +249,19 @@ export default async function ResidentPage({ params, searchParams }: { params: P
           )}
           {data.deletable && <DeleteResidentForm action={deleteResidentAction.bind(null, r.id)} name={r.firstName} />}
         </>
+      )}
+
+      {tab === "adl" && data.adl && (
+        <section className="card">
+          <div className="row">
+            <h2>Daily care (ADLs) · {MONTHS[data.ym.mo - 1]} {data.ym.y}</h2>
+            <span className="spacer" />
+            <Link className="btn small" href={`/residents/${r.id}?tab=adl&m=${prev}`}>‹ {MONTHS[(data.ym.mo + 10) % 12].slice(0, 3)}</Link>
+            {!isCurrent && <Link className="btn small" href={`/residents/${r.id}?tab=adl&m=${next}`}>{MONTHS[data.ym.mo % 12].slice(0, 3)} ›</Link>}
+            <Link className="btn small primary" href={`/adl?r=${r.id}`}>Record this shift</Link>
+          </div>
+          <AdlGrid month={data.adl} />
+        </section>
       )}
 
       {tab === "appointments" && (

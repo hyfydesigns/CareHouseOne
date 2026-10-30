@@ -176,6 +176,13 @@
       "when": 1792592730443,
       "tag": "0024_operations",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793322953352,
+      "tag": "0025_adl",
+      "breakpoints": true
     }
   ]
 }

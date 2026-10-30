@@ -232,6 +232,22 @@ td { padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: to
 .combo-opt[aria-selected="true"], .combo-opt:hover { background: var(--accent-soft); }
 .combo-empty { padding: 10px 12px; color: var(--ink-2); font-size: 14px; }
 
+/* Daily care (ADLs): big choices per activity, and colors in the month grid. */
+.adl-rows { display: grid; gap: 14px; }
+.adl-row { border: 0; padding: 0; margin: 0; min-width: 0; }
+.adl-row legend { font-weight: 700; margin-bottom: 6px; }
+.adl-levels { display: flex; flex-wrap: wrap; gap: 6px; }
+.adl-level { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-weight: 700; font-size: 14.5px; cursor: pointer; }
+.adl-level input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.adl-level.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.adl-level.refused.on { background: var(--crit); border-color: var(--crit); }
+.adl-level:has(input:focus-visible) { outline: 3px solid var(--accent); outline-offset: 2px; }
+.grid-mar td.adl-independent, .grid-mar td.adl-supervision { color: var(--ok); font-weight: 700; }
+.grid-mar td.adl-limited, .grid-mar td.adl-extensive { color: var(--warn); font-weight: 700; }
+.grid-mar td.adl-total { background: var(--warn-soft); color: var(--warn); font-weight: 700; }
+.grid-mar td.adl-refused { background: var(--crit-soft); color: var(--crit); font-weight: 700; }
+.grid-mar td.adl-not_needed { color: var(--ink-2); }
+
 /* Label / value pairs, for example an incident report. */
 .details { display: grid; grid-template-columns: max-content 1fr; gap: 10px 18px; margin: 0; }
 .details dt { font-weight: 700; color: var(--ink-2); }

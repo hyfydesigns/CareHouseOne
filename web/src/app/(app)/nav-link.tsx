@@ -10,6 +10,7 @@ const COLORS: Partial<Record<IconName, string>> = {
   pill: "#e07a2e",
   residents: "#1c9c7a",
   pulse: "#d14b7a",
+  heart: "#b04fc4",
   notes: "#2f7fd8",
   clock: "#2e9e5b",
   alert: "#d4452a",

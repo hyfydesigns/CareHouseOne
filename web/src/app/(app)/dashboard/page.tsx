@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/session";
 import { canManageCare } from "@/lib/permissions";
 import { unreviewedVitals } from "@/server/care";
 import { openIncidentCount } from "@/server/incidents";
+import { adlTodayByHome } from "@/server/adl";
 import { appointmentFollowUps, upcomingAppointments } from "@/server/appointments";
 import { overdueSafety } from "@/server/operations";
 import { trainingOverview } from "@/server/training";
@@ -36,7 +37,8 @@ export default async function DashboardPage() {
     const apptFollowUps = await appointmentFollowUps(tx, actor, now);
     const safety = await overdueSafety(tx, actor, homes, now);
     const training = canManageCare(me) ? (await trainingOverview(tx, localDate(now, homes[0]?.timeZone ?? "America/Chicago"))).filter((p) => p.worst !== "ok") : [];
-    return { org, homes, staff, review, followups, low, incidents, appts, apptFollowUps, safety, training };
+    const adl = await adlTodayByHome(tx, ids, now);
+    return { org, homes, staff, review, followups, low, incidents, appts, apptFollowUps, safety, training, adl };
   });
   return (
     <>
@@ -90,6 +92,7 @@ export default async function DashboardPage() {
                   <span className={`stat ${h.vitalsToday ? "info" : ""}`}><b>{h.vitalsToday}</b><span>vital signs</span></span>
                   <span className={`stat ${h.readingsToReview ? "crit" : ""}`}><b>{h.readingsToReview}</b><span>readings to review</span></span>
                   <span className={`stat ${h.notesToday ? "info" : ""}`}><b>{h.notesToday}</b><span>progress notes</span></span>
+                  <span className={`stat ${h.residents && (data.adl.get(h.id) ?? 0) >= h.residents ? "good" : "info"}`}><b>{data.adl.get(h.id) ?? 0}/{h.residents}</b><span>residents with daily care</span></span>
                 </div>
               </div>
               <div>

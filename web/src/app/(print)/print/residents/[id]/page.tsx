@@ -11,11 +11,13 @@ import { listDiagnoses } from "@/server/diagnoses";
 import { FOLLOWUP_KINDS, getIncident, INCIDENT_TYPES, listIncidents, SEVERITIES, type FollowupKind, type IncidentType } from "@/server/incidents";
 import { listOrders, monthRecord } from "@/server/meds";
 import { getResident } from "@/server/residents";
+import { monthAdl } from "@/server/adl";
+import { AdlGrid } from "../../../../(app)/adl/grid";
 import { monthFrom } from "../../../../(app)/care/month";
 import { recordPrintedAction } from "../../actions";
 import { PrintButton } from "../../print-button";
 
-const SECTIONS = ["mar", "vitals", "notes", "incidents"] as const;
+const SECTIONS = ["mar", "vitals", "adl", "notes", "incidents"] as const;
 
 /**
  * A resident's month on paper, for inspectors, pharmacists and the chart: medication record,
@@ -50,6 +52,7 @@ export default async function PrintResident({ params, searchParams }: { params: 
       record: show.has("mar") ? await monthRecord(tx, r, m.year, m.month, now) : null,
       vitals: show.has("vitals") ? await monthVitals(tx, r, m.year, m.month) : null,
       notes: show.has("notes") ? await monthNotes(tx, r, m.year, m.month) : null,
+      adl: show.has("adl") ? await monthAdl(tx, r, m.year, m.month) : null,
       incidents: incidentDetails,
     };
   });
@@ -73,7 +76,7 @@ export default async function PrintResident({ params, searchParams }: { params: 
         <Link className="btn small" href={monthKey(m.prev)}>‹ {m.prevLabel}</Link>
         {m.next && <Link className="btn small" href={monthKey(m.next)}>{m.nextLabel} ›</Link>}
         <span className="spacer" />
-        {[["mar", "Medication record"], ["vitals", "Vital signs"], ["notes", "Progress notes"], ["incidents", "Incidents"]].map(([k, l]) => (
+        {[["mar", "Medication record"], ["vitals", "Vital signs"], ["adl", "Daily care"], ["notes", "Progress notes"], ["incidents", "Incidents"]].map(([k, l]) => (
           <Link key={k} className={`btn small ${show.has(k as (typeof SECTIONS)[number]) ? "primary" : ""}`} href={toggle(k)}>{l}</Link>
         ))}
         <PrintButton record={recordPrintedAction.bind(null, r.id, `${m.year}-${String(m.month).padStart(2, "0")}`, [...show])} />
@@ -169,6 +172,13 @@ export default async function PrintResident({ params, searchParams }: { params: 
               </tbody>
             </table>
           ) : <p>No readings this month.</p>}
+        </section>
+      )}
+
+      {data.adl && (
+        <section className="print-section">
+          <h2>Daily care (activities of daily living)</h2>
+          <AdlGrid month={data.adl} className="grid-mar print-table" />
         </section>
       )}
 

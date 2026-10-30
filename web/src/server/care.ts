@@ -13,7 +13,7 @@ async function tzOf(tx: Tx, facilityId: string): Promise<string> {
 }
 
 /** UTC bounds of a calendar month in a home's time zone. */
-async function monthBounds(tx: Tx, facilityId: string, year: number, month: number) {
+export async function monthBounds(tx: Tx, facilityId: string, year: number, month: number) {
   const tz = await tzOf(tx, facilityId);
   const first = `${year}-${String(month).padStart(2, "0")}-01`;
   const last = `${year}-${String(month).padStart(2, "0")}-${String(daysInMonth(year, month)).padStart(2, "0")}`;
