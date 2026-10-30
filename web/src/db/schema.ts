@@ -710,3 +710,23 @@ export const adlEntries = pgTable(
   },
   (t) => [index("adl_resident_idx").on(t.residentId, t.recordedAt)],
 );
+
+/**
+ * Which activities an organization tracks in daily care. Until an owner or admin changes the list
+ * there are no rows and the built-in seven apply. Built-in rows carry their `key`; added ones don't
+ * (entries for them store the row's id). Hidden activities keep their history.
+ */
+export const adlActivities = pgTable(
+  "adl_activities",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    key: text("key"),
+    name: text("name").notNull(),
+    position: integer("position").notNull(),
+    hiddenAt: timestamp("hidden_at", { withTimezone: true }),
+    createdBy: uuid("created_by").references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index("adl_activities_org_idx").on(t.orgId, t.position)],
+);

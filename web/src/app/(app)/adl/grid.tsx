@@ -1,4 +1,4 @@
-import { ADL_ACTIVITIES, SUPPORT_LEVELS, type AdlActivity, type AdlMonth } from "@/server/adl";
+import { SUPPORT_LEVELS, type AdlMonth } from "@/server/adl";
 
 /** A month of ADLs: one row per activity, one column per day, the most help given that day. */
 export function AdlGrid({ month, className = "grid-mar" }: { month: AdlMonth; className?: string }) {
@@ -14,10 +14,10 @@ export function AdlGrid({ month, className = "grid-mar" }: { month: AdlMonth; cl
             </tr>
           </thead>
           <tbody>
-            {(Object.keys(ADL_ACTIVITIES) as AdlActivity[]).map((a) => (
-              <tr key={a}>
-                <td><b>{ADL_ACTIVITIES[a]}</b></td>
-                {month.grid[a].map((s, i) => (
+            {month.rows.map((row) => (
+              <tr key={row.key}>
+                <td><b>{row.name}</b>{row.hidden && <span className="small muted"> (no longer tracked)</span>}</td>
+                {row.cells.map((s, i) => (
                   <td key={i} className={`d adl-${s ?? "none"}`} title={s ? SUPPORT_LEVELS[s].label : undefined}>{s ? SUPPORT_LEVELS[s].letter : ""}</td>
                 ))}
               </tr>
@@ -32,7 +32,7 @@ export function AdlGrid({ month, className = "grid-mar" }: { month: AdlMonth; cl
         <ul className="stack" style={{ margin: 0, paddingLeft: 18, gap: 4 }}>
           {month.notes.map((n, i) => (
             <li key={i} className="small">
-              <b>{when(n.at)}</b> · {ADL_ACTIVITIES[n.activity]}: {SUPPORT_LEVELS[n.support].label.toLowerCase()} · {n.note}
+              <b>{when(n.at)}</b> · {n.activity}: {SUPPORT_LEVELS[n.support].label.toLowerCase()} · {n.note}
               {n.by && <span className="muted"> ({n.by})</span>}
             </li>
           ))}

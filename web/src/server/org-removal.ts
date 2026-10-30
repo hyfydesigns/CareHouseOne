@@ -2,6 +2,7 @@ import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
 import type { DB, Tx } from "@/db/client";
 import {
   accountTokens,
+  adlActivities,
   adlEntries,
   administrations,
   appointments,
@@ -84,13 +85,14 @@ export async function removeTestOrganization(db: DB, orgId: string, confirmName:
   }
   const removed: Record<string, number> = {};
   await db.transaction(async (tx: Tx) => {
-    const del = async (name: string, table: typeof shiftPunches | typeof devicePins | typeof staffCertifications | typeof sessions | typeof deviceFacilities | typeof devices | typeof accountTokens | typeof userFacilities | typeof outbox | typeof subscriptions | typeof auditLog | typeof users | typeof facilities) => {
+    const del = async (name: string, table: typeof shiftPunches | typeof devicePins | typeof staffCertifications | typeof adlActivities | typeof sessions | typeof deviceFacilities | typeof devices | typeof accountTokens | typeof userFacilities | typeof outbox | typeof subscriptions | typeof auditLog | typeof users | typeof facilities) => {
       const rows = await tx.delete(table).where(eq(table.orgId, orgId)).returning();
       removed[name] = rows.length;
     };
     await del("shift punches", shiftPunches);
     await del("tablet PINs", devicePins);
     await del("training records", staffCertifications);
+    await del("daily care activities", adlActivities);
     await del("sessions", sessions);
     await del("tablet homes", deviceFacilities);
     await del("tablets", devices);

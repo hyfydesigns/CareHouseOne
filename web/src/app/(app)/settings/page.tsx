@@ -10,8 +10,10 @@ import { paypalLive } from "@/server/paypal";
 import { CONTACT_EMAIL } from "../../(site)/shell";
 import { listDevices } from "@/server/devices";
 import { canManageHomes, listHomes } from "@/server/homes";
+import { listActivities } from "@/server/adl";
+import { AddActivityForm, ToggleActivityButton } from "./adl-activities";
 import { getOrg } from "@/server/org";
-import { addHomeAction, deviceHomesAction, forgetThisDeviceAction, removeHomeAction, updateHomeAction, registerDeviceAction, residentCheckAction, revokeDeviceAction } from "./actions";
+import { addActivityAction, addHomeAction, deviceHomesAction, toggleActivityAction, forgetThisDeviceAction, removeHomeAction, updateHomeAction, registerDeviceAction, residentCheckAction, revokeDeviceAction } from "./actions";
 import { AddHomeForm, HomeRowView } from "./homes-form";
 import { DeviceHomesForm, ForgetDeviceButton, RegisterDeviceForm, ResidentCheckForm, RevokeDeviceButton } from "./settings-form";
 
@@ -22,6 +24,7 @@ export default async function SettingsPage() {
   const data = await withTenant(await getDb(), me.orgId, async (tx) => ({ org: await getOrg(tx, me.orgId), devices: await listDevices(tx, actor), homes: await tx.select().from(facilities).orderBy(asc(facilities.name)),
     sub: await orgSubscription(tx),
     homeRows: canManageHomes(me) ? await listHomes(tx) : [],
+    activities: await listActivities(tx, { includeHidden: true }),
     residentsByHome: await tx.select({ facilityId: residents.facilityId, n: count() }).from(residents).where(and(eq(residents.orgId, me.orgId), eq(residents.status, "active"))).groupBy(residents.facilityId),
   }));
   if (!data.org) redirect("/dashboard");
@@ -98,6 +101,30 @@ export default async function SettingsPage() {
         </div>
       </section>
       <ResidentCheckForm action={residentCheckAction} current={data.org.residentCheck} />
+      <section className="card" aria-labelledby="adl-h">
+        <h2 id="adl-h">Daily care activities</h2>
+        <p className="small muted" style={{ margin: 0 }}>
+          What caregivers record for each resident every shift under Daily care. Add what your homes track, and hide what they don&apos;t. Hiding an activity keeps its past records.
+        </p>
+        <div className="tablewrap">
+          <table className="fit-sm">
+            <tbody>
+              {data.activities.map((a) => (
+                <tr key={a.key}>
+                  <td>
+                    <b className={a.hidden ? "muted" : undefined}>{a.name}</b>
+                    <span className="small muted"> · {a.builtIn ? "built in" : "added"}{a.hidden ? " · hidden" : ""}</span>
+                  </td>
+                  <td style={{ textAlign: "right" }}>
+                    <ToggleActivityButton action={toggleActivityAction.bind(null, a.key, !a.hidden)} hidden={a.hidden} name={a.name} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <AddActivityForm action={addActivityAction} />
+      </section>
       <section className="card" id="billing" aria-labelledby="billing-h">
         <div className="row">
           <h2 id="billing-h" style={{ margin: 0 }}>Billing</h2>

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getDb, withTenant } from "@/db/client";
 import { requireUser } from "@/lib/session";
 import { localClock } from "@/lib/time";
-import { ADL_ACTIVITIES, currentShiftAdl, SUPPORT_LEVELS, type AdlActivity } from "@/server/adl";
+import { currentShiftAdl, listActivities, SUPPORT_LEVELS } from "@/server/adl";
 import { listResidents } from "@/server/residents";
 import { ResidentPicker } from "../care/resident-picker";
 import { adlAction } from "./actions";
@@ -15,9 +15,10 @@ export default async function AdlPage({ searchParams }: { searchParams: Promise<
   const data = await withTenant(await getDb(), me.orgId, async (tx) => {
     const rs = await listResidents(tx, me);
     const r = rs.find((x) => x.id === sp.r) ?? rs[0];
-    return { rs, r, shift: r ? await currentShiftAdl(tx, r, now) : null };
+    return { rs, r, shift: r ? await currentShiftAdl(tx, r, now) : null, activities: await listActivities(tx, { includeHidden: true }) };
   });
-  const { rs, r, shift } = data;
+  const { rs, r, shift, activities } = data;
+  const nameOf = (key: string) => activities.find((a) => a.key === key)?.name ?? key;
   return (
     <>
       <h1>Daily care (ADLs)</h1>
@@ -29,7 +30,7 @@ export default async function AdlPage({ searchParams }: { searchParams: Promise<
             residentId={r.id}
             firstName={r.firstName}
             shift={shift.shift}
-            activities={Object.entries(ADL_ACTIVITIES)}
+            activities={activities.filter((a) => !a.hidden).map((a) => [a.key, a.name])}
             levels={Object.entries(SUPPORT_LEVELS).map(([k, v]) => [k, v.label])}
             current={Object.fromEntries([...shift.latest].map(([a, v]) => [a, v.support]))}
           />
@@ -43,7 +44,7 @@ export default async function AdlPage({ searchParams }: { searchParams: Promise<
               <ul className="stack" style={{ margin: 0, paddingLeft: 18, gap: 6 }}>
                 {[...shift.latest].map(([a, v]) => (
                   <li key={a}>
-                    <b>{ADL_ACTIVITIES[a as AdlActivity]}:</b> {SUPPORT_LEVELS[v.support].label}
+                    <b>{nameOf(a)}:</b> {SUPPORT_LEVELS[v.support].label}
                     <span className="small muted"> · {v.by ?? "Unknown"}, {localClock(v.at, shift.tz)}</span>
                     {v.note && <div className="small">{v.note}</div>}
                   </li>

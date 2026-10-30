@@ -7,6 +7,7 @@ import { clearCookie, DEVICE_COOKIE, requireUser, setDeviceCookie } from "@/lib/
 import { adminLockedMessage } from "@/server/billing";
 import { registerDevice, revokeDevice, updateDeviceHomes } from "@/server/devices";
 import { addHome, removeHome, updateHome } from "@/server/homes";
+import { addActivity, setActivityHidden } from "@/server/adl";
 import { setResidentCheck } from "@/server/org";
 
 export async function residentCheckAction(_: FormState, fd: FormData): Promise<FormState> {
@@ -76,5 +77,21 @@ export async function removeHomeAction(facilityId: string): Promise<FormState> {
   const me = await requireUser();
   const r = await withTenant(await getDb(), me.orgId, (tx) => removeHome(tx, me, facilityId));
   revalidatePath("/", "layout");
+  return r.ok ? { message: r.message } : { error: r.error };
+}
+
+export async function addActivityAction(_: FormState, fd: FormData): Promise<FormState> {
+  const me = await requireUser();
+  const r = await withTenant(await getDb(), me.orgId, (tx) => addActivity(tx, me, me.orgId, fd.get("name")));
+  revalidatePath("/settings");
+  revalidatePath("/adl");
+  return r.ok ? { message: r.message } : { error: r.error };
+}
+
+export async function toggleActivityAction(key: string, hidden: boolean): Promise<FormState> {
+  const me = await requireUser();
+  const r = await withTenant(await getDb(), me.orgId, (tx) => setActivityHidden(tx, me, me.orgId, key, hidden));
+  revalidatePath("/settings");
+  revalidatePath("/adl");
   return r.ok ? { message: r.message } : { error: r.error };
 }
