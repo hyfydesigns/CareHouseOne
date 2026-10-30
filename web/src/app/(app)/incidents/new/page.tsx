@@ -29,6 +29,7 @@ export default async function NewIncidentPage({ searchParams }: { searchParams: 
         <p className="muted">Fill this in as soon as everyone is safe, while it&apos;s fresh. Write what happened, not what you think caused it.</p>
       </div>
       <IncidentForm
+        key={picked?.id ?? "none"}
         action={fileIncidentAction}
         homes={data.homes.map((h) => ({ id: h.id, name: h.name, today: localDate(now, h.timeZone), now: localTime(now, h.timeZone) }))}
         residents={data.people.map((p) => ({ id: p.id, facilityId: p.facilityId, name: `${p.firstName} ${p.lastName}` }))}

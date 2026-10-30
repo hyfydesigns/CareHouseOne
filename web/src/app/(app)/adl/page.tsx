@@ -26,6 +26,8 @@ export default async function AdlPage({ searchParams }: { searchParams: Promise<
       {r && shift ? (
         <>
           <AdlForm
+            // A fresh form per resident and shift, so one resident's choices never carry over to the next.
+            key={`${r.id}-${shift.shift}`}
             action={adlAction}
             residentId={r.id}
             firstName={r.firstName}

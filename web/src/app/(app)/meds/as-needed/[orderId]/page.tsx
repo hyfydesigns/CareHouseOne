@@ -38,7 +38,7 @@ export default async function PrnPage({ params, searchParams }: { params: Promis
         </div>
         {r.allergies.length ? <span className="allergy">Allergies: {r.allergies.join(", ")}</span> : <span className="pill ok">No known allergies</span>}
         {canGiveMeds(me) ? (
-          <PrnForm action={prnAction} orderId={o.id} hasPackageCode={!!o.packageCode} reasons={o.prnReasons} label={`${o.name} ${o.strength}`} back={back} mode={mode} who={{ name: `${r.firstName} ${r.lastName}`, dateOfBirth: r.dateOfBirth, room: r.room, photo: residentPhotoUrl(r) }} />
+          <PrnForm key={o.id} action={prnAction} orderId={o.id} hasPackageCode={!!o.packageCode} reasons={o.prnReasons} label={`${o.name} ${o.strength}`} back={back} mode={mode} who={{ name: `${r.firstName} ${r.lastName}`, dateOfBirth: r.dateOfBirth, room: r.room, photo: residentPhotoUrl(r) }} />
         ) : (
           <p className="error">Only med-certified caregivers can give medications.</p>
         )}

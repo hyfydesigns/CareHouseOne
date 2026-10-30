@@ -37,7 +37,7 @@ export async function VitalsPanel({ resident: r, me, mParam, base }: { resident:
   const nurse = canManageCare(me);
   return (
     <>
-      {m.isCurrent && <VitalsForm action={vitalsAction} residentId={r.id} lastReading={last ? `${when(last.recordedAt, tz)} · BP ${last.systolic}/${last.diastolic}${last.bpPosition === "lying" ? " (lying down)" : ""} · pulse ${last.pulse}${last.bloodSugar != null ? ` · sugar ${last.bloodSugar} mg/dL` : ""}` : undefined} />}
+      {m.isCurrent && <VitalsForm key={r.id} action={vitalsAction} residentId={r.id} lastReading={last ? `${when(last.recordedAt, tz)} · BP ${last.systolic}/${last.diastolic}${last.bpPosition === "lying" ? " (lying down)" : ""} · pulse ${last.pulse}${last.bloodSugar != null ? ` · sugar ${last.bloodSugar} mg/dL` : ""}` : undefined} />}
       <section className="card">
         <div className="row"><h2>Vital signs history</h2><span className="spacer" /><MonthNav base={base} m={m} /></div>
         <div className="kpis">
@@ -83,7 +83,7 @@ export async function NotesPanel({ resident: r, me, mParam, base }: { resident: 
   const byId = new Map(data.rows.map((x) => [x.n.id, x]));
   return (
     <>
-      {m.isCurrent && <NoteForm action={noteAction} residentId={r.id} shift={shiftAt(localTime(now, tz))} firstName={r.firstName} />}
+      {m.isCurrent && <NoteForm key={r.id} action={noteAction} residentId={r.id} shift={shiftAt(localTime(now, tz))} firstName={r.firstName} />}
       <section className="card">
         <div className="row"><h2>Progress notes</h2><span className="spacer" /><MonthNav base={base} m={m} /></div>
         {data.rows.length ? data.rows.map(({ n, by }) => (

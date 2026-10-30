@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Fragment } from "react";
 import { ResidentPhoto, residentPhotoUrl } from "@/components/resident-photo";
 import { notFound } from "next/navigation";
 import QRCode from "qrcode";
@@ -82,7 +83,7 @@ export default async function ResidentPage({ params, searchParams }: { params: P
   const qr = tab === "card" ? await QRCode.toDataURL(r.wristbandCode, { margin: 1, width: 180 }) : null;
 
   return (
-    <>
+    <Fragment key={r.id}>
       <div className="card">
         <div className="row" style={{ alignItems: "start" }}>
           <ResidentPhoto src={residentPhotoUrl(r)} name={`${r.firstName} ${r.lastName}`} size={88} />
@@ -316,6 +317,6 @@ export default async function ResidentPage({ params, searchParams }: { params: P
           <p className="small muted">Print this for the wristband and room card. Scanning it confirms the right person before every medication.</p>
         </section>
       )}
-    </>
+    </Fragment>
   );
 }
