@@ -23,7 +23,7 @@ export default function DemoPage() {
         <button className="btn give big" style={{ width: "100%" }}><Icon name="pill" size={20} />Be the caregiver</button>
       </form>
       <p className="small muted" style={{ margin: "-6px 0 0" }}>
-        {DEMO_ROLES.caregiver.who} on the Cedar Ridge tablet: the medication pass, vital signs, notes and shift sign-in. You&apos;ll choose a PIN for the tablet first.
+        {DEMO_ROLES.caregiver.who} on the Cedar Ridge tablet: the medication pass, vital signs, daily care, notes and shifts. You&apos;ll choose a PIN for the tablet first.
       </p>
       <p className="notice" style={{ margin: 0 }}>Everyone here is made up. Please don&apos;t enter real names or health information.</p>
     </>

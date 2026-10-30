@@ -197,7 +197,7 @@ export function shiftHomes(actor: Pick<Actor, "facilityIds">, deviceFacilityIds:
  * person's homes they choose which; the shift (and the hours) are recorded there.
  */
 export async function signInShift(tx: Tx, actor: Actor, orgId: string, deviceFacilityIds: string[] | null, chosen: string | null, now: Date): Promise<Result> {
-  if (!deviceFacilityIds) return { ok: false, error: "Sign in to your shift on the home's tablet." };
+  if (!deviceFacilityIds) return { ok: false, error: "Start your shift on the home's tablet." };
   const eligible = shiftHomes(actor, deviceFacilityIds);
   if (!eligible.length) return { ok: false, error: "You're not assigned to any home this tablet is used at." };
   const facilityId = chosen || (eligible.length === 1 ? eligible[0] : null);
@@ -207,7 +207,7 @@ export async function signInShift(tx: Tx, actor: Actor, orgId: string, deviceFac
   if (open) return { ok: false, error: "You're already signed in. Sign out first." };
   await tx.insert(shiftPunches).values({ orgId, userId: actor.id, facilityId, signedInAt: now });
   await audit(tx, { orgId, actorId: actor.id, action: "shift_signed_in", entity: "facility", entityId: facilityId });
-  return { ok: true, message: "Signed in. Have a good shift." };
+  return { ok: true, message: "Shift started. Have a good shift." };
 }
 
 export async function signOutShift(tx: Tx, actor: Actor, now: Date): Promise<Result> {

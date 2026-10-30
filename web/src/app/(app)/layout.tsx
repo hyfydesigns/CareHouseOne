@@ -21,7 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <>
             {/* The shared-tablet menu: only what caregivers need on shift. */}
             <NavLink href="/meds" icon="pill">Medication &amp; Diagnosis</NavLink>
-            <NavLink href="/shift" icon="clock">Sign In / Sign Out</NavLink>
+            <NavLink href="/shift" icon="clock">Start / End Shift</NavLink>
             <NavLink href="/vitals" icon="pulse">Vital Signs</NavLink>
             <NavLink href="/adl" icon="heart">Daily Care</NavLink>
             <NavLink href="/notes" icon="notes">Progress Notes</NavLink>
@@ -35,7 +35,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <NavLink href="/vitals" icon="pulse">Vital signs</NavLink>
             <NavLink href="/adl" icon="heart">Daily care</NavLink>
             <NavLink href="/notes" icon="notes">Progress notes</NavLink>
-            <NavLink href="/shift" icon="clock">Sign in / out</NavLink>
+            <NavLink href="/shift" icon="clock">Shifts</NavLink>
             <NavLink href="/incidents" icon="alert">Incidents</NavLink>
           </>
         )}

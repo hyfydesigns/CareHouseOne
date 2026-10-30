@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/session";
 import { listResidents } from "@/server/residents";
 import { NotesPanel } from "../care/panels";
 import { ResidentPicker } from "../care/resident-picker";
+import { ShiftGate } from "../care/shift-gate";
 
 export default async function NotesPage({ searchParams }: { searchParams: Promise<{ r?: string; m?: string }> }) {
   const me = await requireUser();
@@ -11,6 +12,7 @@ export default async function NotesPage({ searchParams }: { searchParams: Promis
   const r = rs.find((x) => x.id === sp.r) ?? rs[0];
   return (
     <>
+      <ShiftGate me={me} />
       <h1>Progress notes</h1>
       <ResidentPicker residents={rs} current={r?.id} base="/notes" />
       {r ? (

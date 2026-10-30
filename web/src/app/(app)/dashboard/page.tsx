@@ -106,7 +106,7 @@ export default async function DashboardPage() {
               <p className="small muted" style={{ margin: 0 }}>
                 {h.tablets.length
                   ? `Tablet: ${h.tablets.map((t) => `${t.name}, last used ${t.lastSeenAt ? `${clock(t.lastSeenAt, h.timeZone)} ${localDate(t.lastSeenAt, h.timeZone) === localDate(now, h.timeZone) ? "today" : localDate(t.lastSeenAt, h.timeZone)}` : "never"}`).join("; ")}`
-                  : "No tablet registered. Shift sign-in won't work here until one is (Settings)."}
+                  : "No tablet registered. Caregivers can't start shifts here until one is (Settings)."}
               </p>
               <div className="row">
                 <Link className="btn small" href={`/meds?home=${h.id}`}>Medication pass</Link>

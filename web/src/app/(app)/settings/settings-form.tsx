@@ -103,7 +103,7 @@ export function RevokeDeviceButton({ action, deviceId, name }: { action: Action;
     <form
       action={formAction}
       onSubmit={(e) => {
-        if (!confirm(`Remove "${name}"? Anyone signed in on it is signed out, and shift sign-in stops working there.`)) e.preventDefault();
+        if (!confirm(`Remove "${name}"? Anyone signed in on it is signed out, and caregivers can no longer start shifts on it.`)) e.preventDefault();
       }}
     >
       <input type="hidden" name="deviceId" value={deviceId} />

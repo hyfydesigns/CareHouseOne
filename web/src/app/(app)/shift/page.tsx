@@ -33,13 +33,14 @@ export default async function ShiftPage({ searchParams }: { searchParams: Promis
   const tz = home.timeZone;
   return (
     <>
-      <h1>Sign in / Sign out</h1>
+      <h1>Start / end shift</h1>
+      <p className="muted" style={{ margin: 0 }}>Your shift is your time on the clock: start it when you arrive and end it when you leave. Ending your shift on the tablet also signs you out of it.</p>
       <section className="card">
         <div className="row" style={{ gap: 14 }}>
           <span>
             <b style={{ fontSize: 20 }}>{me.name}</b>
             <br />
-            {open ? <span className="pill ok">Signed in at {t(open.signedInAt, tz)} · {homes.find((h) => h.id === open.facilityId)?.name}</span> : <span className="pill mute">Not signed in</span>}
+            {open ? <span className="pill ok">On shift since {t(open.signedInAt, tz)} · {homes.find((h) => h.id === open.facilityId)?.name}</span> : <span className="pill mute">Not on shift</span>}
           </span>
         </div>
         <ShiftButton action={shiftAction} signedIn={!!open} homes={me.device ? homes.filter((h) => here.includes(h.id)).map((h) => ({ id: h.id, name: h.name })) : null} />

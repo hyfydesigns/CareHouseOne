@@ -7,6 +7,7 @@ import { getDb, withTenant, type Tx } from "@/db/client";
 import type { Actor } from "@/lib/permissions";
 import { requireUser } from "@/lib/session";
 import { adjustCount, createOrder, recordFollowup, recordPrnDose, recordScheduledDose, stopOrder } from "@/server/meds";
+import { onShiftOnly } from "@/server/shift-guard";
 import { createResident, deleteResident, dischargeResident, readmitResident, updateResident } from "@/server/residents";
 
 /** Every care action re-checks the signed-in user and runs inside their organization only. */
@@ -91,27 +92,31 @@ export async function stopOrderAction(_: FormState, fd: FormData): Promise<FormS
 
 export async function giveAction(_: FormState, fd: FormData): Promise<FormState> {
   const r = await asMe((tx, actor) =>
-    recordScheduledDose(
-      tx,
-      actor,
-      { ...obj(fd, ["orderId", "scheduledFor", "residentCode", "packageCode", "outcome", "reason", "note", "bpSystolic", "bpDiastolic"]), packageConfirmed: fd.get("packageConfirmed") === "on", residentConfirmed: fd.get("residentConfirmed") === "on" },
-      new Date(),
+    onShiftOnly(tx, actor, { orderId: fd.get("orderId") }, () =>
+      recordScheduledDose(
+        tx,
+        actor,
+        { ...obj(fd, ["orderId", "scheduledFor", "residentCode", "packageCode", "outcome", "reason", "note", "bpSystolic", "bpDiastolic"]), packageConfirmed: fd.get("packageConfirmed") === "on", residentConfirmed: fd.get("residentConfirmed") === "on" },
+        new Date(),
+      ),
     ),
   );
   if (r.ok) revalidatePath("/meds");
-  return r.ok ? { message: r.message } : { error: r.error, stop: !!r.stop };
+  return r.ok ? { message: r.message } : { error: r.error, stop: "stop" in r && !!r.stop };
 }
 
 export async function prnAction(_: FormState, fd: FormData): Promise<FormState> {
   const r = await asMe((tx, actor) =>
-    recordPrnDose(tx, actor, { ...obj(fd, ["orderId", "residentCode", "packageCode", "reason", "note"]), packageConfirmed: fd.get("packageConfirmed") === "on", residentConfirmed: fd.get("residentConfirmed") === "on" }, new Date()),
+    onShiftOnly(tx, actor, { orderId: fd.get("orderId") }, () =>
+      recordPrnDose(tx, actor, { ...obj(fd, ["orderId", "residentCode", "packageCode", "reason", "note"]), packageConfirmed: fd.get("packageConfirmed") === "on", residentConfirmed: fd.get("residentConfirmed") === "on" }, new Date()),
+    ),
   );
   if (r.ok) revalidatePath("/meds");
-  return r.ok ? { message: r.message } : { error: r.error, stop: !!r.stop };
+  return r.ok ? { message: r.message } : { error: r.error, stop: "stop" in r && !!r.stop };
 }
 
 export async function followupAction(_: FormState, fd: FormData): Promise<FormState> {
-  const r = await asMe((tx, actor) => recordFollowup(tx, actor, obj(fd, ["followupId", "result", "note"]), new Date()));
+  const r = await asMe((tx, actor) => onShiftOnly(tx, actor, { followupId: fd.get("followupId") }, () => recordFollowup(tx, actor, obj(fd, ["followupId", "result", "note"]), new Date())));
   revalidatePath("/meds");
   revalidatePath(`/residents/${fd.get("residentId")}`);
   return r.ok ? { message: r.message } : { error: r.error };

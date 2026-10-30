@@ -163,17 +163,17 @@ export function ShiftButton({ action, signedIn, homes }: { action: Action; signe
       <input type="hidden" name="op" value={signedIn ? "out" : "in"} />
       <div className="row">
         {signedIn || blocked ? (
-          <button className={`btn big ${signedIn ? "" : "primary"}`} disabled={pending || blocked} style={{ minWidth: 220 }}><Icon name={signedIn ? "logout" : "clock"} size={20} />{signedIn ? "Sign out" : "Sign in"}</button>
+          <button className={`btn big ${signedIn ? "" : "primary"}`} disabled={pending || blocked} style={{ minWidth: 220 }}><Icon name={signedIn ? "logout" : "clock"} size={20} />{signedIn ? "End shift" : "Start shift"}</button>
         ) : (
           homes!.map((h) => (
-            <button key={h.id} className="btn big primary" name="facilityId" value={h.id} disabled={pending} style={{ minWidth: 220 }}><Icon name="clock" size={20} />Sign in at {h.name}</button>
+            <button key={h.id} className="btn big primary" name="facilityId" value={h.id} disabled={pending} style={{ minWidth: 220 }}><Icon name="clock" size={20} />Start shift at {h.name}</button>
           ))
         )}
       </div>
       {!signedIn && (homes?.length ?? 0) > 1 && <p className="small muted" style={{ margin: 0 }}>Choose the home you&apos;re working at today; your hours are recorded there.</p>}
       {blocked && (
         <p className="small muted" style={{ margin: 0 }}>
-          {homes ? "This tablet isn't used at any of your homes. Ask your manager." : "Shift sign-in works on the home's registered tablet, so your hours are recorded at the right home."}
+          {homes ? "This tablet isn't used at any of your homes. Ask your manager." : "Shifts are started on the home's registered tablet, so your hours are recorded at the right home."}
         </p>
       )}
       <Status state={state} />

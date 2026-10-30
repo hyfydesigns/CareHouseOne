@@ -42,8 +42,8 @@ const FEATURES: Array<{ title: string; body: string; d: string; color: string }>
     color: "#2f7fd8",
   },
   {
-    title: "Shift sign-in at the home",
-    body: "Caregivers sign in and out of their shift on the home's own tablet, so hours are recorded at the right home. Monthly hours for each person.",
+    title: "Shifts started at the home",
+    body: "Caregivers start and end their shift on the home's own tablet, so hours are recorded at the right home and care is only recorded on shift. Monthly hours for each person.",
     d: "M12 21s-7-6.1-7-11a7 7 0 1 1 14 0c0 4.9-7 11-7 11ZM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z",
     color: "#1c9c7a",
   },
@@ -107,7 +107,7 @@ export function Landing() {
             <span className="site-kicker">For group homes</span>
             <h1>Care records your caregivers can get right on the first try.</h1>
             <p className="lead">
-              CareHouse One puts the medication pass, vital signs, progress notes and shift sign-in on one shared tablet in each home, with large buttons, plain
+              CareHouse One puts the medication pass, vital signs, progress notes and shift start and end on one shared tablet in each home, with large buttons, plain
               words and hard stops where mistakes happen. Owners and admins see everything from any browser.
             </p>
             <div className="site-cta">
@@ -138,7 +138,7 @@ export function Landing() {
       <section className="site-section" id="features" aria-labelledby="features-h">
         <div className="site-wrap">
           <h2 className="title" id="features-h">Everything a shift needs, nothing it doesn&apos;t</h2>
-          <p className="sub">Caregivers see five screens: Medication &amp; Diagnosis, Sign In / Sign Out, Vital Signs, Progress Notes and Incident Reports. Owners and admins get the tools behind them.</p>
+          <p className="sub">Caregivers see six screens: Medication &amp; Diagnosis, Start / End Shift, Vital Signs, Daily Care, Progress Notes and Incident Reports. Owners and admins get the tools behind them.</p>
           <div className="site-grid">
             {FEATURES.map((f) => (
               <div className="site-feature" key={f.title}>
@@ -240,7 +240,7 @@ export function Landing() {
             <details>
               <summary>What counts as a home, and what if a home has more than {INCLUDED_RESIDENTS} residents?</summary>
               <p>
-                A home is each house you add in CareHouse One, with its own tablet and shift sign-in. Each home includes up to {INCLUDED_RESIDENTS} active residents; each
+                A home is each house you add in CareHouse One, with its own tablet and shifts. Each home includes up to {INCLUDED_RESIDENTS} active residents; each
                 one over that is {usd(PRICE_PER_EXTRA_RESIDENT)} a month. You can always admit a resident; the bill adjusts on the first of the next month.
               </p>
             </details>

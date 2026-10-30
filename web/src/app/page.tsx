@@ -9,7 +9,7 @@ export async function generateMetadata(): Promise<Metadata> {
   if (!isSiteHost((await headers()).get("host"))) return {};
   return {
     title: "CareHouse One · Care records for group homes",
-    description: "Medication pass, vital signs, progress notes and shift sign-in on one shared tablet per home. $149 per home per month.",
+    description: "Medication pass, vital signs, progress notes and shifts on one shared tablet per home. $149 per home per month.",
     robots: { index: true, follow: true },
   };
 }
