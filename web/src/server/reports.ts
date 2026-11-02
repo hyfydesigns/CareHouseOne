@@ -417,6 +417,17 @@ async function incidentCountByResident(tx: Tx, s: Scope, rs: Resident[]): Promis
   return m;
 }
 
+// ---------------------------------------------------------------- month end
+
+/** Residents who lived at a home at some point in a month, for the month-end records. */
+export async function residentsForMonth(tx: Tx, actor: Actor, facilityId: string, year: number, month: number): Promise<Resident[]> {
+  if (!canSeeFacility(actor, facilityId)) return [];
+  const first = `${year}-${String(month).padStart(2, "0")}-01`;
+  const last = `${year}-${String(month).padStart(2, "0")}-${String(daysInMonth(year, month)).padStart(2, "0")}`;
+  const rows = await tx.select().from(residents).where(eq(residents.facilityId, facilityId)).orderBy(asc(residents.lastName), asc(residents.firstName));
+  return rows.filter((r) => (r.status === "active" || !r.dischargedOn || r.dischargedOn >= first) && (!r.admittedOn || r.admittedOn <= last));
+}
+
 // ---------------------------------------------------------------- spreadsheet
 
 /** The spreadsheet version: a heading, then each table with its title. */

@@ -312,6 +312,10 @@ label.btn { cursor: pointer; }
 .print-table.grid-mar td:first-child { position: static; min-width: 150px; }
 .print-note { border-bottom: 1px solid var(--line); padding: 6px 0; break-inside: avoid; }
 .print-sign { display: flex; flex-wrap: wrap; gap: 24px; margin-top: 24px; font-size: 13px; }
+/* Month end: each resident starts on a new page. */
+.print-resident { display: grid; gap: 14px; }
+.print-resident + .print-resident { border-top: 3px dashed var(--line); padding-top: 24px; margin-top: 12px; break-before: page; }
+@media print { .print-resident + .print-resident { border-top: 0; padding-top: 0; margin-top: 0; } }
 @page { size: landscape; margin: 10mm; }
 @media print {
   .no-print { display: none !important; }

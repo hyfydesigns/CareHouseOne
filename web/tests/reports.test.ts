@@ -1,9 +1,10 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { createTestDb, withTenant, type DB } from "@/db/client";
-import { administrations, incidents, vitals } from "@/db/schema";
+import { administrations, incidents, residents, vitals } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import type { Actor } from "@/lib/permissions";
 import { zonedToUtc } from "@/lib/time";
-import { buildReport, reportCsv, reportRanges } from "@/server/reports";
+import { buildReport, reportCsv, reportRanges, residentsForMonth } from "@/server/reports";
 import { seedCare, seedDemo, type Seeded, type SeededCare } from "@/server/seed";
 
 let db: DB;
@@ -86,5 +87,18 @@ describe("reports", () => {
     expect(csv).toContain('"Fall"');
     const staffing = await inOrg((tx) => buildReport(tx, owner, "staffing", q(), now));
     expect(staffing!.tables.map((t) => t.title)).toEqual(["Hours by person", "Hours by home", "Training expired or expiring in the next 30 days"]);
+  });
+
+  it("month-end records include residents who lived at the home that month, for owners and admins", async () => {
+    const names = async (y: number, m: number) => (await inOrg((tx) => residentsForMonth(tx, owner, s.facilities.cedarRidge, y, m))).map((r) => r.firstName);
+    const before = await names(2026, 10);
+    expect(before).toContain("Lena");
+    await inOrg((tx) => tx.update(residents).set({ status: "discharged", dischargedOn: "2026-10-20" }).where(eq(residents.id, c.residents.lena.id)));
+    expect(await names(2026, 10)).toContain("Lena"); // still there in October
+    expect(await names(2026, 11)).not.toContain("Lena"); // gone by November
+    await inOrg((tx) => tx.update(residents).set({ status: "active", dischargedOn: null, admittedOn: "2026-11-05" }).where(eq(residents.id, c.residents.lena.id)));
+    expect(await names(2026, 10)).not.toContain("Lena"); // not admitted yet
+    const maple = { ...caregiver, facilityIds: [s.facilities.mapleHouse], role: "caregiver" as const };
+    expect(await inOrg((tx) => residentsForMonth(tx, maple, s.facilities.cedarRidge, 2026, 10))).toEqual([]);
   });
 });

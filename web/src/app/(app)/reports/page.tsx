@@ -6,12 +6,14 @@ import { facilities } from "@/db/schema";
 import { requireUser } from "@/lib/session";
 import { localDate } from "@/lib/time";
 import { buildReport, canViewReports, isReportKind, MAX_REPORT_DAYS, reportRanges, REPORTS, type ReportKind } from "@/server/reports";
+import { MonthEnd } from "./month-end";
 import { ReportView } from "./report-view";
 
-export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ r?: string; home?: string; from?: string; to?: string }> }) {
+export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ r?: string; home?: string; from?: string; to?: string; m?: string }> }) {
   const me = await requireUser();
   if (!canViewReports(me)) redirect("/dashboard");
   const sp = await searchParams;
+  const monthEnd = sp.r === "month-end";
   const kind: ReportKind = isReportKind(sp.r) ? sp.r : "medication";
   const actor = { id: me.id, role: me.role, facilityIds: me.facilityIds };
   const now = new Date();
@@ -21,19 +23,24 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const home = homes.find((h) => h.id === sp.home)?.id;
   const from = sp.from ?? ranges.thisMonth.from;
   const to = sp.to ?? ranges.thisMonth.to;
-  const report = await withTenant(db, me.orgId, (tx) => buildReport(tx, actor, kind, { facilityId: home, from, to }, now));
+  const report = monthEnd ? null : await withTenant(db, me.orgId, (tx) => buildReport(tx, actor, kind, { facilityId: home, from, to }, now));
   const qs = (over: Record<string, string>) => new URLSearchParams({ r: kind, ...(home && { home }), from, to, ...over }).toString();
   return (
     <>
       <div>
         <h1>Reports</h1>
-        <p className="muted" style={{ margin: 0 }}>{REPORTS[kind].blurb}</p>
+        <p className="muted" style={{ margin: 0 }}>{monthEnd ? "Each resident's full record for a month, to print, save as PDF and sign." : REPORTS[kind].blurb}</p>
       </div>
       <nav className="chips" aria-label="Reports">
         {(Object.keys(REPORTS) as ReportKind[]).map((k) => (
-          <Link key={k} className="chip" href={`/reports?${qs({ r: k })}`} aria-current={k === kind ? "page" : undefined}>{REPORTS[k].title}</Link>
+          <Link key={k} className="chip" href={`/reports?${qs({ r: k })}`} aria-current={!monthEnd && k === kind ? "page" : undefined}>{REPORTS[k].title}</Link>
         ))}
+        <Link className="chip" href={`/reports?r=month-end${home ? `&home=${home}` : ""}`} aria-current={monthEnd ? "page" : undefined}>Month-end records</Link>
       </nav>
+      {monthEnd ? (
+        <MonthEnd orgId={me.orgId} actor={actor} homes={homes} sp={sp} now={now} />
+      ) : (
+      <>
       <form className="card" method="get" action="/reports">
         <input type="hidden" name="r" value={kind} />
         <div className="row" style={{ alignItems: "end" }}>
@@ -67,6 +74,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           <ReportView report={report} />
           <p className="small muted" style={{ margin: 0 }}>Reports hold residents&apos; health information. Printing and downloading are recorded in the audit log.</p>
         </>
+      )}
+      </>
       )}
     </>
   );
