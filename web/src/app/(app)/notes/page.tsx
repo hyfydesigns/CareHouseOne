@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/session";
 import { listResidents } from "@/server/residents";
 import { NotesPanel } from "../care/panels";
 import { ResidentPicker } from "../care/resident-picker";
+import { ComingUp } from "../care/coming-up";
 import { ShiftGate } from "../care/shift-gate";
 
 export default async function NotesPage({ searchParams }: { searchParams: Promise<{ r?: string; m?: string }> }) {
@@ -13,6 +14,7 @@ export default async function NotesPage({ searchParams }: { searchParams: Promis
   return (
     <>
       <ShiftGate me={me} />
+      <ComingUp me={me} />
       <h1>Progress notes</h1>
       <ResidentPicker residents={rs} current={r?.id} base="/notes" />
       {r ? (

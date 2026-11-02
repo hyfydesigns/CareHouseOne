@@ -16,6 +16,7 @@ import { visibleFacilities } from "@/server/residents";
 import { followupAction } from "../care-actions";
 import { FollowupForm } from "../care-forms";
 import { SlotRow } from "./slot-row";
+import { ComingUp } from "../care/coming-up";
 import { ShiftGate } from "../care/shift-gate";
 
 export default async function MedsPage({ searchParams }: { searchParams: Promise<{ home?: string }> }) {
@@ -48,6 +49,7 @@ export default async function MedsPage({ searchParams }: { searchParams: Promise
   return (
     <>
       <ShiftGate me={me} />
+      <ComingUp me={me} />
       <div className="row">
         <h1>{give ? "Medication & Diagnosis" : "Medication pass"}</h1>
         <span className="muted">{home.name} · {localClock(now, home.timeZone)} · {due} dose{due === 1 ? "" : "s"} due</span>

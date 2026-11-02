@@ -199,6 +199,8 @@ async function seedShowcase(db: DB, s: Seeded, c: SeededCare, now: Date): Promis
   await db.insert(appointments).values([
     { orgId, residentId: R.lena.id, facilityId: cr, scheduledAt: zonedToUtc(addDays(today, 1), "10:30", TZ), provider: "Dr. Patel, family doctor", purpose: "Blood pressure follow-up", location: "Riverside Clinic", notes: "Bring her medication list. Staff to drive.", createdBy: joy },
     { orgId, residentId: R.ben.id, facilityId: mh, scheduledAt: zonedToUtc(addDays(today, 3), "14:00", TZ), provider: "Bright Smiles Dental", purpose: "Cleaning", createdBy: joy },
+    // About two hours after the demo is set up, so the caregiver tablet shows "Coming up".
+    { orgId, residentId: R.diego.id, facilityId: cr, scheduledAt: new Date(Math.ceil((now.getTime() + 2 * 3_600_000) / 900_000) * 900_000), provider: "Dr. Okafor, orthopedics", purpose: "Sore right knee", location: "Lakeside Orthopedics", notes: "Bring his knee brace.", createdBy: joy },
     { orgId, residentId: R.marcus.id, facilityId: cr, scheduledAt: at(8, "09:00"), provider: "Dr. Chen, neurologist", purpose: "Seizure medication review", status: "done", outcome: "No seizures in 6 months. Keep the same plan.", followUp: "Blood test in 2 weeks.", createdBy: joy, updatedBy: andre, updatedAt: at(8, "11:30") },
   ]);
 

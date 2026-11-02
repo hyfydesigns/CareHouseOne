@@ -37,7 +37,7 @@ describe("the public demo", () => {
     expect((await db.select().from(residents)).length).toBe(4);
     expect((await db.select().from(administrations)).length).toBeGreaterThan(50);
     expect((await db.select().from(incidents)).length).toBe(2);
-    expect((await db.select().from(appointments)).length).toBe(3);
+    expect((await db.select().from(appointments)).length).toBe(4);
     expect(await demoIsStale(db, new Date(Date.now() + 3_600_000))).toBe(false);
     expect(await demoIsStale(db, new Date(Date.now() + 13 * 3_600_000))).toBe(true);
 

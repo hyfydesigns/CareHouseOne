@@ -38,6 +38,37 @@ export function ResidentCheckForm({ action, current }: { action: (s: FormState, 
 
 type Action = (s: FormState, fd: FormData) => Promise<FormState>;
 
+/** When the daily appointments email goes to owners and admins. */
+export function AppointmentRemindersForm({ action, current, options }: { action: Action; current: string; options: Array<[string, string, string]> }) {
+  const [state, formAction, pending] = useActionState(action, {});
+  return (
+    <form action={formAction} className="card">
+      <h2>Appointment reminders</h2>
+      <p className="small muted" style={{ margin: 0 }}>
+        Owners and admins get one email a day with how many appointments each home has. It leaves out names and reasons, so no health information goes by email. Caregiver tablets also show appointments coming up in the next 3 hours.
+      </p>
+      <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
+        <legend className="sr-only">When the email comes</legend>
+        {options.map(([v, label, detail]) => (
+          <label key={v} className="check" style={{ alignItems: "start" }}>
+            <input type="radio" name="appointmentReminders" value={v} defaultChecked={current === v} />
+            <span>
+              <b>{label}</b>
+              <br />
+              <span className="small muted">{detail}</span>
+            </span>
+          </label>
+        ))}
+      </fieldset>
+      <p className="small muted" style={{ margin: 0 }}>Times are in the time zone of your first home.</p>
+      <Status state={state} />
+      <div className="row">
+        <button className="btn primary" disabled={pending}>Save</button>
+      </div>
+    </form>
+  );
+}
+
 export function RegisterDeviceForm({ action, homes }: { action: Action; homes: Array<{ id: string; name: string }> }) {
   const [state, formAction, pending] = useActionState(action, {});
   return (

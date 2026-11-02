@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/db/client";
 import { cronAuthorized } from "@/lib/cron-auth";
+import { remindAppointments } from "@/server/appointments";
 import { syncSubscriptions } from "@/server/billing";
 import { deliverOutbox } from "@/server/mailer";
 import { pruneRateLimits } from "@/server/rate-limit";
@@ -9,7 +10,8 @@ import { remindCertifications } from "@/server/training";
 /**
  * Housekeeping, called every 5 minutes by Cloud Scheduler with the CRON_SECRET bearer token:
  * retries emails that couldn't be sent, refreshes PayPal subscriptions (and sends the resident
- * count on the first of the month), reminds owners about expiring staff training, and clears
+ * count on the first of the month), reminds owners about expiring staff training and the day's
+ * appointments, and clears
  * old rate-limit counters.
  */
 export async function POST(request: Request) {
@@ -18,6 +20,7 @@ export async function POST(request: Request) {
   const mail = await deliverOutbox(db);
   const billing = await syncSubscriptions(db);
   const training = await remindCertifications(db, new Date());
+  const appointments = await remindAppointments(db, new Date());
   await pruneRateLimits(db);
-  return NextResponse.json({ mail, billing, training }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ mail, billing, training, appointments }, { headers: { "Cache-Control": "no-store" } });
 }

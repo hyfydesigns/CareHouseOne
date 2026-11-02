@@ -5,6 +5,7 @@ import { localClock } from "@/lib/time";
 import { currentShiftAdl, listActivities, SUPPORT_LEVELS } from "@/server/adl";
 import { listResidents } from "@/server/residents";
 import { ResidentPicker } from "../care/resident-picker";
+import { ComingUp } from "../care/coming-up";
 import { ShiftGate } from "../care/shift-gate";
 import { adlAction } from "./actions";
 import { AdlForm } from "./form";
@@ -23,6 +24,7 @@ export default async function AdlPage({ searchParams }: { searchParams: Promise<
   return (
     <>
       <ShiftGate me={me} />
+      <ComingUp me={me} />
       <h1>Daily care (ADLs)</h1>
       <ResidentPicker residents={rs} current={r?.id} base="/adl" />
       {r && shift ? (

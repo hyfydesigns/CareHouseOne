@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { REMINDER_TIMES } from "@/server/org";
 import { getDb, withTenant } from "@/db/client";
 import { canViewAudit } from "@/lib/permissions";
 import { currentDevice, requireUser } from "@/lib/session";
@@ -13,9 +14,9 @@ import { canManageHomes, listHomes } from "@/server/homes";
 import { listActivities } from "@/server/adl";
 import { AddActivityForm, ToggleActivityButton } from "./adl-activities";
 import { getOrg } from "@/server/org";
-import { addActivityAction, addHomeAction, deviceHomesAction, toggleActivityAction, forgetThisDeviceAction, removeHomeAction, updateHomeAction, registerDeviceAction, residentCheckAction, revokeDeviceAction } from "./actions";
+import { addActivityAction, addHomeAction, deviceHomesAction, toggleActivityAction, forgetThisDeviceAction, removeHomeAction, updateHomeAction, registerDeviceAction, residentCheckAction, revokeDeviceAction, appointmentRemindersAction } from "./actions";
 import { AddHomeForm, HomeRowView } from "./homes-form";
-import { DeviceHomesForm, ForgetDeviceButton, RegisterDeviceForm, ResidentCheckForm, RevokeDeviceButton } from "./settings-form";
+import { DeviceHomesForm, ForgetDeviceButton, RegisterDeviceForm, AppointmentRemindersForm, ResidentCheckForm, RevokeDeviceButton } from "./settings-form";
 
 export default async function SettingsPage() {
   const me = await requireUser();
@@ -101,6 +102,7 @@ export default async function SettingsPage() {
         </div>
       </section>
       <ResidentCheckForm action={residentCheckAction} current={data.org.residentCheck} />
+      <AppointmentRemindersForm action={appointmentRemindersAction} current={data.org.appointmentReminders} options={Object.entries(REMINDER_TIMES).map(([k, v]) => [k, v.label, v.detail])} />
       <section className="card" aria-labelledby="adl-h">
         <h2 id="adl-h">Daily care activities</h2>
         <p className="small muted" style={{ margin: 0 }}>

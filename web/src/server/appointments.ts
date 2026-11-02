@@ -1,10 +1,11 @@
 import { and, asc, desc, eq, gte, inArray, lt } from "drizzle-orm";
 import { z } from "zod";
-import type { Tx } from "@/db/client";
-import { appointments, facilities, residents, users } from "@/db/schema";
+import type { DB, Tx } from "@/db/client";
+import { appointments, facilities, organizations, residents, users } from "@/db/schema";
 import { canManageCare, canSeeFacility, type Actor } from "@/lib/permissions";
-import { isDate, isTime, zonedToUtc } from "@/lib/time";
-import { audit } from "./audit";
+import { appBaseUrl } from "@/lib/hosts";
+import { addDays, isDate, isTime, localDate, localTime, zonedToUtc } from "@/lib/time";
+import { audit, sendMail } from "./audit";
 import { getResident, type Result } from "./residents";
 
 export const APPOINTMENT_STATUS = { scheduled: "Scheduled", done: "Done", cancelled: "Cancelled", missed: "Missed" } as const;
@@ -115,3 +116,58 @@ export async function appointmentFollowUps(tx: Tx, actor: Actor, now: Date) {
   return rows.filter((r) => r.a.followUp && canSeeFacility(actor, r.a.facilityId)).map((r) => ({ ...r, resident: `${r.first} ${r.last}` }));
 }
 
+/** How far ahead the caregiver tablets show an appointment, and how long after its time. */
+export const SOON_HOURS = 3;
+const AFTER_HOURS = 1;
+
+/** Appointments at these homes starting in the next few hours (or just started), for the tablet banner. */
+export async function appointmentsSoon(tx: Tx, actor: Actor, facilityIds: string[], now: Date) {
+  const rows = await upcomingAppointments(tx, actor, facilityIds, now, 1);
+  const from = now.getTime() - AFTER_HOURS * 3_600_000;
+  const to = now.getTime() + SOON_HOURS * 3_600_000;
+  return rows.filter((r) => r.a.scheduledAt.getTime() >= from && r.a.scheduledAt.getTime() <= to);
+}
+
+/**
+ * The daily appointments email to owners and admins, sent by the cron job: in the evening for
+ * tomorrow, or in the morning for today, as each organization chooses. It gives only counts per
+ * home (no names or reasons), so no health information goes out by email. Each day is sent once,
+ * and a day with no appointments sends nothing.
+ */
+export async function remindAppointments(db: DB, now: Date): Promise<number> {
+  const orgs = await db.select({ id: organizations.id, when: organizations.appointmentReminders, last: organizations.appointmentDigestOn }).from(organizations);
+  let sent = 0;
+  for (const o of orgs) {
+    if (o.when !== "evening" && o.when !== "morning") continue;
+    const homes = await db.select({ id: facilities.id, name: facilities.name, tz: facilities.timeZone }).from(facilities).where(eq(facilities.orgId, o.id)).orderBy(asc(facilities.createdAt));
+    if (!homes.length) continue;
+    const tz = homes[0].tz;
+    const hour = Number(localTime(now, tz).slice(0, 2));
+    const today = localDate(now, tz);
+    const day = o.when === "evening" ? (hour >= 17 && hour < 23 ? addDays(today, 1) : null) : hour >= 6 && hour < 11 ? today : null;
+    if (!day || o.last === day) continue;
+    await db.update(organizations).set({ appointmentDigestOn: day }).where(eq(organizations.id, o.id));
+    const rows = await db
+      .select({ facilityId: appointments.facilityId, at: appointments.scheduledAt })
+      .from(appointments)
+      .where(and(eq(appointments.orgId, o.id), eq(appointments.status, "scheduled"), gte(appointments.scheduledAt, new Date(now.getTime() - 86_400_000)), lt(appointments.scheduledAt, new Date(now.getTime() + 3 * 86_400_000))));
+    const perHome = homes.map((h) => ({ name: h.name, n: rows.filter((r) => r.facilityId === h.id && localDate(r.at, h.tz) === day).length })).filter((h) => h.n);
+    const total = perHome.reduce((n, h) => n + h.n, 0);
+    if (!total) continue;
+    const plural = (n: number) => `${n} appointment${n === 1 ? "" : "s"}`;
+    const when = o.when === "evening" ? "Tomorrow" : "Today";
+    const subject = `${when}: ${plural(total)} at your homes`;
+    const body = [
+      `${when} (${day}):`,
+      ...perHome.map((h) => `- ${h.name}: ${plural(h.n)}`),
+      "",
+      `Sign in to CareHouse One to see who, when and where: ${appBaseUrl()}/dashboard`,
+      "",
+      "To keep residents' health information private, this email doesn't include names or details. Change when it comes under Settings > Appointment reminders.",
+    ].join("\n");
+    const to = await db.select({ email: users.email }).from(users).where(and(eq(users.orgId, o.id), inArray(users.role, ["owner", "admin"]), eq(users.status, "active")));
+    for (const { email } of to) await sendMail(db, { orgId: o.id, to: email, subject, body });
+    sent++;
+  }
+  return sent;
+}

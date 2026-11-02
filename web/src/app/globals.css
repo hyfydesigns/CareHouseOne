@@ -260,6 +260,12 @@ td { padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: to
 .grid-mar td.adl-refused { background: var(--crit-soft); color: var(--crit); font-weight: 700; }
 .grid-mar td.adl-not_needed { color: var(--ink-2); }
 
+/* Caregiver screens: appointments in the next few hours. */
+.coming-up { display: grid; gap: 10px; border-radius: var(--radius); padding: 12px 14px; background: var(--accent-soft); border: 1px solid var(--accent); }
+.coming-up h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 17px; color: var(--accent-ink); }
+.coming-up-item { display: grid; gap: 2px; padding-top: 8px; border-top: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); }
+.coming-up-item:first-of-type { border-top: 0; padding-top: 0; }
+
 /* Progress note attachments: chips while picking, thumbnails on saved notes. */
 .btn.disabled { opacity: 0.5; pointer-events: none; }
 label.btn { cursor: pointer; }

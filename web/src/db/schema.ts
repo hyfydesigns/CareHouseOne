@@ -32,6 +32,10 @@ export const organizations = pgTable("organizations", {
   id: id(),
   name: text("name").notNull(),
   residentCheck: residentCheckEnum("resident_check").notNull().default("two_identifiers"),
+  /** When owners and admins get the appointments email: "evening" (for tomorrow), "morning" (for today) or "off". */
+  appointmentReminders: text("appointment_reminders").notNull().default("evening"),
+  /** The day the last appointments email was about, so each day is only sent once. */
+  appointmentDigestOn: text("appointment_digest_on"),
   createdAt: createdAt(),
 });
 
