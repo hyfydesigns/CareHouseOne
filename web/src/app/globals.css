@@ -269,6 +269,36 @@ td { padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: to
   .report-tiles .stat { border: 1px solid #999; }
 }
 
+/* Onboarding forms: the builder, the family's page and staff review. */
+.ob-form { display: grid; gap: 14px; }
+.ob-form h3 { margin: 8px 0 0; font-size: 17px; }
+.ob-text { margin: 0; white-space: pre-wrap; line-height: 1.5; }
+.ob-field { display: grid; gap: 6px; border: 0; padding: 0; margin: 0; min-width: 0; }
+.ob-label { font-weight: 700; }
+.ob-who { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--bg); color: var(--ink-2); font-size: 12px; font-weight: 600; }
+.ob-answer { padding: 8px 10px; border-radius: 8px; background: var(--bg); white-space: pre-wrap; }
+.ob-line { padding: 8px 10px; border-bottom: 1px dashed var(--line); color: var(--ink-2); font-size: 14px; }
+.ob-sign { display: grid; gap: 6px; padding: 12px; border: 1px dashed var(--line); border-radius: 10px; }
+.ob-sign.signed { border-style: solid; border-color: var(--ok); background: var(--ok-soft); }
+.ob-signature { display: grid; gap: 2px; }
+.ob-signature img { max-height: 70px; max-width: 280px; background: #fff; border-radius: 6px; }
+.ob-typed { font-family: "Segoe Script", "Brush Script MT", "Snell Roundhand", cursive; font-size: 28px; line-height: 1.2; }
+.ob-edit { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.sign-pad { width: 100%; max-width: 520px; height: 180px; border: 2px solid var(--line); border-radius: 10px; background: #fff; touch-action: none; cursor: crosshair; }
+.checklist { display: grid; gap: 8px; }
+.checklist-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); text-decoration: none; }
+.checklist-item:hover { border-color: var(--accent); }
+.checklist-item .grow { flex: 1; min-width: 0; }
+
+/* The family's onboarding pages: no app chrome, comfortable on a phone. */
+.family { max-width: 760px; margin: 0 auto; padding: 16px; display: grid; gap: 14px; }
+.family .brand { display: flex; align-items: center; gap: 8px; }
+.family h1 { font-size: 24px; }
+.sign-dialog { width: min(560px, calc(100vw - 32px)); border: 0; border-radius: var(--radius); padding: 18px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.sign-dialog::backdrop { background: rgba(20, 16, 50, 0.45); }
+.sign-dialog[open] { display: grid; gap: 12px; }
+.sign-dialog h2 { margin: 0; }
+
 /* Caregiver screens: appointments in the next few hours. */
 .coming-up { display: grid; gap: 10px; border-radius: var(--radius); padding: 12px 14px; background: var(--accent-soft); border: 1px solid var(--accent); }
 .coming-up h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 17px; color: var(--accent-ink); }

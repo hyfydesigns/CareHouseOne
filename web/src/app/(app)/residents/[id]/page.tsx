@@ -237,7 +237,7 @@ export default async function ResidentPage({ params, searchParams }: { params: P
                       <tr key={d.id}>
                         <td>
                           <a href={`/api/documents/${d.id}`} target="_blank" rel="noreferrer"><b>{d.title}</b></a>
-                          {d.source === "onboarding" && <span className="pill info" style={{ marginLeft: 6 }}>Signed at admission</span>}
+                          {d.source === "onboarding" && <span className="pill info" style={{ marginLeft: 6 }}>From onboarding</span>}
                           <div className="small muted">{d.contentType === "application/pdf" ? "PDF" : "Photo"} · {(d.sizeBytes / 1024 / 1024).toFixed(1)} MB · {localDate(d.uploadedAt, home.timeZone)}{d.by ? ` · ${d.by}` : ""}</div>
                         </td>
                         <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>

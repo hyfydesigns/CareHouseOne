@@ -31,6 +31,8 @@ import {
   users,
   vitalReviews,
   vitals,
+  onboardingForms,
+  onboardingPackets,
 } from "@/db/schema";
 
 export interface OrgListing {
@@ -69,7 +71,7 @@ export async function listUnclaimedSubscriptions(db: DB) {
 }
 
 /** Tables whose rows are care records. Any row here means the organization isn't a test one. */
-const CARE_TABLES = [residents, medicationOrders, administrations, prnFollowups, vitals, vitalReviews, progressNotes, residentDiagnoses, incidents, appointments, handoffNotes, safetyChecks, adlEntries, noteAttachments, residentDocuments] as const;
+const CARE_TABLES = [residents, medicationOrders, administrations, prnFollowups, vitals, vitalReviews, progressNotes, residentDiagnoses, incidents, appointments, handoffNotes, safetyChecks, adlEntries, noteAttachments, residentDocuments, onboardingPackets] as const;
 
 /**
  * Permanently removes a TEST organization: one that has never had a resident or any care record.
@@ -87,7 +89,7 @@ export async function removeTestOrganization(db: DB, orgId: string, confirmName:
   }
   const removed: Record<string, number> = {};
   await db.transaction(async (tx: Tx) => {
-    const del = async (name: string, table: typeof shiftPunches | typeof devicePins | typeof staffCertifications | typeof adlActivities | typeof sessions | typeof deviceFacilities | typeof devices | typeof accountTokens | typeof userFacilities | typeof outbox | typeof subscriptions | typeof auditLog | typeof users | typeof facilities) => {
+    const del = async (name: string, table: typeof shiftPunches | typeof devicePins | typeof staffCertifications | typeof adlActivities | typeof onboardingForms | typeof sessions | typeof deviceFacilities | typeof devices | typeof accountTokens | typeof userFacilities | typeof outbox | typeof subscriptions | typeof auditLog | typeof users | typeof facilities) => {
       const rows = await tx.delete(table).where(eq(table.orgId, orgId)).returning();
       removed[name] = rows.length;
     };
@@ -95,6 +97,7 @@ export async function removeTestOrganization(db: DB, orgId: string, confirmName:
     await del("tablet PINs", devicePins);
     await del("training records", staffCertifications);
     await del("daily care activities", adlActivities);
+    await del("onboarding forms", onboardingForms);
     await del("sessions", sessions);
     await del("tablet homes", deviceFacilities);
     await del("tablets", devices);

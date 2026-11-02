@@ -1,8 +1,9 @@
 import { eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
-import { createTestDb, type DB } from "@/db/client";
+import { createTestDb, withTenant, type DB } from "@/db/client";
 import { auditLog, organizations, users } from "@/db/schema";
 import { audit } from "@/server/audit";
+import { ensureStarterForms } from "@/server/onboarding-forms";
 import { provisionOrganization } from "@/server/provision";
 import { listOrganizations, removeTestOrganization } from "@/server/org-removal";
 import { seedCare, seedDemo, type Seeded } from "@/server/seed";
@@ -21,6 +22,8 @@ beforeAll(async () => {
     "https://app.example.test",
   );
   testOrgId = r.orgId;
+  // Opening Onboarding once gives the organization its starter forms; those go too.
+  await withTenant(db, testOrgId, (tx) => ensureStarterForms(tx, testOrgId, null));
 });
 
 describe("removing test organizations", () => {

@@ -785,3 +785,154 @@ export const residentDocuments = pgTable(
   },
   (t) => [index("resident_documents_resident_idx").on(t.residentId, t.uploadedAt)],
 );
+
+/**
+ * The forms and documents an organization asks families for when a resident moves in. Each
+ * organization starts with general starter forms and edits them or adds its own. A form sent to a
+ * family is copied into the onboarding, so later edits never change what was already signed.
+ */
+export const onboardingForms = pgTable(
+  "onboarding_forms",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    title: text("title").notNull(),
+    description: text("description").notNull().default(""),
+    /** "form" (fill and sign) or "upload" (documents to send). */
+    kind: text("kind").notNull(),
+    required: boolean("required").notNull().default(true),
+    blocks: jsonb("blocks").$type<unknown[]>().notNull().default([]),
+    position: integer("position").notNull(),
+    version: integer("version").notNull().default(1),
+    hiddenAt: timestamp("hidden_at", { withTimezone: true }),
+    createdBy: uuid("created_by").references(() => users.id),
+    createdAt: createdAt(),
+    updatedBy: uuid("updated_by").references(() => users.id),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (t) => [index("onboarding_forms_org_idx").on(t.orgId, t.position)],
+);
+
+/**
+ * One family's onboarding: a future resident, their power of attorney (POA), and a private link.
+ * The POA opens the link, confirms a code sent to their email, and works through the checklist.
+ * Admitting it creates the resident and files the signed forms.
+ */
+export const onboardingPackets = pgTable(
+  "onboarding_packets",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    facilityId: uuid("facility_id").notNull().references(() => facilities.id),
+    residentFirstName: text("resident_first_name").notNull(),
+    residentLastName: text("resident_last_name").notNull(),
+    poaName: text("poa_name").notNull(),
+    poaEmail: text("poa_email").notNull(),
+    /** open, admitted or cancelled. */
+    status: text("status").notNull().default("open"),
+    /** sha256 of the private link's token; the token itself is only ever in the email. */
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    residentId: uuid("resident_id").references(() => residents.id),
+    admittedAt: timestamp("admitted_at", { withTimezone: true }),
+    admittedBy: uuid("admitted_by").references(() => users.id),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    cancelledBy: uuid("cancelled_by").references(() => users.id),
+  },
+  (t) => [uniqueIndex("onboarding_packets_token_uq").on(t.tokenHash), index("onboarding_packets_org_idx").on(t.orgId, t.createdAt)],
+);
+
+/** One checklist item of an onboarding: a copy of the form as sent, with the answers so far. */
+export const onboardingItems = pgTable(
+  "onboarding_items",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    packetId: uuid("packet_id").notNull().references(() => onboardingPackets.id),
+    formId: uuid("form_id").references(() => onboardingForms.id),
+    formVersion: integer("form_version").notNull().default(1),
+    title: text("title").notNull(),
+    description: text("description").notNull().default(""),
+    kind: text("kind").notNull(),
+    required: boolean("required").notNull(),
+    blocks: jsonb("blocks").$type<unknown[]>().notNull().default([]),
+    position: integer("position").notNull(),
+    values: jsonb("values").$type<Record<string, string>>().notNull().default({}),
+    /** todo, submitted (by the POA), changes (requested by staff) or approved. */
+    status: text("status").notNull().default("todo"),
+    staffNote: text("staff_note"),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    reviewedBy: uuid("reviewed_by").references(() => users.id),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (t) => [index("onboarding_items_packet_idx").on(t.packetId, t.position)],
+);
+
+/** Files the POA uploads for an item (court papers, ID and insurance cards). */
+export const onboardingFiles = pgTable(
+  "onboarding_files",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    packetId: uuid("packet_id").notNull().references(() => onboardingPackets.id),
+    itemId: uuid("item_id").notNull().references(() => onboardingItems.id),
+    filename: text("filename").notNull(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    data: bytea("data").notNull(),
+    uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
+    removedAt: timestamp("removed_at", { withTimezone: true }),
+  },
+  (t) => [index("onboarding_files_item_idx").on(t.itemId)],
+);
+
+/**
+ * Electronic signatures, kept as evidence (ESIGN/UETA): who signed, how, when, from where, and a
+ * fingerprint (sha256) of exactly what the form said at that moment. Never deleted; if the form's
+ * answers change afterwards the signature is voided and has to be given again.
+ */
+export const onboardingSignatures = pgTable(
+  "onboarding_signatures",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    packetId: uuid("packet_id").notNull().references(() => onboardingPackets.id),
+    itemId: uuid("item_id").notNull().references(() => onboardingItems.id),
+    blockId: text("block_id").notNull(),
+    /** poa or staff. */
+    signer: text("signer").notNull(),
+    userId: uuid("user_id").references(() => users.id),
+    name: text("name").notNull(),
+    /** drawn or typed. */
+    method: text("method").notNull(),
+    image: bytea("image"),
+    consent: text("consent").notNull(),
+    documentHash: text("document_hash").notNull(),
+    ip: text("ip"),
+    userAgent: text("user_agent"),
+    signedAt: timestamp("signed_at", { withTimezone: true }).notNull().defaultNow(),
+    voidedAt: timestamp("voided_at", { withTimezone: true }),
+  },
+  (t) => [index("onboarding_signatures_item_idx").on(t.itemId)],
+);
+
+/** The 6-digit codes emailed to a POA, and the short sessions a correct code starts. */
+export const onboardingAccess = pgTable(
+  "onboarding_access",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    packetId: uuid("packet_id").notNull().references(() => onboardingPackets.id),
+    /** code or session. */
+    kind: text("kind").notNull(),
+    secretHash: text("secret_hash").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("onboarding_access_packet_idx").on(t.packetId, t.kind), uniqueIndex("onboarding_access_secret_uq").on(t.secretHash)],
+);

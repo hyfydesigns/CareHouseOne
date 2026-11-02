@@ -35,7 +35,7 @@ describe("resident documents", () => {
     const list = await inOrg((tx) => listDocuments(tx, owner, lena));
     expect(list.map((d) => [d.title, d.category, d.contentType])).toEqual([["Admission agreement", "admission", "application/pdf"]]);
     expect(await inOrg((tx) => listDocuments(tx, caregiver, lena))).toEqual([]);
-    expect(await inOrg((tx) => getDocument(tx, caregiver, r.data!.id))).toBeNull();
+    expect(await inOrg((tx) => getDocument(tx, caregiver, r.ok ? r.data!.id : ""))).toBeNull();
     // A resident with a document on file isn't one "added by mistake" any more.
     expect(await inOrg((tx) => hasCareRecords(tx, lena))).toBe(true);
   });
