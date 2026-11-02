@@ -80,7 +80,8 @@ export async function timesheet(tx: Tx, actor: Actor, q: { facilityId?: string; 
   return { from: q.from, to: q.to, shifts, people: [...byPerson.values()].sort((a, b) => a.name.localeCompare(b.name)) };
 }
 
-const csvCell = (v: string | number | null) => {
+/** One spreadsheet cell, quoted, with formulas neutralised. */
+export const csvCell = (v: string | number | null) => {
   const s = v == null ? "" : String(v);
   // Quote everything; neutralise spreadsheet formulas in names.
   const safe = /^[=+\-@]/.test(s) ? `'${s}` : s;

@@ -260,6 +260,15 @@ td { padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: to
 .grid-mar td.adl-refused { background: var(--crit-soft); color: var(--crit); font-weight: 700; }
 .grid-mar td.adl-not_needed { color: var(--ink-2); }
 
+/* Reports: tables are wide; on paper each table starts clean and the summary tiles stay compact. */
+.report-tiles { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.report-table td { white-space: nowrap; }
+@media print {
+  .report-table { break-inside: auto; box-shadow: none; border: 0; padding: 0; }
+  .report-table td { white-space: normal; }
+  .report-tiles .stat { border: 1px solid #999; }
+}
+
 /* Caregiver screens: appointments in the next few hours. */
 .coming-up { display: grid; gap: 10px; border-radius: var(--radius); padding: 12px 14px; background: var(--accent-soft); border: 1px solid var(--accent); }
 .coming-up h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 17px; color: var(--accent-ink); }

@@ -80,7 +80,7 @@ async function fillDemo(db: DB, now: Date): Promise<void> {
   if (!med) await db.insert(medicationCatalog).values(SAMPLE_CATALOG.map((r) => ({ ...r, version: "starter list" }))).onConflictDoNothing();
   const s = await seedDemo(db, { fixedTotp: true });
   const care = await seedCare(db, s);
-  await seedDoseHistory(db, s, now, 21);
+  await seedDoseHistory(db, s, now, 62); // two months, so "Last month" and "Last 30 days" reports are full
   await seedToday(db, s, now);
   await seedShowcase(db, s, care, now);
 }
