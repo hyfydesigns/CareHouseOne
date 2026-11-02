@@ -756,3 +756,32 @@ export const noteAttachments = pgTable(
   },
   (t) => [index("note_attachments_note_idx").on(t.noteId)],
 );
+
+/**
+ * Documents kept on a resident's file: admission papers, consents, ID and insurance cards,
+ * guardianship papers, signed onboarding forms. Uploaded by owners and admins (or created when an
+ * onboarding is admitted). Never deleted: a document added by mistake is marked removed, with
+ * who, when and why, and stops showing.
+ */
+export const residentDocuments = pgTable(
+  "resident_documents",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    residentId: uuid("resident_id").notNull().references(() => residents.id),
+    category: text("category").notNull(),
+    title: text("title").notNull(),
+    filename: text("filename").notNull(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    data: bytea("data").notNull(),
+    /** "upload", or "onboarding" for signed forms from an admission. */
+    source: text("source").notNull().default("upload"),
+    uploadedBy: uuid("uploaded_by").notNull().references(() => users.id),
+    uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
+    removedAt: timestamp("removed_at", { withTimezone: true }),
+    removedBy: uuid("removed_by").references(() => users.id),
+    removedReason: text("removed_reason"),
+  },
+  (t) => [index("resident_documents_resident_idx").on(t.residentId, t.uploadedAt)],
+);

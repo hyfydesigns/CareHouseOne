@@ -1,21 +1,7 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import type { Tx } from "@/db/client";
-import {
-  adlEntries,
-  administrations,
-  appointments,
-  facilities,
-  incidents,
-  medicationOrders,
-  prnFollowups,
-  progressNotes,
-  residentDiagnoses,
-  residentPhotos,
-  residents,
-  vitals,
-  type Resident,
-} from "@/db/schema";
+import { adlEntries, administrations, appointments, facilities, incidents, medicationOrders, prnFollowups, progressNotes, residentDiagnoses, residentPhotos, residents, vitals, type Resident, residentDocuments } from "@/db/schema";
 import { randomBytes } from "node:crypto";
 import { canManageCare, canSeeFacility, type Actor } from "@/lib/permissions";
 import { isDate } from "@/lib/time";
@@ -224,7 +210,7 @@ export async function dischargeResident(tx: Tx, actor: Actor, residentId: string
  * record that must be kept, so the resident is discharged instead.
  */
 export async function hasCareRecords(tx: Tx, residentId: string): Promise<boolean> {
-  const tables = [medicationOrders, administrations, prnFollowups, vitals, progressNotes, residentDiagnoses, incidents, appointments, adlEntries];
+  const tables = [medicationOrders, administrations, prnFollowups, vitals, progressNotes, residentDiagnoses, incidents, appointments, adlEntries, residentDocuments];
   for (const t of tables) {
     const [row] = await tx.select({ id: t.residentId }).from(t).where(eq(t.residentId, residentId)).limit(1);
     if (row) return true;

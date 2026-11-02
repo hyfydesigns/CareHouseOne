@@ -20,10 +20,15 @@ import { addOrderAction, adjustCountAction, deleteResidentAction, dischargeActio
 import { AddOrderForm, CountAdjust, DeleteResidentForm, DischargeForm, EditResidentForm, FollowupForm, ReadmitForm, StopOrderButton } from "../../care-forms";
 import { SlotRow } from "../../meds/slot-row";
 import { PhotoUpload } from "./photo-upload";
+import { removeDocumentAction } from "./actions";
+import { DocumentUpload, RemoveDocumentButton } from "./documents";
+import { DOC_CATEGORIES, listDocuments, type DocCategory } from "@/server/documents";
 import { DiagnosesPanel, NotesPanel, VitalsPanel } from "../../care/panels";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const TABS = [["today", "Today"], ["orders", "Medication orders"], ["record", "Medication record"], ["diagnoses", "Diagnoses"], ["vitals", "Vital signs"], ["notes", "Progress notes"], ["adl", "Daily care"], ["appointments", "Appointments"], ["card", "Wristband card"], ["details", "Details"]] as const;
+const TABS = [["today", "Today"], ["orders", "Medication orders"], ["record", "Medication record"], ["diagnoses", "Diagnoses"], ["vitals", "Vital signs"], ["notes", "Progress notes"], ["adl", "Daily care"], ["appointments", "Appointments"], ["documents", "Documents"], ["card", "Wristband card"], ["details", "Details"]] as const;
+/** Tabs only owners and admins see. */
+const MANAGER_TABS: readonly string[] = ["details", "documents"];
 
 /** A contact in the resident header: name, relationship and a tap-to-call number (email stays on Details). */
 function Contact({ label, name, relationship, phone }: { label: string; name: string | null; relationship: string | null; phone: string | null }) {
@@ -47,7 +52,7 @@ export default async function ResidentPage({ params, searchParams }: { params: P
   const sp = await searchParams;
   const me = await requireUser();
   // Details (editing, discharge) is for owners and admins.
-  const tab = TABS.some((t) => t[0] === sp.tab) && (sp.tab !== "details" || canManageCare(me)) ? sp.tab! : "today";
+  const tab = TABS.some((t) => t[0] === sp.tab) && (!MANAGER_TABS.includes(sp.tab!) || canManageCare(me)) ? sp.tab! : "today";
   const actor = { id: me.id, role: me.role, facilityIds: me.facilityIds };
   const now = new Date();
   const data = await withTenant(await getDb(), me.orgId, async (tx) => {
@@ -72,6 +77,7 @@ export default async function ResidentPage({ params, searchParams }: { params: P
       adl: tab === "adl" ? await monthAdl(tx, r, y, mo) : null,
       homes: tab === "details" ? (await visibleFacilities(tx, actor)).map((h) => ({ id: h.id, name: h.name })) : [],
       appts: tab === "appointments" ? await residentAppointments(tx, r.id) : [],
+      documents: tab === "documents" ? await listDocuments(tx, actor, r.id) : [],
       deletable: tab === "details" && me.role === "owner" && !(await hasCareRecords(tx, r.id)),
     };
   });
@@ -107,7 +113,7 @@ export default async function ResidentPage({ params, searchParams }: { params: P
         </div>
       </div>
       <nav className="chips" aria-label="Resident sections">
-        {TABS.filter(([k]) => (k !== "card" || data.wristbands) && (k !== "details" || canManageCare(me))).map(([k, label]) => (
+        {TABS.filter(([k]) => (k !== "card" || data.wristbands) && (!MANAGER_TABS.includes(k) || canManageCare(me))).map(([k, label]) => (
           <Link key={k} className="chip" href={`/residents/${r.id}?tab=${k}`} aria-current={tab === k ? "page" : undefined}>{label}</Link>
         ))}
       </nav>
@@ -216,6 +222,38 @@ export default async function ResidentPage({ params, searchParams }: { params: P
             <div className="tablewrap"><table><tbody>{data.record.prn.map((p) => <tr key={p.dose.id}><td>{p.dose.recordedAt.toLocaleString("en-US", { timeZone: home.timeZone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}</td><td><b>{p.order.name}</b> {p.order.strength}</td><td>{p.dose.reason}</td><td>{p.by}</td></tr>)}</tbody></table></div>
           ) : <p className="muted">None this month.</p>}
         </section>
+      )}
+
+      {tab === "documents" && (
+        <>
+          <DocumentUpload residentId={r.id} categories={Object.entries(DOC_CATEGORIES)} />
+          {(Object.keys(DOC_CATEGORIES) as DocCategory[]).filter((c) => data.documents.some((d) => d.category === c)).map((c) => (
+            <section key={c} className="card" aria-label={DOC_CATEGORIES[c]}>
+              <h2>{DOC_CATEGORIES[c]}</h2>
+              <div className="tablewrap">
+                <table className="fit-sm">
+                  <tbody>
+                    {data.documents.filter((d) => d.category === c).map((d) => (
+                      <tr key={d.id}>
+                        <td>
+                          <a href={`/api/documents/${d.id}`} target="_blank" rel="noreferrer"><b>{d.title}</b></a>
+                          {d.source === "onboarding" && <span className="pill info" style={{ marginLeft: 6 }}>Signed at admission</span>}
+                          <div className="small muted">{d.contentType === "application/pdf" ? "PDF" : "Photo"} · {(d.sizeBytes / 1024 / 1024).toFixed(1)} MB · {localDate(d.uploadedAt, home.timeZone)}{d.by ? ` · ${d.by}` : ""}</div>
+                        </td>
+                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                          <a className="btn small" href={`/api/documents/${d.id}?download=1`}>Download</a>{" "}
+                          <RemoveDocumentButton action={removeDocumentAction.bind(null, d.id)} title={d.title} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ))}
+          {!data.documents.length && <p className="muted">No documents on file yet. Scan the admission agreement, consents, ID and insurance cards, and guardianship papers.</p>}
+          <p className="small muted" style={{ margin: 0 }}>Only owners and admins see documents. Opening or downloading one is recorded in the audit log.</p>
+        </>
       )}
 
       {tab === "details" && (
