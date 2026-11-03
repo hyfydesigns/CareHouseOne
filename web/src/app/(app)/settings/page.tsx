@@ -14,10 +14,10 @@ import { canManageHomes, listHomes } from "@/server/homes";
 import { listActivities } from "@/server/adl";
 import { AddActivityForm, ToggleActivityButton } from "./adl-activities";
 import { getOrg, logoDataUrl } from "@/server/org";
-import { addActivityAction, addHomeAction, deviceHomesAction, toggleActivityAction, forgetThisDeviceAction, removeHomeAction, updateHomeAction, registerDeviceAction, residentCheckAction, revokeDeviceAction, appointmentRemindersAction } from "./actions";
+import { addActivityAction, addHomeAction, deviceHomesAction, toggleActivityAction, forgetThisDeviceAction, removeHomeAction, updateHomeAction, registerDeviceAction, orgNameAction, residentCheckAction, revokeDeviceAction, appointmentRemindersAction } from "./actions";
 import { AddHomeForm, HomeRowView } from "./homes-form";
 import { LogoForm } from "./logo-form";
-import { DeviceHomesForm, ForgetDeviceButton, RegisterDeviceForm, AppointmentRemindersForm, ResidentCheckForm, RevokeDeviceButton } from "./settings-form";
+import { DeviceHomesForm, ForgetDeviceButton, RegisterDeviceForm, AppointmentRemindersForm, OrgNameForm, ResidentCheckForm, RevokeDeviceButton } from "./settings-form";
 
 export default async function SettingsPage() {
   const me = await requireUser();
@@ -49,6 +49,7 @@ export default async function SettingsPage() {
         <h1>Settings</h1>
         <p className="muted">{data.org.name}</p>
       </div>
+      {me.role === "owner" && <OrgNameForm action={orgNameAction} current={data.org.name} />}
       {canManageHomes(me) && (
         <section className="card" aria-labelledby="homes-h">
           <h2 id="homes-h">Homes</h2>

@@ -3,6 +3,27 @@
 import { useActionState, useState } from "react";
 import { Status, type FormState } from "@/components/status";
 
+/** The organization's name, as it appears on forms, agreements and emails. Owners only. */
+export function OrgNameForm({ action, current }: { action: (s: FormState, fd: FormData) => Promise<FormState>; current: string }) {
+  const [state, formAction, pending] = useActionState(action, {});
+  return (
+    <form action={formAction} className="card">
+      <h2>Organization name</h2>
+      <p className="small muted" style={{ margin: 0 }}>
+        Shown in the app, at the top of every form and signed PDF, and wherever an agreement says {"{{Organization}}"}. Use your full legal name, for example &ldquo;Amazed Group Care LLC&rdquo;. Forms already sent to a family keep the name they were sent with.
+      </p>
+      <div className="row" style={{ alignItems: "end" }}>
+        <div className="field" style={{ flex: "1 1 320px" }}>
+          <label htmlFor="orgName">Name</label>
+          <input id="orgName" name="name" defaultValue={current} required minLength={2} maxLength={120} autoComplete="organization" />
+        </div>
+        <button className="btn primary" disabled={pending}>Save</button>
+      </div>
+      <Status state={state} />
+    </form>
+  );
+}
+
 export function ResidentCheckForm({ action, current }: { action: (s: FormState, fd: FormData) => Promise<FormState>; current: "two_identifiers" | "wristband" }) {
   const [state, formAction, pending] = useActionState(action, {});
   return (

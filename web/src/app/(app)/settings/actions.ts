@@ -8,7 +8,7 @@ import { adminLockedMessage } from "@/server/billing";
 import { registerDevice, revokeDevice, updateDeviceHomes } from "@/server/devices";
 import { addHome, removeHome, updateHome } from "@/server/homes";
 import { addActivity, setActivityHidden } from "@/server/adl";
-import { setAppointmentReminders, setResidentCheck } from "@/server/org";
+import { setAppointmentReminders, setOrgName, setResidentCheck } from "@/server/org";
 
 export async function residentCheckAction(_: FormState, fd: FormData): Promise<FormState> {
   const me = await requireUser();
@@ -16,6 +16,13 @@ export async function residentCheckAction(_: FormState, fd: FormData): Promise<F
   if (locked) return { error: locked };
   const r = await withTenant(await getDb(), me.orgId, (tx) => setResidentCheck(tx, { id: me.id, role: me.role, facilityIds: me.facilityIds }, me.orgId, fd.get("residentCheck")));
   revalidatePath("/settings");
+  return r.ok ? { message: r.message } : { error: r.error };
+}
+
+export async function orgNameAction(_: FormState, fd: FormData): Promise<FormState> {
+  const me = await requireUser();
+  const r = await withTenant(await getDb(), me.orgId, (tx) => setOrgName(tx, { id: me.id, role: me.role, facilityIds: me.facilityIds }, me.orgId, fd.get("name")));
+  revalidatePath("/", "layout");
   return r.ok ? { message: r.message } : { error: r.error };
 }
 

@@ -79,3 +79,21 @@ export async function removeLogo(tx: Tx, actor: Actor, orgId: string): Promise<R
 
 /** The logo as a data: URL for pages (allowed by the app's image policy), or null. */
 export const logoDataUrl = (logo: Buffer | null | undefined) => (logo ? `data:image/png;base64,${Buffer.from(logo).toString("base64")}` : null);
+
+const orgNameSchema = z.string().trim().min(2, "Enter the organization's name.").max(120, "Use 120 characters or fewer.");
+
+/**
+ * Owners rename the organization. The name is on every form, agreement ({{Organization}}) and
+ * signed PDF sent from now on; forms already sent to a family keep the name they were sent with.
+ */
+export async function setOrgName(tx: Tx, actor: Actor, orgId: string, raw: unknown): Promise<Result> {
+  if (actor.role !== "owner") return { ok: false, error: "Only owners can change the organization's name." };
+  const p = orgNameSchema.safeParse(raw);
+  if (!p.success) return { ok: false, error: p.error.issues[0].message };
+  const org = await getOrg(tx, orgId);
+  if (!org) return { ok: false, error: "Organization not found." };
+  if (org.name === p.data) return { ok: true, message: "No change." };
+  await tx.update(organizations).set({ name: p.data }).where(eq(organizations.id, orgId));
+  await audit(tx, { orgId, actorId: actor.id, action: "setting_changed", entity: "organization", entityId: orgId, details: { setting: "name", from: org.name, to: p.data } });
+  return { ok: true, message: `Saved. Your organization is now ${p.data}.` };
+}
