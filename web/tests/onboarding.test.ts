@@ -1,7 +1,8 @@
 import { desc, eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createTestDb, withTenant, type DB } from "@/db/client";
-import { onboardingSignatures, outbox, residentDocuments, residents } from "@/db/schema";
+import { facilities, onboardingSignatures, organizations, outbox, residentDocuments, residents } from "@/db/schema";
+import { withAnswers } from "@/lib/onboarding-forms";
 import type { Actor } from "@/lib/permissions";
 import { listDocuments } from "@/server/documents";
 import {
@@ -49,18 +50,32 @@ beforeAll(async () => {
 
 describe("onboarding forms", () => {
   it("start with the starter forms, which owners can edit", async () => {
+    // The home's address and the organization's logo go on the forms.
+    await db.update(facilities).set({ street: "3915 Tidewater Dr", city: "Houston", state: "TX", zip: "77045", phone: "713-900-9389" }).where(eq(facilities.id, s.facilities.cedarRidge));
+    const sharp = (await import("sharp")).default;
+    await db.update(organizations).set({ logo: await sharp({ create: { width: 200, height: 200, channels: 4, background: "#3366cc" } }).png().toBuffer() }).where(eq(organizations.id, s.orgId));
     const start = { facilityId: s.facilities.cedarRidge, residentFirstName: "Rosa", residentLastName: "Diaz", poaName: "Maria Diaz", poaEmail: "maria@example.com" };
     expect((await inOrg((tx) => startOnboarding(tx, caregiver, s.orgId, start, "https://app.test", now))).ok).toBe(false);
     const r = await inOrg((tx) => startOnboarding(tx, owner, s.orgId, start, "https://app.test", now));
     expect(r.ok).toBe(true);
     packetId = r.ok ? r.data!.id : "";
     const forms = await inOrg((tx) => listForms(tx, owner));
-    expect(forms.map((f) => f.title)).toContain("Admission agreement");
+    expect(forms.map((f) => f.title)).toContain("Residential Care Home Agreement");
     // Editing a form later doesn't change what this family was sent.
     const photo = forms.find((f) => f.title === "Photo and media consent")!;
     expect((await inOrg((tx) => saveForm(tx, owner, photo.id, { ...photo, title: "Photo consent (2027)" }))).ok).toBe(true);
     const o = await inOrg((tx) => getOnboarding(tx, owner, packetId));
     expect(o!.items.map((i) => i.title)).toContain("Photo and media consent");
+    // Sent forms carry the home's details; the answers show in the wording once given.
+    const agreement = o!.items.find((i) => i.title === "Residential Care Home Agreement")!;
+    const opening = agreement.blocks.find((b) => b.type === "text" && b.text.startsWith("THIS RESIDENCY AGREEMENT"));
+    expect(opening?.type === "text" && opening.text).toContain("located at 3915 Tidewater Dr, Houston, TX 77045");
+    expect(opening?.type === "text" && opening.text).toContain("Maria Diaz on behalf of Rosa Diaz");
+    const fee = agreement.blocks.find((b) => b.type === "text" && b.text.startsWith("2.) Initial Monthly Fee"))!;
+    const feeField = agreement.blocks.find((b) => b.type === "field" && b.label === "Monthly fee")!;
+    expect(fee.type === "text" && withAnswers(fee.text, agreement.blocks, {})).toContain("is __________ for each month");
+    expect(fee.type === "text" && withAnswers(fee.text, agreement.blocks, { [feeField.id]: "$2,500.00" })).toContain("is $2,500.00 for each month");
+    expect(o!.head.address).toBe("3915 Tidewater Dr, Houston, TX 77045");
     const mail = await lastMailTo("maria@example.com");
     expect(mail.subject).toContain("move-in paperwork for Rosa");
     token = tokenIn(mail.body);
@@ -134,12 +149,12 @@ describe("review and admission", () => {
     let o = (await inOrg((tx) => getOnboarding(tx, owner, packetId)))!;
     // Can't admit before everything is approved.
     expect((await inOrg((tx) => admitOnboarding(tx, owner, packetId, { firstName: "Rosa", lastName: "Diaz" }, renderOnboardingPdf, "https://app.test", now))).ok).toBe(false);
-    const agreement = o.items.find((i) => i.title === "Admission agreement")!;
+    const agreement = o.items.find((i) => i.title === "Residential Care Home Agreement")!;
     expect((await inOrg((tx) => reviewItem(tx, owner, packetId, agreement.id, "approve", "", now))).ok).toBe(false); // staff part missing
     expect((await inOrg((tx) => reviewItem(tx, owner, packetId, agreement.id, "changes", "", now))).ok).toBe(false); // needs a note
     for (const item of o.items.filter((i) => i.kind === "form")) {
       const staffAnswers: Record<string, string> = {};
-      for (const b of item.blocks) if (b.type === "field" && b.who === "staff") staffAnswers[b.id] = b.input === "date" ? "2026-11-15" : b.label === "Room" ? "104" : "$3,200";
+      for (const b of item.blocks) if (b.type === "field" && b.who === "staff") staffAnswers[b.id] = b.input === "date" ? "2026-11-15" : b.input === "choice" ? b.options![0] : b.input === "yesno" ? "yes" : /^room/i.test(b.label) ? "104" : "$3,200.00";
       if (Object.keys(staffAnswers).length) {
         // Staff answers change the form, so the family's signature on it is voided...
         const r = await inOrg((tx) => staffSaveValues(tx, owner, packetId, item.id, staffAnswers, now));
@@ -148,7 +163,7 @@ describe("review and admission", () => {
     }
     o = (await inOrg((tx) => getOnboarding(tx, owner, packetId)))!;
     const voidedForms = o.items.filter((i) => i.kind === "form" && i.poaMissing.length);
-    expect(voidedForms.map((i) => i.title)).toEqual(expect.arrayContaining(["Admission agreement"]));
+    expect(voidedForms.map((i) => i.title)).toEqual(expect.arrayContaining(["Residential Care Home Agreement"]));
     // ...so the home sends those back, and the family signs again.
     const p = (await packetByToken(db, token, now))!;
     for (const item of voidedForms) {
@@ -169,7 +184,7 @@ describe("review and admission", () => {
     expect([r.firstName, r.room, r.allergies]).toEqual(["Rosa", "104", ["Penicillin"]]);
     const docs = await inOrg((tx) => listDocuments(tx, owner, residentId));
     expect(docs.length).toBe(o.items.length);
-    const agreementPdf = (await db.select().from(residentDocuments).where(eq(residentDocuments.title, "Admission agreement (signed)")))[0];
+    const agreementPdf = (await db.select().from(residentDocuments).where(eq(residentDocuments.title, "Residential Care Home Agreement (signed)")))[0];
     expect(agreementPdf.data.subarray(0, 5).toString()).toBe("%PDF-");
     // The family gets a new link to download their copies; the old one stops working.
     expect(await packetByToken(db, token, now)).toBeNull();

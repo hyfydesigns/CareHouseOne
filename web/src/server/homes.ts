@@ -7,6 +7,8 @@ import { validZone } from "@/lib/time-zones";
 import { audit } from "./audit";
 import type { Result } from "./residents";
 
+const opt = (max: number) => z.string().trim().max(max).optional().transform((v) => v || null);
+
 /** Adding, editing and removing homes changes what the organization pays, so it's for owners only. */
 export const canManageHomes = (actor: Pick<Actor, "role">) => actor.role === "owner";
 
@@ -14,6 +16,13 @@ export const homeSchema = z.object({
   name: z.string().trim().min(2, "Name the home, for example Oak House.").max(120),
   timeZone: z.string().refine(validZone, "Choose the home's time zone."),
   beds: z.coerce.number().int("Licensed beds is a whole number.").min(0).max(500),
+  street: opt(160),
+  city: opt(80),
+  state: opt(40),
+  zip: z.string().trim().optional().refine((s) => !s || /^\d{5}(-\d{4})?$/.test(s), "Enter the ZIP code like 77045.").transform((v) => v || null),
+  phone: z.string().trim().optional().refine((s) => !s || /^[0-9+().\- ]{7,25}$/.test(s), "Enter the home's phone number with digits only, like 713-555-0100.").transform((v) => v || null),
+  fax: z.string().trim().optional().refine((s) => !s || /^[0-9+().\- ]{7,25}$/.test(s), "Enter the fax number with digits only, like 888-555-0100.").transform((v) => v || null),
+  email: z.string().trim().toLowerCase().optional().refine((s) => !s || z.string().email().safeParse(s).success, "Enter the home's email like office@example.com.").transform((v) => v || null),
 });
 
 /** Every home with its counts, for the Homes section in Settings. */
@@ -43,7 +52,7 @@ export async function addHome(tx: Tx, actor: Actor, orgId: string, raw: unknown)
   if (!p.success) return { ok: false, error: p.error.issues[0].message };
   const [same] = await tx.select({ id: facilities.id }).from(facilities).where(eq(facilities.name, p.data.name));
   if (same) return { ok: false, error: `You already have a home called ${p.data.name}.` };
-  const [home] = await tx.insert(facilities).values({ orgId, name: p.data.name, timeZone: p.data.timeZone, beds: p.data.beds }).returning();
+  const [home] = await tx.insert(facilities).values({ orgId, ...p.data }).returning();
   const owners = await tx.select({ id: users.id }).from(users).where(and(eq(users.role, "owner"), inArray(users.status, ["active", "invited"])));
   const ids = [...new Set([actor.id, ...owners.map((o) => o.id)])];
   await tx.insert(userFacilities).values(ids.map((userId) => ({ orgId, userId, facilityId: home.id })));
@@ -60,7 +69,7 @@ export async function updateHome(tx: Tx, actor: Actor, facilityId: string, raw: 
   const [same] = await tx.select({ id: facilities.id }).from(facilities).where(eq(facilities.name, p.data.name));
   if (same && same.id !== h.id) return { ok: false, error: `You already have a home called ${p.data.name}.` };
   await tx.update(facilities).set(p.data).where(eq(facilities.id, h.id));
-  const changed = (["name", "timeZone", "beds"] as const).filter((k) => h[k] !== p.data[k]);
+  const changed = (["name", "timeZone", "beds", "street", "city", "state", "zip", "phone", "fax", "email"] as const).filter((k) => h[k] !== p.data[k]);
   await audit(tx, { orgId: h.orgId, actorId: actor.id, action: "home_updated", entity: "facility", entityId: h.id, details: { changed, before: { name: h.name, timeZone: h.timeZone, beds: h.beds } } });
   return { ok: true, message: `${p.data.name} is saved.` };
 }

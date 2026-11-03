@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { OnboardingFormView } from "@/components/onboarding-form";
 import { Status, type FormState } from "@/components/status";
-import { FORM_KINDS, INPUTS, newBlockId, WHO_LABEL, type Block, type FormDef, type FormKind, type InputKind, type Who } from "@/lib/onboarding-forms";
+import { FORM_KINDS, INPUTS, newBlockId, PLACEHOLDERS, WHO_LABEL, type Block, type FormDef, type FormKind, type InputKind, type Who } from "@/lib/onboarding-forms";
 
 type Save = (form: FormDef) => Promise<FormState>;
 
@@ -84,6 +84,9 @@ export function FormEditor({ initial, save }: { initial: FormDef; save: Save }) 
                   <BlockEditor block={b} onChange={(nb) => setBlock(i, nb)} />
                 </div>
               ))}
+              <p className="small muted" style={{ margin: 0 }}>
+                In headings and paragraphs, these are filled in from the home chosen for each onboarding: {PLACEHOLDERS.map((p) => `{{${p}}}`).join(", ")}. A question&apos;s own label in double braces, like {"{{Monthly fee}}"}, shows its answer.
+              </p>
               <div className="row" style={{ gap: 6 }}>
                 <span className="small muted">Add:</span>
                 {ADD.map(([label, make]) => <button key={label} type="button" className="btn small" onClick={() => setForm((f) => ({ ...f, blocks: [...f.blocks, make()] }))}>+ {label}</button>)}

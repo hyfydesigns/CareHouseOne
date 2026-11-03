@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useState } from "react";
+import { FormLetterhead } from "@/components/form-letterhead";
 import { OnboardingFormView } from "@/components/onboarding-form";
 import { SignDialog } from "@/components/sign-dialog";
 import { Status, type FormState } from "@/components/status";
@@ -63,6 +64,7 @@ export function FamilyPortal({ token, view, openItem, consentText }: { token: st
   if (packet.status === "admitted") {
     return (
       <div className="card">
+        <FormLetterhead head={view.head} />
         <h1>{packet.residentFirstName}&apos;s paperwork is complete</h1>
         <p>{view.org} ({view.home}) has admitted {packet.residentFirstName}. Here are your signed copies. Download them now: this page stops working after the date in the email.</p>
         <ul className="checklist" style={{ listStyle: "none", padding: 0 }}>
@@ -79,13 +81,13 @@ export function FamilyPortal({ token, view, openItem, consentText }: { token: st
     );
   }
 
-  if (item) return <ItemPage key={item.id} token={token} item={item} poaName={packet.poaName} consentText={consentText} locked={packet.status !== "open"} />;
+  if (item) return <ItemPage key={item.id} head={view.head} token={token} item={item} poaName={packet.poaName} consentText={consentText} locked={packet.status !== "open"} />;
 
   return (
     <>
       <div className="card">
+        <FormLetterhead head={view.head} />
         <h1>Move-in paperwork for {packet.residentFirstName} {packet.residentLastName}</h1>
-        <p style={{ margin: 0 }}>{view.org} · {view.home}</p>
         <p className="small muted" style={{ margin: 0 }}>
           Open each item, fill it in and sign, or upload the documents asked for, then send it to the home. Your answers are saved as you go, so you can stop and come back with the same link.
         </p>
@@ -111,7 +113,7 @@ export function FamilyPortal({ token, view, openItem, consentText }: { token: st
   );
 }
 
-function ItemPage({ token, item, poaName, consentText, locked }: { token: string; item: Item; poaName: string; consentText: string; locked: boolean }) {
+function ItemPage({ head, token, item, poaName, consentText, locked }: { head: View["head"]; token: string; item: Item; poaName: string; consentText: string; locked: boolean }) {
   const router = useRouter();
   const [values, setValues] = useState<Values>(item.values);
   const [dirty, setDirty] = useState(false);
@@ -154,6 +156,7 @@ function ItemPage({ token, item, poaName, consentText, locked }: { token: string
   return (
     <div className="card">
       <Link href={`/family/${token}`} className="small">‹ Back to the checklist</Link>
+      <FormLetterhead head={head} />
       <h1>{item.title}</h1>
       {item.description && <p style={{ margin: 0 }}>{item.description}</p>}
       {item.status === "changes" && item.staffNote && <p className="banner offline" role="alert"><b>The home asked for changes:</b>&nbsp;{item.staffNote}</p>}

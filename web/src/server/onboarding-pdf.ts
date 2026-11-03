@@ -1,7 +1,7 @@
 import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
-import { answerText, WHO_LABEL } from "@/lib/onboarding-forms";
+import { answerText, WHO_LABEL, withAnswers } from "@/lib/onboarding-forms";
 import type { onboardingPackets } from "@/db/schema";
-import { E_SIGN_CONSENT, type Evidence, type ItemView } from "./onboarding";
+import { E_SIGN_CONSENT, type Evidence, type ItemView, type Letterhead } from "./onboarding";
 
 type Packet = typeof onboardingPackets.$inferSelect;
 
@@ -26,7 +26,7 @@ const grey = rgb(0.4, 0.4, 0.45);
  * typed name), and a signature record at the end with time, IP and the document fingerprint each
  * signature covers. Letter size, standard fonts, so it opens anywhere.
  */
-export async function renderOnboardingPdf(packet: Packet, item: ItemView, ctx: { org: string; home: string }, sigEvidence: Evidence): Promise<Buffer> {
+export async function renderOnboardingPdf(packet: Packet, item: ItemView, head: Letterhead, sigEvidence: Evidence): Promise<Buffer> {
   const doc = await PDFDocument.create();
   doc.setTitle(latin(`${item.title} - ${packet.residentFirstName} ${packet.residentLastName}`));
   doc.setProducer("CareHouse One");
@@ -70,9 +70,20 @@ export async function renderOnboardingPdf(packet: Packet, item: ItemView, ctx: {
     y -= opts.gap ?? 4;
   };
 
-  // Heading
-  write(ctx.org, { font: bold, size: 9, color: grey, gap: 0 });
-  write(`${ctx.home} - move-in paperwork`, { size: 9, color: grey, gap: 8 });
+  // Letterhead: logo on the left, the organization and the home's address and contact details beside it.
+  let textX = 0;
+  if (head.logo) {
+    const logo = await doc.embedPng(head.logo);
+    const scale = Math.min(150 / logo.width, 56 / logo.height);
+    page.drawImage(logo, { x: M, y: y - logo.height * scale, width: logo.width * scale, height: logo.height * scale });
+    textX = logo.width * scale + 14;
+  }
+  const top = y;
+  write(head.org, { font: bold, size: 12, indent: textX, gap: 0 });
+  write(head.address ? `${head.home} - ${head.address}` : head.home, { size: 9, color: grey, indent: textX, gap: 0 });
+  if (head.contact) write(head.contact, { size: 9, color: grey, indent: textX, gap: 0 });
+  if (head.logo) y = Math.min(y, top - 60);
+  y -= 10;
   write(item.title, { font: bold, size: 18, gap: 2 });
   write(`Resident: ${packet.residentFirstName} ${packet.residentLastName}  ·  Power of attorney: ${packet.poaName}`, { size: 10, color: grey, gap: 10 });
   page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 1, color: rgb(0.8, 0.8, 0.85) });
@@ -81,9 +92,9 @@ export async function renderOnboardingPdf(packet: Packet, item: ItemView, ctx: {
   for (const b of item.blocks) {
     if (b.type === "heading") {
       y -= 4;
-      write(b.text, { font: bold, size: 13 });
+      write(withAnswers(b.text, item.blocks, item.values), { font: bold, size: 13 });
     } else if (b.type === "text") {
-      write(b.text, { gap: 8 });
+      write(withAnswers(b.text, item.blocks, item.values), { gap: 8 });
     } else if (b.type === "field") {
       write(`${b.label}`, { font: bold, size: 9.5, color: grey, gap: 1 });
       write(answerText(b, item.values[b.id]) || (b.input === "check" ? "Not agreed" : "-"), { indent: 8, gap: 8 });

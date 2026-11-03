@@ -17,8 +17,7 @@ export async function GET(request: Request, { params }: Ctx) {
     const o = await getOnboarding(tx, { id: u.id, role: u.role, facilityIds: u.facilityIds }, packetId);
     const item = o?.items.find((i) => i.id === id && i.kind === "form");
     if (!o || !item) return null;
-    const [org] = await tx.query.organizations.findMany({ columns: { name: true }, limit: 1 });
-    return renderOnboardingPdf(o.p, item, { org: org?.name ?? "", home: o.home.name }, await signatureEvidence(tx, item.id));
+    return renderOnboardingPdf(o.p, item, o.head, await signatureEvidence(tx, item.id));
   });
   if (!pdf) return new NextResponse(null, { status: 404 });
   return fileResponse({ data: pdf, contentType: "application/pdf", filename: "preview.pdf" }, false);

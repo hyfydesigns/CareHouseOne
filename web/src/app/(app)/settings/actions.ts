@@ -64,7 +64,8 @@ export async function forgetThisDeviceAction(): Promise<FormState> {
   return { message: "This browser is no longer marked as a tablet." };
 }
 
-const homeFields = (fd: FormData) => ({ name: fd.get("name"), timeZone: fd.get("timeZone"), beds: fd.get("beds") || 0 });
+const HOME_CONTACT = ["street", "city", "state", "zip", "phone", "fax", "email"] as const;
+const homeFields = (fd: FormData) => ({ name: fd.get("name"), timeZone: fd.get("timeZone"), beds: fd.get("beds") || 0, ...Object.fromEntries(HOME_CONTACT.map((k) => [k, fd.get(k) ?? undefined])) });
 
 export async function addHomeAction(_: FormState, fd: FormData): Promise<FormState> {
   const me = await requireUser();

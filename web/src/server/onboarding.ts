@@ -4,7 +4,8 @@ import { z } from "zod";
 import type { DB, Tx } from "@/db/client";
 import { facilities, onboardingAccess, onboardingFiles, onboardingItems, onboardingPackets, onboardingSignatures, organizations, outbox, residentDocuments, users } from "@/db/schema";
 import { randomToken, safeEqual, sha256 } from "@/lib/crypto";
-import { blockSchema, cleanValues, missingFor, type Block, type Values, type Who } from "@/lib/onboarding-forms";
+import { addressLine, contactLine } from "@/lib/home-contact";
+import { blockSchema, cleanValues, fillPlaceholders, missingFor, type Block, type Values, type Who } from "@/lib/onboarding-forms";
 import { canSeeFacility, type Actor } from "@/lib/permissions";
 import { MAX_ATTACHMENT_BYTES, normaliseAttachment } from "./attachments";
 import { audit, sendMail } from "./audit";
@@ -80,13 +81,25 @@ export async function startOnboarding(tx: Tx, actor: Actor, orgId: string, raw: 
   await ensureStarterForms(tx, orgId, actor.id);
   const forms = await listForms(tx, actor);
   if (!forms.length) return { ok: false, error: "There are no onboarding forms to send. Add or show some under Onboarding forms." };
+  const [home] = await tx.select().from(facilities).where(eq(facilities.id, p.data.facilityId));
+  const [org] = await tx.select({ name: organizations.name }).from(organizations).where(eq(organizations.id, orgId));
+  const ctx = {
+    Organization: org.name,
+    "Home name": home.name,
+    "Home address": addressLine(home),
+    "Home phone": home.phone ?? "",
+    "Home fax": home.fax ?? "",
+    "Home email": home.email ?? "",
+    "Resident name": `${p.data.residentFirstName} ${p.data.residentLastName}`,
+    "POA name": p.data.poaName,
+  };
   const token = randomToken();
   const [packet] = await tx
     .insert(onboardingPackets)
     .values({ orgId, ...p.data, tokenHash: sha256(token), expiresAt: new Date(now.getTime() + LINK_DAYS * 86_400_000), createdBy: actor.id, createdAt: now })
     .returning();
   await tx.insert(onboardingItems).values(
-    forms.map((f, i) => ({ orgId, packetId: packet.id, formId: f.id, formVersion: f.version, title: f.title, description: f.description, kind: f.kind, required: f.required, blocks: f.blocks, position: i + 1 })),
+    forms.map((f, i) => ({ orgId, packetId: packet.id, formId: f.id, formVersion: f.version, title: f.title, description: f.description, kind: f.kind, required: f.required, blocks: fillPlaceholders(f.blocks, ctx), position: i + 1 })),
   );
   await emailLink(tx, packet, token, appUrl, "invite");
   await audit(tx, { orgId, actorId: actor.id, action: "onboarding_started", entity: "organization", entityId: orgId, details: { packetId: packet.id, facilityId: packet.facilityId, forms: forms.length } });
@@ -193,7 +206,7 @@ export async function getOnboarding(tx: Tx, actor: Actor, id: string) {
   const p = await packetFor(tx, actor, id);
   if (!p) return null;
   const [home] = await tx.select().from(facilities).where(eq(facilities.id, p.facilityId));
-  return { p, home, items: await itemsOf(tx, p.id) };
+  return { p, home, head: await letterhead(tx, p), items: await itemsOf(tx, p.id) };
 }
 
 // ---------------------------------------------------------------- filling in and signing
@@ -367,10 +380,28 @@ export async function familySession(tx: Tx, packet: Packet, session: string | un
   return !!row;
 }
 
+/** The top of every form: the organization's logo and name, and the home's address and contact details. */
+export interface Letterhead {
+  org: string;
+  logo: Buffer | null;
+  home: string;
+  address: string;
+  contact: string;
+}
+
+/** The letterhead for pages: the logo as an image URL instead of bytes. */
+export type LetterheadView = Omit<Letterhead, "logo"> & { logoUrl: string | null };
+export const letterheadView = ({ logo, ...rest }: Letterhead): LetterheadView => ({ ...rest, logoUrl: logo ? `data:image/png;base64,${Buffer.from(logo).toString("base64")}` : null });
+
+export async function letterhead(tx: Tx, p: Pick<Packet, "orgId" | "facilityId">): Promise<Letterhead> {
+  const [org] = await tx.select({ name: organizations.name, logo: organizations.logo }).from(organizations).where(eq(organizations.id, p.orgId));
+  const [home] = await tx.select().from(facilities).where(eq(facilities.id, p.facilityId));
+  return { org: org.name, logo: org.logo ?? null, home: home.name, address: addressLine(home), contact: contactLine(home) };
+}
+
 /** What the family sees: their checklist, or after admission their signed copies. */
 export async function familyView(tx: Tx, packet: Packet) {
-  const [org] = await tx.select({ name: organizations.name }).from(organizations).where(eq(organizations.id, packet.orgId));
-  const [home] = await tx.select({ name: facilities.name }).from(facilities).where(eq(facilities.id, packet.facilityId));
+  const head = await letterhead(tx, packet);
   const documents = packet.residentId
     ? await tx
         .select({ id: residentDocuments.id, title: residentDocuments.title, contentType: residentDocuments.contentType, sizeBytes: residentDocuments.sizeBytes })
@@ -378,7 +409,7 @@ export async function familyView(tx: Tx, packet: Packet) {
         .where(and(eq(residentDocuments.residentId, packet.residentId), eq(residentDocuments.source, "onboarding"), isNull(residentDocuments.removedAt)))
         .orderBy(asc(residentDocuments.uploadedAt))
     : [];
-  return { org: org.name, home: home.name, packet, items: await itemsOf(tx, packet.id), documents };
+  return { org: head.org, home: head.home, head: letterheadView(head), packet, items: await itemsOf(tx, packet.id), documents };
 }
 
 const family = (p: Packet): Party => ({ who: "poa", userId: null, orgId: p.orgId });
@@ -448,7 +479,7 @@ export async function familySubmit(tx: Tx, p: Packet, itemId: string, now = new 
 // ---------------------------------------------------------------- admission
 
 export type Evidence = Array<{ blockId: string; name: string; signer: string; method: string; signedAt: Date; ip: string | null; documentHash: string }>;
-export type Renderer = (packet: Packet, item: ItemView, ctx: { org: string; home: string }, evidence: Evidence) => Promise<Buffer>;
+export type Renderer = (packet: Packet, item: ItemView, head: Letterhead, evidence: Evidence) => Promise<Buffer>;
 
 /** The signature record for one item (current signatures only), for the signed PDF. */
 export async function signatureEvidence(tx: Tx, itemId: string): Promise<Evidence> {
@@ -514,11 +545,12 @@ export async function admitOnboarding(
   const created = await createResident(tx, actor, p.orgId, { ...raw, allergies, facilityId: p.facilityId });
   if (!created.ok) return created;
   const residentId = created.data!.id;
-  const [org] = await tx.select({ name: organizations.name }).from(organizations).where(eq(organizations.id, p.orgId));
-  const [home] = await tx.select({ name: facilities.name }).from(facilities).where(eq(facilities.id, p.facilityId));
+  const head = await letterhead(tx, p);
+  const org = { name: head.org };
+  const home = { name: head.home };
   for (const item of items.filter((i) => i.status === "approved")) {
     if (item.kind === "form") {
-      const pdf = await render(p, item, { org: org.name, home: home.name }, await signatureEvidence(tx, item.id));
+      const pdf = await render(p, item, head, await signatureEvidence(tx, item.id));
       await tx.insert(residentDocuments).values({ orgId: p.orgId, residentId, category: DOC_CATEGORY_FOR(item.title, "form"), title: `${item.title} (signed)`, filename: `${item.title.replace(/[^\w .()-]+/g, "").slice(0, 80) || "form"}.pdf`, contentType: "application/pdf", sizeBytes: pdf.length, data: pdf, source: "onboarding", uploadedBy: actor.id, uploadedAt: now });
     } else {
       const files = await tx.select().from(onboardingFiles).where(and(eq(onboardingFiles.itemId, item.id), isNull(onboardingFiles.removedAt)));

@@ -7,7 +7,7 @@ import { getDb, withTenant } from "@/db/client";
 import type { FormDef, FormKind } from "@/lib/onboarding-forms";
 import { appUrl, clientIp, requireUser, userAgent } from "@/lib/session";
 import { admitOnboarding, cancelOnboarding, resendLink, reviewItem, staffSaveValues, staffSign, startOnboarding } from "@/server/onboarding";
-import { createForm, moveForm, saveForm, setFormHidden } from "@/server/onboarding-forms";
+import { addMissingStarters, createForm, moveForm, saveForm, setFormHidden } from "@/server/onboarding-forms";
 import { renderOnboardingPdf } from "@/server/onboarding-pdf";
 
 const actorOf = (me: Awaited<ReturnType<typeof requireUser>>) => ({ id: me.id, role: me.role, facilityIds: me.facilityIds });
@@ -34,6 +34,12 @@ export async function hideFormAction(id: string, hidden: boolean): Promise<void>
 export async function moveFormAction(id: string, dir: -1 | 1): Promise<void> {
   const me = await requireUser();
   await withTenant(await getDb(), me.orgId, (tx) => moveForm(tx, actorOf(me), id, dir));
+  revalidatePath("/onboarding/forms");
+}
+
+export async function addStartersAction(): Promise<void> {
+  const me = await requireUser();
+  await withTenant(await getDb(), me.orgId, (tx) => addMissingStarters(tx, actorOf(me), me.orgId));
   revalidatePath("/onboarding/forms");
 }
 

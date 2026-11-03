@@ -98,5 +98,37 @@ export function answerText(b: Extract<Block, { type: "field" }>, v: string | und
   if (!v) return "";
   if (b.input === "yesno") return v === "yes" ? "Yes" : "No";
   if (b.input === "check") return v === "yes" ? "✓ Agreed" : "";
+  if (b.input === "date" && /^\d{4}-\d{2}-\d{2}$/.test(v)) return new Date(`${v}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "long", day: "numeric", year: "numeric" });
   return v;
+}
+
+/**
+ * Placeholders in a form's wording. The home's details are filled in when the form is sent to a
+ * family (so the signed copy keeps them even if the home's details change later); a placeholder
+ * named after one of the form's questions shows that question's answer.
+ */
+export const PLACEHOLDERS = ["Organization", "Home name", "Home address", "Home phone", "Home fax", "Home email", "Resident name", "POA name"] as const;
+export type Placeholder = (typeof PLACEHOLDERS)[number];
+const TOKEN = /\{\{\s*([^{}]{1,80}?)\s*\}\}/g;
+const BLANK = "__________";
+
+/** Fills the home's details into every block (wording, questions, help text). */
+export function fillPlaceholders(blocks: Block[], ctx: Record<Placeholder, string>): Block[] {
+  const fill = (s: string) => s.replace(TOKEN, (all, name: string) => {
+    const key = PLACEHOLDERS.find((p) => p.toLowerCase() === name.toLowerCase());
+    return key ? ctx[key] || BLANK : all;
+  });
+  return blocks.map((b) => {
+    if (b.type === "heading" || b.type === "text") return { ...b, text: fill(b.text) };
+    if (b.type === "field") return { ...b, label: fill(b.label), ...(b.help && { help: fill(b.help) }) };
+    return { ...b, label: fill(b.label) };
+  });
+}
+
+/** Shows answers where the wording names a question: "Monthly fee: {{Monthly fee}}". Blank until answered. */
+export function withAnswers(text: string, blocks: Block[], values: Values): string {
+  return text.replace(TOKEN, (all, name: string) => {
+    const q = blocks.find((b): b is Extract<Block, { type: "field" }> => b.type === "field" && b.label.toLowerCase() === name.toLowerCase());
+    return q ? answerText(q, values[q.id]) || BLANK : all;
+  });
 }

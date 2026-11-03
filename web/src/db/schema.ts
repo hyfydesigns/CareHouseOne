@@ -28,6 +28,11 @@ const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull(
 export const residentCheckEnum = pgEnum("resident_check", ["two_identifiers", "wristband"]);
 
 /** A customer organization (tenant). Every other row carries its org_id. */
+const bytea = customType<{ data: Buffer; driverData: Buffer | Uint8Array }>({
+  dataType: () => "bytea",
+  fromDriver: (v) => Buffer.from(v),
+});
+
 export const organizations = pgTable("organizations", {
   id: id(),
   name: text("name").notNull(),
@@ -36,6 +41,8 @@ export const organizations = pgTable("organizations", {
   appointmentReminders: text("appointment_reminders").notNull().default("evening"),
   /** The day the last appointments email was about, so each day is only sent once. */
   appointmentDigestOn: text("appointment_digest_on"),
+  /** The organization's logo as a PNG (scaled down when uploaded), shown on forms. */
+  logo: bytea("logo"),
   createdAt: createdAt(),
 });
 
@@ -48,6 +55,14 @@ export const facilities = pgTable(
     licenseType: text("license_type").notNull().default("IDD"),
     beds: integer("beds").notNull().default(0),
     timeZone: text("time_zone").notNull().default("America/New_York"),
+    /** The home's address and contact details, shown in the header of its forms. */
+    street: text("street"),
+    city: text("city"),
+    state: text("state"),
+    zip: text("zip"),
+    phone: text("phone"),
+    fax: text("fax"),
+    email: text("email"),
     createdAt: createdAt(),
   },
   (t) => [index("facilities_org_idx").on(t.orgId)],
@@ -546,11 +561,6 @@ export const leads = pgTable("leads", {
   createdAt: createdAt(),
 });
 export type Subscription = typeof subscriptions.$inferSelect;
-
-const bytea = customType<{ data: Buffer; driverData: Buffer | Uint8Array }>({
-  dataType: () => "bytea",
-  fromDriver: (v) => Buffer.from(v),
-});
 
 /**
  * A resident's photo, so caregivers can confirm they have the right person. Kept in the database

@@ -99,3 +99,21 @@ export async function moveForm(tx: Tx, actor: Actor, id: string, dir: -1 | 1): P
   await tx.update(onboardingForms).set({ position: forms[i].position }).where(eq(onboardingForms.id, forms[j].id));
   return { ok: true, message: "Moved." };
 }
+
+/** Starter forms this organization doesn't have yet (by title), for organizations that started earlier. */
+export async function missingStarters(tx: Tx, actor: Actor): Promise<string[]> {
+  const have = new Set((await listForms(tx, actor, { includeHidden: true })).map((f) => f.title.toLowerCase()));
+  return starterForms().filter((f) => !have.has(f.title.toLowerCase())).map((f) => f.title);
+}
+
+/** Adds the starter forms the organization doesn't have yet, at the end of the list. */
+export async function addMissingStarters(tx: Tx, actor: Actor, orgId: string): Promise<Result> {
+  if (!canManageOnboarding(actor)) return { ok: false, error: "Only owners and admins manage onboarding forms." };
+  const missing = new Set(await missingStarters(tx, actor));
+  const add = starterForms().filter((f) => missing.has(f.title));
+  if (!add.length) return { ok: true, message: "You already have every starter form." };
+  const [{ top }] = await tx.select({ top: max(onboardingForms.position) }).from(onboardingForms);
+  await tx.insert(onboardingForms).values(add.map((f, i) => ({ orgId, title: f.title, description: f.description, kind: f.kind, required: f.required, blocks: f.blocks, position: (top ?? 0) + i + 1, createdBy: actor.id })));
+  await audit(tx, { orgId, actorId: actor.id, action: "onboarding_form_added", entity: "organization", entityId: orgId, details: { starters: add.map((f) => f.title) } });
+  return { ok: true, message: `Added: ${add.map((f) => f.title).join(", ")}.` };
+}

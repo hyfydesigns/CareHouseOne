@@ -1,4 +1,5 @@
 import type { Block, FormDef, Who } from "@/lib/onboarding-forms";
+import { residentialAgreement } from "./onboarding-agreement";
 
 /**
  * The forms every organization starts with. They are general placeholders, not legal documents:
@@ -98,25 +99,7 @@ export function starterForms(): FormDef[] {
         sign("Power of attorney or guardian", "poa"),
       ],
     },
-    {
-      title: "Admission agreement",
-      description: "The services, rates and house rules.",
-      kind: "form",
-      required: true,
-      blocks: [
-        p(PLACEHOLDER),
-        h("Services"),
-        p("The home provides a room, meals, help with daily activities, medication administration by trained staff, and supervision, as described in the resident's support plan."),
-        h("Rates and payment"),
-        f("Monthly rate", "text", { who: "staff" }),
-        f("Payment due each month on", "text", { who: "staff" }),
-        p("Charges, notice periods and refunds follow the home's policies and state rules, which the home has explained and given in writing."),
-        h("Agreement"),
-        f("I have read the admission agreement and the resident's rights", "check"),
-        sign("Power of attorney or guardian", "poa"),
-        sign("For the home", "staff"),
-      ],
-    },
+    residentialAgreement(),
     { title: "Power of attorney or guardianship papers", description: "A copy of the signed power of attorney or the court's guardianship order.", kind: "upload", required: true, blocks: [] },
     { title: "Insurance cards", description: "Front and back of the Medicaid, Medicare and any other insurance cards.", kind: "upload", required: true, blocks: [] },
     { title: "Photo ID of the power of attorney", description: "A driver's license or other photo ID.", kind: "upload", required: true, blocks: [] },

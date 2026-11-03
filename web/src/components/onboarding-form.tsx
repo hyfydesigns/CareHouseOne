@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- signatures are data: URLs drawn on the page */
 
-import { answerText, WHO_LABEL, WHO_PHRASE, type Block, type Values, type Who } from "@/lib/onboarding-forms";
+import { answerText, WHO_LABEL, WHO_PHRASE, withAnswers, type Block, type Values, type Who } from "@/lib/onboarding-forms";
 
 export interface SignatureView {
   name: string;
@@ -35,8 +35,8 @@ export function OnboardingFormView({
   return (
     <div className="ob-form">
       {blocks.map((b) => {
-        if (b.type === "heading") return <h3 key={b.id}>{b.text}</h3>;
-        if (b.type === "text") return <p key={b.id} className="ob-text">{b.text}</p>;
+        if (b.type === "heading") return <h3 key={b.id}>{withAnswers(b.text, blocks, values)}</h3>;
+        if (b.type === "text") return <p key={b.id} className="ob-text">{withAnswers(b.text, blocks, values)}</p>;
         if (b.type === "signature") {
           const s = signatures[b.id];
           return (

@@ -3,7 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { getDb, withTenant } from "@/db/client";
 import { requireUser } from "@/lib/session";
 import { demoMode } from "@/server/demo";
-import { demoFamilyLink, E_SIGN_CONSENT, getOnboarding, ITEM_STATUS, suggestResident } from "@/server/onboarding";
+import { FormLetterhead } from "@/components/form-letterhead";
+import { demoFamilyLink, E_SIGN_CONSENT, getOnboarding, ITEM_STATUS, letterheadView, suggestResident } from "@/server/onboarding";
 import { canManageOnboarding } from "@/server/onboarding-forms";
 import { admitAction, cancelOnboardingAction, resendLinkAction, reviewAction, staffSaveAction, staffSignAction } from "../actions";
 import { AdmitForm, PacketButtons, StaffItem } from "../staff-forms";
@@ -26,6 +27,7 @@ export default async function OnboardingDetail({ params }: { params: Promise<{ i
     <>
       <div className="card">
         <Link href="/onboarding" className="small">‹ Onboarding</Link>
+        <FormLetterhead head={letterheadView(o.head)} />
         <div className="row" style={{ alignItems: "start" }}>
           <div>
             <h1>{p.residentFirstName} {p.residentLastName}</h1>

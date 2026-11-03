@@ -290,6 +290,11 @@ td { padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: to
 .checklist-item:hover { border-color: var(--accent); }
 .checklist-item .grow { flex: 1; min-width: 0; }
 
+/* Form letterhead: logo, organization, the home's address and contact details. */
+.letterhead { display: flex; align-items: center; gap: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.letterhead img { max-height: 64px; max-width: 160px; object-fit: contain; }
+.org-logo { max-height: 72px; max-width: 220px; object-fit: contain; background: #fff; border-radius: 8px; padding: 4px; }
+
 /* The family's onboarding pages: no app chrome, comfortable on a phone. */
 .family { max-width: 760px; margin: 0 auto; padding: 16px; display: grid; gap: 14px; }
 .family .brand { display: flex; align-items: center; gap: 8px; }

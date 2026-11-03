@@ -225,6 +225,13 @@
       "when": 1793605698569,
       "tag": "0031_onboarding",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1793668332466,
+      "tag": "0032_home_address_logo",
+      "breakpoints": true
     }
   ]
 }
