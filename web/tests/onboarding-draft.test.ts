@@ -99,3 +99,19 @@ describe("responsible party wording", () => {
     expect(fillPlaceholders([old[1]], ctx)).toEqual([{ ...old[1], text: "I, Luis Ruiz, agree." }]);
   });
 });
+
+describe("a family member as responsible party", () => {
+  it("is a choice for their authority, and legal papers become optional, in forms organizations already have", async () => {
+    const authority: Block = { id: "au1", type: "field", label: "Your authority", input: "choice", required: true, who: "poa", options: ["Health care power of attorney", "Court-appointed guardian", "Representative payee", "Other"] };
+    const [form] = await db.insert(onboardingForms).values({ orgId: s.orgId, title: "Responsible party and emergency contacts", kind: "form", blocks: [authority], position: 97 }).returning();
+    const [papers] = await db.insert(onboardingForms).values({ orgId: s.orgId, title: "Power of attorney or guardianship papers", description: "A copy of the signed power of attorney or the court's guardianship order.", kind: "upload", required: true, blocks: [], position: 96 }).returning();
+    for (let run = 0; run < 2; run++) {
+      for (const part of readFileSync(path.join(process.cwd(), "drizzle", "0036_family_member_responsible_party.sql"), "utf8").split("--> statement-breakpoint")) await db.execute(sql.raw(part));
+    }
+    const [f] = await db.select().from(onboardingForms).where(eq(onboardingForms.id, form.id));
+    expect((f.blocks as Block[])[0]).toMatchObject({ options: ["Health care power of attorney", "Court-appointed guardian", "Representative payee", "Family member (no legal papers)", "Other"] });
+    expect(f.version).toBe(2);
+    const [u] = await db.select().from(onboardingForms).where(eq(onboardingForms.id, papers.id));
+    expect(u.required).toBe(false);
+  });
+});

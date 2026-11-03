@@ -253,6 +253,13 @@
       "when": 1793790000000,
       "tag": "0035_responsible_party_wording",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1793800000000,
+      "tag": "0036_family_member_responsible_party",
+      "breakpoints": true
     }
   ]
 }
