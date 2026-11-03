@@ -148,6 +148,28 @@ export function fillPlaceholders(blocks: Block[], ctx: Record<Placeholder, strin
   });
 }
 
+/**
+ * What one signature line covers: the form's title, everything above the line, and the answers
+ * shown there (questions above it, and any answer the wording above quotes, like {{Monthly fee}}).
+ * Each part is signed as it's finished; changing an answer only affects the parts that show it.
+ */
+export function signedPart(title: string, blocks: Block[], values: Values, signatureId: string): string | null {
+  const at = blocks.findIndex((b) => b.id === signatureId && b.type === "signature");
+  if (at < 0) return null;
+  const part = blocks.slice(0, at + 1);
+  const fields = blocks.filter((b): b is Extract<Block, { type: "field" }> => b.type === "field");
+  const shown = new Set(part.filter((b) => b.type === "field").map((b) => b.id));
+  for (const b of part) {
+    if (b.type !== "heading" && b.type !== "text") continue;
+    for (const [, name] of b.text.matchAll(TOKEN)) {
+      const q = fields.find((f) => f.label.toLowerCase() === name.toLowerCase());
+      if (q) shown.add(q.id);
+    }
+  }
+  const answers = Object.fromEntries(Object.entries(values).filter(([k]) => shown.has(k)).sort(([a], [b]) => a.localeCompare(b)));
+  return JSON.stringify({ title, blocks: part, values: answers });
+}
+
 /** Shows answers where the wording names a question: "Monthly fee: {{Monthly fee}}". Blank until answered. */
 export function withAnswers(text: string, blocks: Block[], values: Values): string {
   return text.replace(TOKEN, (all, name: string) => {

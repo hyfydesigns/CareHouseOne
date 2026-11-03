@@ -5,7 +5,7 @@ import type { DB, Tx } from "@/db/client";
 import { facilities, onboardingAccess, onboardingFiles, onboardingItems, onboardingPackets, onboardingSignatures, organizations, outbox, residentDocuments, users } from "@/db/schema";
 import { randomToken, safeEqual, sha256 } from "@/lib/crypto";
 import { addressLine, contactLine } from "@/lib/home-contact";
-import { blockSchema, cleanValues, fillPlaceholders, missingFor, type Block, type Values, type Who } from "@/lib/onboarding-forms";
+import { blockSchema, cleanValues, fillPlaceholders, missingFor, signedPart, type Block, type Values, type Who } from "@/lib/onboarding-forms";
 import { canSeeFacility, type Actor } from "@/lib/permissions";
 import { MAX_ATTACHMENT_BYTES, normaliseAttachment } from "./attachments";
 import { audit, sendMail } from "./audit";
@@ -36,8 +36,8 @@ const blocksOf = (i: Pick<ItemRow, "blocks">): Block[] =>
     return p.success ? [p.data as Block] : [];
   });
 
-/** The fingerprint a signature covers: the form's wording and every answer at that moment. */
-export const documentHash = (i: Pick<ItemRow, "title" | "blocks" | "values">) => sha256(JSON.stringify({ title: i.title, blocks: i.blocks, values: i.values }));
+/** The fingerprint a signature covers: the form's wording above the signature line and the answers shown there. */
+export const signatureHash = (i: Pick<ItemRow, "title" | "blocks" | "values">, blockId: string) => sha256(signedPart(i.title, blocksOf(i), i.values ?? {}, blockId) ?? "");
 
 // ---------------------------------------------------------------- staff: start and manage
 
@@ -248,7 +248,7 @@ async function editableItem(tx: Tx, packet: Packet, itemId: string): Promise<Ite
   return item;
 }
 
-/** Saves one side's answers. Changing any answer voids the signatures already on the form. */
+/** Saves one side's answers. Changing an answer voids the signatures on the parts of the form that show it. */
 async function saveValues(tx: Tx, packet: Packet, itemId: string, raw: Record<string, unknown>, party: Party, now: Date): Promise<Result> {
   const item = await editableItem(tx, packet, itemId);
   if ("error" in item) return { ok: false, error: item.error };
@@ -258,10 +258,13 @@ async function saveValues(tx: Tx, packet: Packet, itemId: string, raw: Record<st
   const values = { ...others, ...mine };
   const changed = JSON.stringify(values) !== JSON.stringify(item.values ?? {});
   if (!changed) return { ok: true, message: "Saved." };
-  const voided = await tx.update(onboardingSignatures).set({ voidedAt: now }).where(and(eq(onboardingSignatures.itemId, item.id), isNull(onboardingSignatures.voidedAt))).returning({ id: onboardingSignatures.id });
+  const signed = await tx.select({ id: onboardingSignatures.id, blockId: onboardingSignatures.blockId }).from(onboardingSignatures).where(and(eq(onboardingSignatures.itemId, item.id), isNull(onboardingSignatures.voidedAt)));
+  const before = item.values ?? {};
+  const affected = signed.filter((s) => signedPart(item.title, blocks, before, s.blockId) !== signedPart(item.title, blocks, values, s.blockId)).map((s) => s.id);
+  const voided = affected.length ? await tx.update(onboardingSignatures).set({ voidedAt: now }).where(inArray(onboardingSignatures.id, affected)).returning({ id: onboardingSignatures.id }) : [];
   await tx.update(onboardingItems).set({ values, status: party.who === "poa" ? "todo" : item.status, updatedAt: now }).where(eq(onboardingItems.id, item.id));
   if (voided.length) await audit(tx, { orgId: packet.orgId, actorId: party.userId, action: "onboarding_signatures_voided", entity: "organization", entityId: packet.orgId, details: { packetId: packet.id, itemId: item.id, count: voided.length, by: party.who } });
-  return { ok: true, message: voided.length ? "Saved. Answers changed after signing, so the form needs to be signed again." : "Saved." };
+  return { ok: true, message: voided.length ? `Saved. Answers changed above ${voided.length === 1 ? "a signature, so that part needs" : `${voided.length} signatures, so those parts need`} to be signed again.` : "Saved." };
 }
 
 const signSchema = z.object({
@@ -280,8 +283,10 @@ async function sign(tx: Tx, packet: Packet, itemId: string, blockId: string, raw
   const blocks = blocksOf(item);
   const line = blocks.find((b) => b.id === blockId);
   if (!line || line.type !== "signature" || line.who !== party.who) return { ok: false, error: "That signature line isn't yours to sign." };
-  const fieldsLeft = missingFor(blocks.filter((b) => b.type === "field"), item.values ?? {}, new Set(), party.who);
-  if (fieldsLeft.length) return { ok: false, error: `Fill in ${fieldsLeft.slice(0, 3).join(", ")}${fieldsLeft.length > 3 ? "…" : ""} first, then sign.` };
+  // Each part is signed as it's finished: only the questions above this line need answers.
+  const above = blocks.slice(0, blocks.indexOf(line)).filter((b) => b.type === "field");
+  const fieldsLeft = missingFor(above, item.values ?? {}, new Set(), party.who);
+  if (fieldsLeft.length) return { ok: false, error: `Fill in ${fieldsLeft.slice(0, 3).join(", ")}${fieldsLeft.length > 3 ? "…" : ""} above, then sign.` };
   let image: Buffer | null = null;
   if (p.data.method === "drawn") {
     const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(p.data.image ?? "");
@@ -301,7 +306,7 @@ async function sign(tx: Tx, packet: Packet, itemId: string, blockId: string, raw
     method: p.data.method,
     image,
     consent: E_SIGN_CONSENT,
-    documentHash: documentHash(item),
+    documentHash: signatureHash(item, blockId),
     ip: meta.ip?.slice(0, 100) ?? null,
     userAgent: meta.userAgent?.slice(0, 300) ?? null,
     signedAt: now,

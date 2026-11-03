@@ -6,7 +6,7 @@ import { createTestDb, withTenant, type DB } from "@/db/client";
 import { onboardingForms, outbox } from "@/db/schema";
 import { fillPlaceholders, type Block } from "@/lib/onboarding-forms";
 import type { Actor } from "@/lib/permissions";
-import { cancelOnboarding, getOnboarding, packetByToken, resendLink, sendOnboarding, staffSaveValues, startOnboarding } from "@/server/onboarding";
+import { cancelOnboarding, familySaveValues, familySign, familyView, getOnboarding, packetByToken, resendLink, sendOnboarding, staffSaveValues, startOnboarding } from "@/server/onboarding";
 import { residentialAgreement } from "@/server/onboarding-agreement";
 import { ensureStarterForms, listForms } from "@/server/onboarding-forms";
 import { seedDemo, type Seeded } from "@/server/seed";
@@ -113,5 +113,47 @@ describe("a family member as responsible party", () => {
     expect(f.version).toBe(2);
     const [u] = await db.select().from(onboardingForms).where(eq(onboardingForms.id, papers.id));
     expect(u.required).toBe(false);
+  });
+});
+
+describe("signing a long form part by part", () => {
+  it("each signature needs only the answers above it, and later answers don't clear it", async () => {
+    const blocks: Block[] = [
+      { id: "fee0", type: "field", label: "Monthly fee", input: "money", required: true, who: "staff" },
+      { id: "qone", type: "field", label: "Your phone", input: "text", required: true, who: "poa" },
+      { id: "sone", type: "signature", label: "Responsible party (part 1)", who: "poa" },
+      { id: "ttwo", type: "text", text: "I guarantee the Monthly Fee of {{Monthly fee}}." },
+      { id: "qtwo", type: "field", label: "Guarantor's address", input: "long", required: true, who: "poa" },
+      { id: "stwo", type: "signature", label: "Guarantor (part 2)", who: "poa" },
+    ];
+    const [form] = await db.insert(onboardingForms).values({ orgId: s.orgId, title: "Two-part form", kind: "form", blocks, position: 95 }).returning();
+    const r = await inOrg((tx) => startOnboarding(tx, owner, s.orgId, start({ poaEmail: "parts@example.com", formIds: [form.id], draft: true }), "https://app.test"));
+    const id = r.ok ? r.data!.id : "";
+    const itemId = (await inOrg((tx) => getOnboarding(tx, owner, id)))!.items[0].id;
+    expect((await inOrg((tx) => staffSaveValues(tx, owner, id, itemId, { fee0: "2500" }))).ok).toBe(true);
+    await inOrg((tx) => sendOnboarding(tx, owner, id, "https://app.test"));
+    const p = (await packetByToken(db, /\/family\/([A-Za-z0-9_-]+)/.exec((await mailsTo("parts@example.com"))[0].body)![1]))!;
+    const fam = <T>(fn: Parameters<typeof withTenant<T>>[2]) => withTenant(db, p.orgId, fn);
+    const sig = { name: "Luis Ruiz", method: "typed", consent: true };
+    const signatures = async () => Object.keys((await fam((tx) => familyView(tx, p))).items[0].signatures).sort();
+
+    // Part 1 can't be signed until its question is answered; part 2's question can wait.
+    expect((await fam((tx) => familySign(tx, p, itemId, "sone", sig, {}))).ok).toBe(false);
+    await fam((tx) => familySaveValues(tx, p, itemId, { qone: "713-555-0100" }));
+    const s1 = await fam((tx) => familySign(tx, p, itemId, "sone", sig, {}));
+    expect(s1.ok, s1.ok ? "" : s1.error).toBe(true);
+    expect((await fam((tx) => familySign(tx, p, itemId, "stwo", sig, {}))).ok).toBe(false);
+    // Answering part 2 leaves part 1's signature in place.
+    await fam((tx) => familySaveValues(tx, p, itemId, { qone: "713-555-0100", qtwo: "12 Elm St" }));
+    expect((await fam((tx) => familySign(tx, p, itemId, "stwo", sig, {}))).ok).toBe(true);
+    expect(await signatures()).toEqual(["sone", "stwo"]);
+    // Changing part 2's answer clears only part 2's signature.
+    const changed = await fam((tx) => familySaveValues(tx, p, itemId, { qone: "713-555-0100", qtwo: "14 Elm St" }));
+    expect(changed.ok && changed.message).toMatch(/a signature, so that part needs to be signed again/);
+    expect(await signatures()).toEqual(["sone"]);
+    await fam((tx) => familySign(tx, p, itemId, "stwo", sig, {}));
+    // The fee is above part 1 and quoted in part 2, so changing it clears both.
+    await inOrg((tx) => staffSaveValues(tx, owner, id, itemId, { fee0: "2600" }));
+    expect(await signatures()).toEqual([]);
   });
 });
