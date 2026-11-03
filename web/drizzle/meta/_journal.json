@@ -246,6 +246,13 @@
       "when": 1793760000000,
       "tag": "0034_room_number_optional",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1793790000000,
+      "tag": "0035_responsible_party_wording",
+      "breakpoints": true
     }
   ]
 }

@@ -37,7 +37,7 @@ export function residentialAgreement(): FormDef {
       f("Care level", "choice", { who: "staff", options: ["Care Level A", "Care Level B"], help: "Every resident starts at Care Level A for at least the first thirty (30) days." }),
 
       h("Residential Care Home Agreement"),
-      p('THIS RESIDENCY AGREEMENT ("Agreement"), dated {{Agreement date}}, is made between {{Organization}}, located at {{Home address}} ("We", "Us", or "Community") & {{POA name}} on behalf of {{Resident name}} ("Resident" or "You"). If more than one person is signing this Agreement, these terms refer to both of you.'),
+      p('THIS RESIDENCY AGREEMENT ("Agreement"), dated {{Agreement date}}, is made between {{Organization}}, located at {{Home address}} ("We", "Us", or "Community") & {{Responsible party}} on behalf of {{Resident name}} ("Resident" or "You"). If more than one person is signing this Agreement, these terms refer to both of you.'),
       p("The Community provides residence, care and services to eligible persons who require some assistance in the daily activities of living. We operate on a non-discriminatory basis and afford equal treatment and access to services to eligible persons regardless of age, race, color, religion, sex, national origin, ancestry, handicap or any other category protected by applicable law."),
       p("You have applied for residency, and with our signature on this agreement, we have accepted your Application. The purpose of this Agreement is to provide a statement of the services that we will furnish to you and the other legal obligations that we will assume and also sets forth your legal obligations to us, both financial and non-financial."),
 
@@ -187,7 +187,7 @@ export function residentialAgreement(): FormDef {
       p("Care Level B includes Level A, plus any of the following additional services, based on resident needs:\n• Residents with Dementia and/or Alzheimer's disease\n• Additional Advanced Care services"),
 
       h("Appendix C: Acknowledgement of Receipt"),
-      p("I, {{POA name}}, have received, read and understand the following contents of the admission packet from {{Organization}}:\n• Residency Agreement\n• Community Rules\n• Resident's Bill of Rights\n• Policy of Advance Directives\n• Community Disclosure Statement\n• Community Grievance Procedures\n• The Community is a physical and chemical restraint free residence\n• Contact information for the Texas Department of Aging and Disability Services and the Texas Ombudsman Program"),
+      p("I, {{Responsible party}}, have received, read and understand the following contents of the admission packet from {{Organization}}:\n• Residency Agreement\n• Community Rules\n• Resident's Bill of Rights\n• Policy of Advance Directives\n• Community Disclosure Statement\n• Community Grievance Procedures\n• The Community is a physical and chemical restraint free residence\n• Contact information for the Texas Department of Aging and Disability Services and the Texas Ombudsman Program"),
       f("I have received, read and understand the contents of the admission packet listed above", "check"),
       sign("Responsible party (Appendix C)", "poa"),
       sign("Community staff (Appendix C)", "staff"),

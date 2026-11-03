@@ -85,7 +85,7 @@ export async function renderOnboardingPdf(packet: Packet, item: ItemView, head: 
   if (head.logo) y = Math.min(y, top - 60);
   y -= 10;
   write(item.title, { font: bold, size: 18, gap: 2 });
-  write(`Resident: ${packet.residentFirstName} ${packet.residentLastName}  ·  Power of attorney: ${packet.poaName}`, { size: 10, color: grey, gap: 10 });
+  write(`Resident: ${packet.residentFirstName} ${packet.residentLastName}  ·  Responsible party: ${packet.poaName}`, { size: 10, color: grey, gap: 10 });
   page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 1, color: rgb(0.8, 0.8, 0.85) });
   y -= 12;
 
@@ -124,7 +124,7 @@ export async function renderOnboardingPdf(packet: Packet, item: ItemView, head: 
   write("Electronic signature record", { font: bold, size: 11 });
   write(`Each signer agreed: "${E_SIGN_CONSENT}"`, { size: 8.5, color: grey, gap: 6 });
   for (const e of sigEvidence) {
-    write(`${e.name} (${e.signer === "poa" ? "power of attorney" : "for the home"}), ${e.method}, ${e.signedAt.toISOString()}${e.ip ? `, from ${e.ip}` : ""}`, { size: 8.5, gap: 1 });
+    write(`${e.name} (${e.signer === "poa" ? "responsible party" : "for the home"}), ${e.method}, ${e.signedAt.toISOString()}${e.ip ? `, from ${e.ip}` : ""}`, { size: 8.5, gap: 1 });
     write(`Document fingerprint (SHA-256): ${e.documentHash}`, { size: 7.5, color: grey, gap: 6 });
   }
 

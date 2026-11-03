@@ -56,7 +56,7 @@ export async function createForm(tx: Tx, actor: Actor, orgId: string, kind: Form
   if (!canManageOnboarding(actor)) return { ok: false, error: "Only owners and admins manage onboarding forms." };
   await ensureStarterForms(tx, orgId, actor.id);
   const [{ top }] = await tx.select({ top: max(onboardingForms.position) }).from(onboardingForms);
-  const blocks: Block[] = kind === "form" ? [{ id: newBlockId(), type: "field", label: "Your question", input: "text", required: true, who: "poa" }, { id: newBlockId(), type: "signature", label: "Power of attorney or guardian", who: "poa" }] : [];
+  const blocks: Block[] = kind === "form" ? [{ id: newBlockId(), type: "field", label: "Your question", input: "text", required: true, who: "poa" }, { id: newBlockId(), type: "signature", label: "Responsible party", who: "poa" }] : [];
   const [row] = await tx
     .insert(onboardingForms)
     .values({ orgId, title: kind === "form" ? "New form" : "New document request", description: "", kind, required: true, blocks, position: (top ?? 0) + 1, createdBy: actor.id })

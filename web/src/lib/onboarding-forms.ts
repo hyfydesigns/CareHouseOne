@@ -7,7 +7,7 @@ import { z } from "zod";
  * family's page, staff review and the signed PDF.
  */
 export type Who = "poa" | "staff";
-export const WHO_LABEL: Record<Who, string> = { poa: "Family / POA", staff: "Staff" };
+export const WHO_LABEL: Record<Who, string> = { poa: "Responsible party", staff: "Staff" };
 /** "To be filled in by …" */
 export const WHO_PHRASE: Record<Who, string> = { poa: "the family", staff: "the home" };
 
@@ -128,7 +128,9 @@ export function answerText(b: Extract<Block, { type: "field" }>, v: string | und
  * family (so the signed copy keeps them even if the home's details change later); a placeholder
  * named after one of the form's questions shows that question's answer.
  */
-export const PLACEHOLDERS = ["Organization", "Home name", "Home address", "Home phone", "Home fax", "Home email", "Resident name", "POA name"] as const;
+export const PLACEHOLDERS = ["Organization", "Home name", "Home address", "Home phone", "Home fax", "Home email", "Resident name", "Responsible party"] as const;
+/** Earlier names that still work in forms written before the rename. */
+const PLACEHOLDER_ALIASES: Record<string, Placeholder> = { "poa name": "Responsible party" };
 export type Placeholder = (typeof PLACEHOLDERS)[number];
 const TOKEN = /\{\{\s*([^{}]{1,80}?)\s*\}\}/g;
 const BLANK = "__________";
@@ -136,7 +138,7 @@ const BLANK = "__________";
 /** Fills the home's details into every block (wording, questions, help text). */
 export function fillPlaceholders(blocks: Block[], ctx: Record<Placeholder, string>): Block[] {
   const fill = (s: string) => s.replace(TOKEN, (all, name: string) => {
-    const key = PLACEHOLDERS.find((p) => p.toLowerCase() === name.toLowerCase());
+    const key = PLACEHOLDERS.find((p) => p.toLowerCase() === name.toLowerCase()) ?? PLACEHOLDER_ALIASES[name.toLowerCase()];
     return key ? ctx[key] || BLANK : all;
   });
   return blocks.map((b) => {

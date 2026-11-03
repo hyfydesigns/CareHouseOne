@@ -101,7 +101,7 @@ export async function startOnboarding(tx: Tx, actor: Actor, orgId: string, raw: 
     "Home fax": home.fax ?? "",
     "Home email": home.email ?? "",
     "Resident name": `${p.data.residentFirstName} ${p.data.residentLastName}`,
-    "POA name": p.data.poaName,
+    "Responsible party": p.data.poaName,
   };
   const { draft, ...rest } = p.data;
   const details = { facilityId: rest.facilityId, residentFirstName: rest.residentFirstName, residentLastName: rest.residentLastName, poaName: rest.poaName, poaEmail: rest.poaEmail };

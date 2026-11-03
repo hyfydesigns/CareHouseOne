@@ -4,7 +4,7 @@ import { desc, eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createTestDb, withTenant, type DB } from "@/db/client";
 import { onboardingForms, outbox } from "@/db/schema";
-import type { Block } from "@/lib/onboarding-forms";
+import { fillPlaceholders, type Block } from "@/lib/onboarding-forms";
 import type { Actor } from "@/lib/permissions";
 import { cancelOnboarding, getOnboarding, packetByToken, resendLink, sendOnboarding, staffSaveValues, startOnboarding } from "@/server/onboarding";
 import { residentialAgreement } from "@/server/onboarding-agreement";
@@ -76,5 +76,26 @@ describe("the agreement's room number", () => {
     const [after] = await db.select().from(onboardingForms).where(eq(onboardingForms.id, row.id));
     expect(room(after.blocks as Block[])).toMatchObject({ required: false });
     expect((after.blocks as Block[]).length).toBe(old.length);
+  });
+});
+
+describe("responsible party wording", () => {
+  it("replaces power of attorney in forms organizations already have, and {{POA name}} still fills in", async () => {
+    const old: Block[] = [
+      { id: "h1", type: "heading", text: "Power of attorney or guardian" },
+      { id: "t1", type: "text", text: "I, {{POA name}}, agree." },
+      { id: "s1", type: "signature", label: "Power of attorney or guardian", who: "poa" },
+    ];
+    const [row] = await db.insert(onboardingForms).values({ orgId: s.orgId, title: "Power of attorney and emergency contacts", kind: "form", blocks: old, position: 98 }).returning();
+    for (const part of readFileSync(path.join(process.cwd(), "drizzle", "0035_responsible_party_wording.sql"), "utf8").split("--> statement-breakpoint")) await db.execute(sql.raw(part));
+    const [after] = await db.select().from(onboardingForms).where(eq(onboardingForms.id, row.id));
+    expect(after.title).toBe("Responsible party and emergency contacts");
+    expect(after.blocks).toEqual([
+      { id: "h1", type: "heading", text: "Responsible party" },
+      { id: "t1", type: "text", text: "I, {{Responsible party}}, agree." },
+      { id: "s1", type: "signature", label: "Responsible party", who: "poa" },
+    ]);
+    const ctx = { Organization: "", "Home name": "", "Home address": "", "Home phone": "", "Home fax": "", "Home email": "", "Resident name": "", "Responsible party": "Luis Ruiz" };
+    expect(fillPlaceholders([old[1]], ctx)).toEqual([{ ...old[1], text: "I, Luis Ruiz, agree." }]);
   });
 });

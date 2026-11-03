@@ -53,12 +53,12 @@ export function starterForms(): FormDef[] {
       ],
     },
     {
-      title: "Power of attorney and emergency contacts",
+      title: "Responsible party and emergency contacts",
       description: "Who can make decisions, and who to call.",
       kind: "form",
       required: true,
       blocks: [
-        h("Power of attorney or guardian"),
+        h("Responsible party"),
         f("Your full name", "text"),
         f("Relationship to the resident", "text"),
         f("Your authority", "choice", { options: ["Health care power of attorney", "Durable (financial) power of attorney", "Court-appointed guardian", "Representative payee", "Other"] }),
@@ -70,7 +70,7 @@ export function starterForms(): FormDef[] {
         f("Relationship", "text", { required: false }),
         f("Phone", "text", { required: false }),
         p("By signing, I confirm this information is correct and I will tell the home if it changes."),
-        sign("Power of attorney or guardian", "poa"),
+        sign("Responsible party", "poa"),
       ],
     },
     {
@@ -83,7 +83,7 @@ export function starterForms(): FormDef[] {
         p("I authorize trained staff of the home to store and give the resident's medications as ordered by the prescriber, to keep a record of every dose, and to contact the prescriber or pharmacy about the resident's medications."),
         f("Medications may be given by staff who are certified to do so", "check"),
         f("The pharmacy the home uses may be told about allergies and changes", "yesno"),
-        sign("Power of attorney or guardian", "poa"),
+        sign("Responsible party", "poa"),
         sign("For the home", "staff"),
       ],
     },
@@ -96,13 +96,13 @@ export function starterForms(): FormDef[] {
         p("The home keeps a photo of each resident in their record so staff give care to the right person. This form is about any other use."),
         f("Photos for the resident's record (identification)", "yesno"),
         f("Photos in the home's newsletter or social media", "choice", { options: ["Yes", "Yes, without the resident's name", "No"] }),
-        sign("Power of attorney or guardian", "poa"),
+        sign("Responsible party", "poa"),
       ],
     },
     residentialAgreement(),
     { title: "Power of attorney or guardianship papers", description: "A copy of the signed power of attorney or the court's guardianship order.", kind: "upload", required: true, blocks: [] },
     { title: "Insurance cards", description: "Front and back of the Medicaid, Medicare and any other insurance cards.", kind: "upload", required: true, blocks: [] },
-    { title: "Photo ID of the power of attorney", description: "A driver's license or other photo ID.", kind: "upload", required: true, blocks: [] },
+    { title: "Photo ID of the responsible party", description: "A driver's license or other photo ID.", kind: "upload", required: true, blocks: [] },
     { title: "Current medication list or doctor's orders", description: "The latest list from the doctor, pharmacy or hospital discharge papers.", kind: "upload", required: false, blocks: [] },
   ];
 }

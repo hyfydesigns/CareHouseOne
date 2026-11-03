@@ -11,7 +11,7 @@ const ADD: Array<[string, () => Block]> = [
   ["Heading", () => ({ id: newBlockId(), type: "heading", text: "" })],
   ["Paragraph", () => ({ id: newBlockId(), type: "text", text: "" })],
   ["Question", () => ({ id: newBlockId(), type: "field", label: "", input: "text", required: true, who: "poa" })],
-  ["Signature line", () => ({ id: newBlockId(), type: "signature", label: "Power of attorney or guardian", who: "poa" })],
+  ["Signature line", () => ({ id: newBlockId(), type: "signature", label: "Responsible party", who: "poa" })],
 ];
 
 /** Owners and admins write a form: headings, paragraphs, questions and signature lines. */
