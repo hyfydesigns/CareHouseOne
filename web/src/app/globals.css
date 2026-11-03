@@ -290,6 +290,10 @@ td { padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: to
 .checklist-item:hover { border-color: var(--accent); }
 .checklist-item .grow { flex: 1; min-width: 0; }
 
+/* Amount ($) answers: the dollar sign sits inside the box. */
+.money-input { display: flex; align-items: center; gap: 6px; max-width: 220px; }
+.money-input span { font-weight: 700; color: var(--ink-2); }
+
 /* Form letterhead: logo, organization, the home's address and contact details. */
 .letterhead { display: flex; align-items: center; gap: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
 .letterhead img { max-height: 64px; max-width: 160px; object-fit: contain; }

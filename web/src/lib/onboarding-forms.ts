@@ -18,7 +18,18 @@ export const INPUTS = {
   yesno: "Yes or no",
   choice: "Choose one",
   check: "Checkbox (I agree / I confirm)",
+  money: "Amount ($)",
 } as const;
+
+/** "1000", "$1,000" or "1000.5" as a number of dollars, or null if it isn't an amount. */
+export function parseMoney(v: string): number | null {
+  const s = v.replace(/[$,\s]/g, "");
+  if (!/^\d{1,9}(\.\d{1,2})?$/.test(s)) return null;
+  return Number(s);
+}
+
+/** $1,000.00 */
+export const formatMoney = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 export type InputKind = keyof typeof INPUTS;
 
 export type Block =
@@ -86,6 +97,12 @@ export function cleanValues(blocks: Block[], raw: Record<string, unknown>, w: Wh
     const v = typeof raw[b.id] === "string" ? (raw[b.id] as string).trim() : "";
     if (!v) continue;
     if (b.input === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(v)) continue;
+    if (b.input === "money") {
+      // Kept as a plain number ("1000.00") and shown as currency wherever it appears.
+      const amount = parseMoney(v);
+      if (amount !== null) out[b.id] = amount.toFixed(2);
+      continue;
+    }
     if ((b.input === "yesno" || b.input === "check") && v !== "yes" && v !== "no") continue;
     if (b.input === "choice" && !(b.options ?? []).includes(v)) continue;
     out[b.id] = v.slice(0, b.input === "long" ? 4000 : 300);
@@ -96,6 +113,10 @@ export function cleanValues(blocks: Block[], raw: Record<string, unknown>, w: Wh
 /** How an answer reads on screen and on paper. */
 export function answerText(b: Extract<Block, { type: "field" }>, v: string | undefined): string {
   if (!v) return "";
+  if (b.input === "money") {
+    const amount = parseMoney(v);
+    return amount === null ? v : formatMoney(amount);
+  }
   if (b.input === "yesno") return v === "yes" ? "Yes" : "No";
   if (b.input === "check") return v === "yes" ? "✓ Agreed" : "";
   if (b.input === "date" && /^\d{4}-\d{2}-\d{2}$/.test(v)) return new Date(`${v}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "long", day: "numeric", year: "numeric" });

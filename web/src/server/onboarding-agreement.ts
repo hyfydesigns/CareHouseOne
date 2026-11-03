@@ -32,8 +32,8 @@ export function residentialAgreement(): FormDef {
       h("Agreement details"),
       f("Agreement date", "date", { who: "staff" }),
       f("Room number", "text", { who: "staff" }),
-      f("Community fee", "text", { who: "staff", help: "One-time, non-refundable. For example: $1,000.00" }),
-      f("Monthly fee", "text", { who: "staff", help: "For example: $2,500.00" }),
+      f("Community fee", "money", { who: "staff", help: "One-time, non-refundable. For example: 1000" }),
+      f("Monthly fee", "money", { who: "staff", help: "For example: 2500" }),
       f("Care level", "choice", { who: "staff", options: ["Care Level A", "Care Level B"], help: "Every resident starts at Care Level A for at least the first thirty (30) days." }),
 
       h("Residential Care Home Agreement"),

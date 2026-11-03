@@ -232,6 +232,13 @@
       "when": 1793668332466,
       "tag": "0032_home_address_logo",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1793671247695,
+      "tag": "0033_agreement_fees_as_amounts",
+      "breakpoints": true
     }
   ]
 }

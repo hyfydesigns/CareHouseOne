@@ -97,6 +97,11 @@ export function OnboardingFormView({
             {b.help && <span className="small muted">{b.help}</span>}
             {b.input === "long" ? (
               <textarea id={inputId} rows={3} value={v} maxLength={4000} disabled={disabled} onChange={(e) => set(e.target.value)} />
+            ) : b.input === "money" ? (
+              <div className="money-input">
+                <span aria-hidden="true">$</span>
+                <input id={inputId} inputMode="decimal" value={v} maxLength={16} placeholder="0.00" disabled={disabled} onChange={(e) => set(e.target.value)} />
+              </div>
             ) : (
               <input id={inputId} type={b.input === "date" ? "date" : "text"} value={v} maxLength={300} disabled={disabled} onChange={(e) => set(e.target.value)} />
             )}
