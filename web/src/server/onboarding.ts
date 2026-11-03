@@ -45,8 +45,12 @@ const startSchema = z.object({
   facilityId: z.string().uuid("Choose the home."),
   residentFirstName: z.string().trim().min(1, "Enter the resident's first name.").max(80),
   residentLastName: z.string().trim().min(1, "Enter the resident's last name.").max(80),
-  poaName: z.string().trim().min(2, "Enter the power of attorney's name.").max(160),
-  poaEmail: z.string().trim().toLowerCase().email("Enter the power of attorney's email like name@example.com."),
+  poaName: z.string().trim().min(2, "Enter the responsible party's name.").max(160),
+  poaEmail: z.string().trim().toLowerCase().email("Enter the responsible party's email like name@example.com."),
+  /** The forms this resident needs; all of them when not given. */
+  formIds: z.array(z.string()).optional(),
+  /** Saved without sending, so the home can fill in its part (fees, room) before the family sees it. */
+  draft: z.boolean().optional(),
 });
 
 async function emailLink(tx: Tx, p: Packet, token: string, appUrl: string, kind: "invite" | "reminder") {
@@ -72,15 +76,21 @@ async function emailLink(tx: Tx, p: Packet, token: string, appUrl: string, kind:
   });
 }
 
-/** Owners and admins start an onboarding: the checklist is copied from the current forms and the POA gets the link. */
+/**
+ * Owners and admins start an onboarding: the chosen forms are copied into a checklist. The family
+ * gets the link straight away, or, for a draft, once the home has filled in its part and sends it.
+ */
 export async function startOnboarding(tx: Tx, actor: Actor, orgId: string, raw: unknown, appUrl: string, now = new Date()): Promise<Result<{ id: string }>> {
   if (!canManageOnboarding(actor)) return { ok: false, error: "Only owners and admins start onboardings." };
   const p = startSchema.safeParse(raw);
   if (!p.success) return { ok: false, error: p.error.issues[0].message };
   if (!canSeeFacility(actor, p.data.facilityId)) return { ok: false, error: "Choose one of your homes." };
   await ensureStarterForms(tx, orgId, actor.id);
-  const forms = await listForms(tx, actor);
-  if (!forms.length) return { ok: false, error: "There are no onboarding forms to send. Add or show some under Onboarding forms." };
+  const all = await listForms(tx, actor);
+  if (!all.length) return { ok: false, error: "There are no onboarding forms to send. Add or show some under Onboarding forms." };
+  const chosen = p.data.formIds && new Set(p.data.formIds);
+  const forms = chosen ? all.filter((f) => chosen.has(f.id)) : all;
+  if (!forms.length) return { ok: false, error: "Choose at least one form for this resident." };
   const [home] = await tx.select().from(facilities).where(eq(facilities.id, p.data.facilityId));
   const [org] = await tx.select({ name: organizations.name }).from(organizations).where(eq(organizations.id, orgId));
   const ctx = {
@@ -93,17 +103,31 @@ export async function startOnboarding(tx: Tx, actor: Actor, orgId: string, raw: 
     "Resident name": `${p.data.residentFirstName} ${p.data.residentLastName}`,
     "POA name": p.data.poaName,
   };
+  const { draft, ...rest } = p.data;
+  const details = { facilityId: rest.facilityId, residentFirstName: rest.residentFirstName, residentLastName: rest.residentLastName, poaName: rest.poaName, poaEmail: rest.poaEmail };
+  // A draft's token is never sent anywhere; sending it makes a new one.
   const token = randomToken();
   const [packet] = await tx
     .insert(onboardingPackets)
-    .values({ orgId, ...p.data, tokenHash: sha256(token), expiresAt: new Date(now.getTime() + LINK_DAYS * 86_400_000), createdBy: actor.id, createdAt: now })
+    .values({ orgId, ...details, status: draft ? "draft" : "open", tokenHash: sha256(token), expiresAt: new Date(now.getTime() + LINK_DAYS * 86_400_000), createdBy: actor.id, createdAt: now })
     .returning();
   await tx.insert(onboardingItems).values(
     forms.map((f, i) => ({ orgId, packetId: packet.id, formId: f.id, formVersion: f.version, title: f.title, description: f.description, kind: f.kind, required: f.required, blocks: fillPlaceholders(f.blocks, ctx), position: i + 1 })),
   );
-  await emailLink(tx, packet, token, appUrl, "invite");
-  await audit(tx, { orgId, actorId: actor.id, action: "onboarding_started", entity: "organization", entityId: orgId, details: { packetId: packet.id, facilityId: packet.facilityId, forms: forms.length } });
-  return { ok: true, message: `Sent to ${packet.poaEmail}.`, data: { id: packet.id } };
+  if (!draft) await emailLink(tx, packet, token, appUrl, "invite");
+  await audit(tx, { orgId, actorId: actor.id, action: "onboarding_started", entity: "organization", entityId: orgId, details: { packetId: packet.id, facilityId: packet.facilityId, forms: forms.length, draft: !!draft } });
+  return { ok: true, message: draft ? "Saved. Fill in the home's part, then send the link." : `Sent to ${packet.poaEmail}.`, data: { id: packet.id } };
+}
+
+/** Sends a draft onboarding to the family once the home has filled in its part. */
+export async function sendOnboarding(tx: Tx, actor: Actor, id: string, appUrl: string, now = new Date()): Promise<Result> {
+  const p = await packetFor(tx, actor, id);
+  if (!p || p.status !== "draft") return { ok: false, error: "That onboarding was already sent." };
+  const token = randomToken();
+  const [sent] = await tx.update(onboardingPackets).set({ status: "open", tokenHash: sha256(token), expiresAt: new Date(now.getTime() + LINK_DAYS * 86_400_000) }).where(eq(onboardingPackets.id, p.id)).returning();
+  await emailLink(tx, sent, token, appUrl, "invite");
+  await audit(tx, { orgId: p.orgId, actorId: actor.id, action: "onboarding_sent", entity: "organization", entityId: p.orgId, details: { packetId: p.id } });
+  return { ok: true, message: `Sent to ${p.poaEmail}.` };
 }
 
 async function packetFor(tx: Tx, actor: Actor, id: string): Promise<Packet | null> {
@@ -126,7 +150,7 @@ export async function resendLink(tx: Tx, actor: Actor, id: string, appUrl: strin
 
 export async function cancelOnboarding(tx: Tx, actor: Actor, id: string, now = new Date()): Promise<Result> {
   const p = await packetFor(tx, actor, id);
-  if (!p || p.status !== "open") return { ok: false, error: "That onboarding isn't open." };
+  if (!p || (p.status !== "open" && p.status !== "draft")) return { ok: false, error: "That onboarding isn't open." };
   await tx.update(onboardingPackets).set({ status: "cancelled", cancelledAt: now, cancelledBy: actor.id }).where(eq(onboardingPackets.id, p.id));
   await audit(tx, { orgId: p.orgId, actorId: actor.id, action: "onboarding_cancelled", entity: "organization", entityId: p.orgId, details: { packetId: p.id } });
   return { ok: true, message: "Onboarding cancelled. The family's link no longer works." };
@@ -216,7 +240,7 @@ type SignInput = { name: unknown; method: unknown; image?: unknown; consent: unk
 type Meta = { ip?: string; userAgent?: string };
 
 async function editableItem(tx: Tx, packet: Packet, itemId: string): Promise<ItemRow | { error: string }> {
-  if (packet.status !== "open") return { error: "This onboarding is closed." };
+  if (packet.status !== "open" && packet.status !== "draft") return { error: "This onboarding is closed." };
   if (!/^[0-9a-f-]{36}$/i.test(itemId)) return { error: "That form isn't part of this onboarding." };
   const [item] = await tx.select().from(onboardingItems).where(and(eq(onboardingItems.id, itemId), eq(onboardingItems.packetId, packet.id)));
   if (!item) return { error: "That form isn't part of this onboarding." };
@@ -332,12 +356,12 @@ export async function staffFile(tx: Tx, actor: Actor, fileId: string) {
 
 /**
  * The family's link: finds the onboarding from the token alone (before any organization is
- * known), then everything else runs inside that organization. Cancelled or expired links don't work.
+ * known), then everything else runs inside that organization. Drafts, cancelled and expired links don't work.
  */
 export async function packetByToken(db: DB, token: string, now = new Date()): Promise<Packet | null> {
   if (!/^[A-Za-z0-9_-]{20,100}$/.test(token)) return null;
   const [p] = await db.select().from(onboardingPackets).where(and(eq(onboardingPackets.tokenHash, sha256(token)), gt(onboardingPackets.expiresAt, now)));
-  return p && p.status !== "cancelled" ? p : null;
+  return p && (p.status === "open" || p.status === "admitted") ? p : null;
 }
 
 const mask = (email: string) => email.replace(/^(.)(.*)(@.*)$/, (_, a: string, b: string, c: string) => `${a}${"•".repeat(Math.min(b.length, 6))}${c}`);

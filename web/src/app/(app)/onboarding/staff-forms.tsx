@@ -10,12 +10,12 @@ import type { ItemView } from "@/server/onboarding";
 
 type Action = (s: FormState, fd: FormData) => Promise<FormState>;
 
-export function StartOnboardingForm({ action, homes }: { action: Action; homes: Array<{ id: string; name: string }> }) {
+export function StartOnboardingForm({ action, homes, forms }: { action: Action; homes: Array<{ id: string; name: string }>; forms: Array<{ id: string; title: string; required: boolean }> }) {
   const [state, formAction, pending] = useActionState(action, {});
   return (
     <form action={formAction} className="card">
       <h2>Start an onboarding</h2>
-      <p className="small muted" style={{ margin: 0 }}>The power of attorney gets an email with a private link to the checklist. Nothing is added to Residents until you admit.</p>
+      <p className="small muted" style={{ margin: 0 }}>The responsible party gets an email with a private link to the checklist. Nothing is added to Residents until you admit.</p>
       <div className="row" style={{ alignItems: "end" }}>
         <div className="field" style={{ flex: "1 1 180px" }}>
           <label htmlFor="facilityId">Home</label>
@@ -28,17 +28,27 @@ export function StartOnboardingForm({ action, homes }: { action: Action; homes: 
         <div className="field" style={{ flex: "1 1 160px" }}><label htmlFor="rl">Resident last name</label><input id="rl" name="residentLastName" maxLength={80} required /></div>
       </div>
       <div className="row" style={{ alignItems: "end" }}>
-        <div className="field" style={{ flex: "1 1 200px" }}><label htmlFor="pn">Power of attorney&apos;s name</label><input id="pn" name="poaName" maxLength={160} required /></div>
+        <div className="field" style={{ flex: "1 1 200px" }}><label htmlFor="pn">Person or Responsible Party</label><input id="pn" name="poaName" maxLength={160} required /></div>
         <div className="field" style={{ flex: "1 1 220px" }}><label htmlFor="pe">Their email</label><input id="pe" name="poaEmail" type="email" maxLength={200} required /></div>
-        <button className="btn primary" disabled={pending}>Send the link</button>
       </div>
+      <fieldset className="ob-pick">
+        <legend>Forms this resident needs</legend>
+        {forms.map((f) => (
+          <label key={f.id} className="check"><input type="checkbox" name="formIds" value={f.id} defaultChecked /> {f.title}{!f.required && <span className="small muted"> (optional)</span>}</label>
+        ))}
+      </fieldset>
+      <div className="row" style={{ gap: 6 }}>
+        <button className="btn primary" name="intent" value="draft" disabled={pending}>Fill in the home&apos;s part first</button>
+        <button className="btn" name="intent" value="send" disabled={pending}>Send the link now</button>
+      </div>
+      <p className="small muted" style={{ margin: 0 }}>Fill in first when a form has answers for the home to complete, like the fees and room in the agreement. The family doesn&apos;t see anything until you send the link.</p>
       <Status state={state} />
     </form>
   );
 }
 
-/** Resend the link or cancel, with a confirmation for cancelling. */
-export function PacketButtons({ resend, cancel }: { resend: () => Promise<FormState>; cancel: () => Promise<FormState> }) {
+/** Send (a draft) or resend the link, or cancel, with a confirmation for sending and cancelling. */
+export function PacketButtons({ resend, cancel, send, sendWarning }: { resend?: () => Promise<FormState>; cancel: () => Promise<FormState>; send?: () => Promise<FormState>; sendWarning?: string }) {
   const router = useRouter();
   const [state, setState] = useState<FormState>({});
   const [busy, setBusy] = useState(false);
@@ -51,7 +61,8 @@ export function PacketButtons({ resend, cancel }: { resend: () => Promise<FormSt
   return (
     <div className="stack" style={{ gap: 6 }}>
       <div className="row" style={{ gap: 6 }}>
-        <button type="button" className="btn small" disabled={busy} onClick={() => run(resend)}>Send a new link</button>
+        {send && <button type="button" className="btn small primary" disabled={busy} onClick={() => confirm(sendWarning ?? "Send the link to the family now?") && run(send)}>Send the link</button>}
+        {resend && <button type="button" className="btn small" disabled={busy} onClick={() => run(resend)}>Send a new link</button>}
         <button type="button" className="btn small" disabled={busy} onClick={() => confirm("Cancel this onboarding? The family's link stops working. Nothing is deleted.") && run(cancel)}>Cancel onboarding</button>
       </div>
       <Status state={state} />
@@ -64,6 +75,7 @@ export function StaffItem({
   packetId,
   item,
   open,
+  draft = false,
   me,
   consentText,
   save,
@@ -73,6 +85,8 @@ export function StaffItem({
   packetId: string;
   item: ItemView;
   open: boolean;
+  /** Not sent to the family yet: the home fills in its part, nothing to review. */
+  draft?: boolean;
   me: string;
   consentText: string;
   save: (values: Values) => Promise<FormState>;
@@ -127,7 +141,10 @@ export function StaffItem({
         <p className="small muted" style={{ margin: 0 }}>Tip: fill in the home&apos;s part before the family signs. Changing answers after someone signs clears the signatures.</p>
       )}
       <Status state={state} />
-      {editable && (
+      {editable && draft && item.kind === "form" && hasStaffPart && (
+        <div className="row"><button type="button" className="btn small primary" disabled={busy || !dirty} onClick={async () => { setBusy(true); await doSave(); setBusy(false); }}>Save the home&apos;s answers</button></div>
+      )}
+      {editable && !draft && (
         <div className="row" style={{ gap: 6 }}>
           {item.kind === "form" && hasStaffPart && <button type="button" className="btn small" disabled={busy || !dirty} onClick={async () => { setBusy(true); await doSave(); setBusy(false); }}>Save the home&apos;s answers</button>}
           <span className="spacer" />

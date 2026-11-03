@@ -5,8 +5,9 @@ import { requireUser } from "@/lib/session";
 import { demoMode } from "@/server/demo";
 import { FormLetterhead } from "@/components/form-letterhead";
 import { demoFamilyLink, E_SIGN_CONSENT, getOnboarding, ITEM_STATUS, letterheadView, suggestResident } from "@/server/onboarding";
+import { missingFor } from "@/lib/onboarding-forms";
 import { canManageOnboarding } from "@/server/onboarding-forms";
-import { admitAction, cancelOnboardingAction, resendLinkAction, reviewAction, staffSaveAction, staffSignAction } from "../actions";
+import { admitAction, cancelOnboardingAction, resendLinkAction, reviewAction, sendOnboardingAction, staffSaveAction, staffSignAction } from "../actions";
 import { AdmitForm, PacketButtons, StaffItem } from "../staff-forms";
 
 const TONE = { todo: "", submitted: "warn", changes: "info", approved: "ok" } as const;
@@ -22,6 +23,13 @@ export default async function OnboardingDetail({ params }: { params: Promise<{ i
   if (!o) notFound();
   const { p, home, items } = o;
   const open = p.status === "open";
+  const draft = p.status === "draft";
+  // The home's answers (not its signatures, which come after the family's part).
+  const homeFields = (i: (typeof items)[number]) => missingFor(i.blocks.filter((b) => b.type === "field"), i.values, new Set(), "staff");
+  const homeToDo = items.filter((i) => homeFields(i).length);
+  const sendWarning = homeToDo.length
+    ? `The home's part isn't filled in yet on: ${homeToDo.map((i) => i.title).join(", ")}. Send the link to ${p.poaEmail} anyway?`
+    : `Send the link to ${p.poaEmail} now?`;
   const waiting = items.filter((i) => i.required && i.status !== "approved");
   return (
     <>
@@ -31,8 +39,9 @@ export default async function OnboardingDetail({ params }: { params: Promise<{ i
         <div className="row" style={{ alignItems: "start" }}>
           <div>
             <h1>{p.residentFirstName} {p.residentLastName}</h1>
-            <p className="muted" style={{ margin: 0 }}>{home.name} · Power of attorney: {p.poaName} ({p.poaEmail})</p>
+            <p className="muted" style={{ margin: 0 }}>{home.name} · Responsible party: {p.poaName} ({p.poaEmail})</p>
             <p className="small muted" style={{ margin: 0 }}>
+              {draft && "Not sent yet. Fill in the home's part below, then send the link."}
               {p.status === "open" && `Link works until ${p.expiresAt.toISOString().slice(0, 10)}.`}
               {p.status === "admitted" && <>Admitted {p.admittedAt?.toISOString().slice(0, 10)}. <Link href={`/residents/${p.residentId}?tab=documents`}>Open the resident&apos;s documents</Link></>}
               {p.status === "cancelled" && `Cancelled ${p.cancelledAt?.toISOString().slice(0, 10)}.`}
@@ -41,17 +50,19 @@ export default async function OnboardingDetail({ params }: { params: Promise<{ i
           <span className="spacer" />
           {o.demoLink && <a className="btn small" href={o.demoLink} target="_blank" rel="noreferrer">Demo: open the family&apos;s page</a>}
           {open && <PacketButtons resend={resendLinkAction.bind(null, p.id)} cancel={cancelOnboardingAction.bind(null, p.id)} />}
+          {draft && <PacketButtons send={sendOnboardingAction.bind(null, p.id)} sendWarning={sendWarning} cancel={cancelOnboardingAction.bind(null, p.id)} />}
         </div>
       </div>
 
       {items.map((i) => (
-        <details key={i.id} className="card" open={open && i.status === "submitted"}>
+        <details key={i.id} className="card" open={(open && i.status === "submitted") || (draft && homeFields(i).length > 0)}>
           <summary className="row" style={{ cursor: "pointer" }}>
             <b>{i.title}</b>{!i.required && <span className="small muted">optional</span>}
             <span className="spacer" />
             <span className={`pill ${TONE[i.status]}`}>{i.status === "submitted" ? "Ready for review" : ITEM_STATUS[i.status]}</span>
           </summary>
           {i.status === "changes" && i.staffNote && <p className="small"><b>Asked the family:</b> {i.staffNote}</p>}
+          {draft && homeFields(i).length > 0 && <p className="small muted" style={{ margin: 0 }}>Home to fill in: {homeFields(i).join(", ")}.</p>}
           {open && i.status !== "approved" && (i.poaMissing.length > 0 || i.staffMissing.length > 0) && (
             <p className="small muted" style={{ margin: 0 }}>
               {i.poaMissing.length > 0 && <>Family still to do: {i.poaMissing.slice(0, 4).join(", ")}{i.poaMissing.length > 4 ? "…" : ""}. </>}
@@ -61,7 +72,8 @@ export default async function OnboardingDetail({ params }: { params: Promise<{ i
           <StaffItem
             packetId={p.id}
             item={i}
-            open={open}
+            open={open || draft}
+            draft={draft}
             me={me.name}
             consentText={E_SIGN_CONSENT}
             save={staffSaveAction.bind(null, p.id, i.id)}

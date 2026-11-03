@@ -290,6 +290,10 @@ td { padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: to
 .checklist-item:hover { border-color: var(--accent); }
 .checklist-item .grow { flex: 1; min-width: 0; }
 
+/* Starting an onboarding: which forms this resident needs. */
+.ob-pick { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 16px; }
+.ob-pick legend { font-weight: 600; padding: 0 4px; }
+
 /* Amount ($) answers: the dollar sign sits inside the box. */
 .money-input { display: flex; align-items: center; gap: 6px; max-width: 220px; }
 .money-input span { font-weight: 700; color: var(--ink-2); }

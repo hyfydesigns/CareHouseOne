@@ -239,6 +239,13 @@
       "when": 1793671247695,
       "tag": "0033_agreement_fees_as_amounts",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1793760000000,
+      "tag": "0034_room_number_optional",
+      "breakpoints": true
     }
   ]
 }

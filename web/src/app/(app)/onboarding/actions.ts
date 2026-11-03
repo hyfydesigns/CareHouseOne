@@ -6,7 +6,7 @@ import type { FormState } from "@/components/status";
 import { getDb, withTenant } from "@/db/client";
 import type { FormDef, FormKind } from "@/lib/onboarding-forms";
 import { appUrl, clientIp, requireUser, userAgent } from "@/lib/session";
-import { admitOnboarding, cancelOnboarding, resendLink, reviewItem, staffSaveValues, staffSign, startOnboarding } from "@/server/onboarding";
+import { admitOnboarding, cancelOnboarding, resendLink, reviewItem, sendOnboarding, staffSaveValues, staffSign, startOnboarding } from "@/server/onboarding";
 import { addMissingStarters, createForm, moveForm, saveForm, setFormHidden } from "@/server/onboarding-forms";
 import { renderOnboardingPdf } from "@/server/onboarding-pdf";
 
@@ -48,9 +48,18 @@ export async function addStartersAction(): Promise<void> {
 export async function startOnboardingAction(_: FormState, fd: FormData): Promise<FormState> {
   const me = await requireUser();
   const url = await appUrl();
-  const r = await withTenant(await getDb(), me.orgId, (tx) => startOnboarding(tx, actorOf(me), me.orgId, Object.fromEntries(fd), url));
+  const raw = { ...Object.fromEntries(fd), formIds: fd.getAll("formIds").map(String), draft: fd.get("intent") !== "send" };
+  const r = await withTenant(await getDb(), me.orgId, (tx) => startOnboarding(tx, actorOf(me), me.orgId, raw, url));
   if (!r.ok) return { error: r.error };
   redirect(`/onboarding/${r.data!.id}`);
+}
+
+export async function sendOnboardingAction(packetId: string): Promise<FormState> {
+  const me = await requireUser();
+  const url = await appUrl();
+  const r = await withTenant(await getDb(), me.orgId, (tx) => sendOnboarding(tx, actorOf(me), packetId, url));
+  revalidatePath(`/onboarding/${packetId}`);
+  return r.ok ? { message: r.message } : { error: r.error };
 }
 
 export async function resendLinkAction(packetId: string): Promise<FormState> {
