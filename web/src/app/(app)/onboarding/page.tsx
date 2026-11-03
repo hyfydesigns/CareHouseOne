@@ -36,13 +36,15 @@ export default async function OnboardingPage() {
           <table className="fit-sm">
             <thead><tr><th>Resident</th><th className="hide-sm">Responsible party</th><th>Progress</th><th></th></tr></thead>
             <tbody>
-              {data.list.length ? data.list.map(({ p, home, total, approved, submitted, changes }) => (
+              {data.list.length ? data.list.map(({ p, home, total, optional, approved, submitted, changes }) => (
                 <tr key={p.id}>
                   <td><Link href={`/onboarding/${p.id}`}><b>{p.residentFirstName} {p.residentLastName}</b></Link><div className="small muted">{home} · started {p.createdAt.toISOString().slice(0, 10)}</div></td>
                   <td className="hide-sm">{p.poaName}<div className="small muted">{p.poaEmail}</div></td>
                   <td>
-                    {p.status === "open" ? (
-                      <span className="small">{approved}/{total} approved{submitted ? ` · ${submitted} to review` : ""}{changes ? ` · ${changes} sent back` : ""}</span>
+                    {p.status === "open" || p.status === "draft" ? (
+                      <span className="small">
+                        {approved}/{total} approved{optional ? ` (${optional} optional)` : ""}{submitted ? ` · ${submitted} to review` : ""}{changes ? ` · ${changes} sent back` : ""}
+                      </span>
                     ) : null}
                   </td>
                   <td style={{ textAlign: "right" }}><span className={`pill ${STATUS[p.status]?.[1] ?? ""}`}>{STATUS[p.status]?.[0] ?? p.status}</span>{submitted > 0 && p.status === "open" && <span className="pill warn" style={{ marginLeft: 6 }}>Needs review</span>}</td>

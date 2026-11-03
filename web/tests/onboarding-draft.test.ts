@@ -6,7 +6,7 @@ import { createTestDb, withTenant, type DB } from "@/db/client";
 import { onboardingForms, outbox } from "@/db/schema";
 import { fillPlaceholders, type Block } from "@/lib/onboarding-forms";
 import type { Actor } from "@/lib/permissions";
-import { cancelOnboarding, familySaveValues, familySign, familyView, getOnboarding, packetByToken, resendLink, sendOnboarding, staffSaveValues, startOnboarding } from "@/server/onboarding";
+import { cancelOnboarding, listOnboardings, familySaveValues, familySign, familyView, getOnboarding, packetByToken, resendLink, sendOnboarding, staffSaveValues, startOnboarding } from "@/server/onboarding";
 import { residentialAgreement } from "@/server/onboarding-agreement";
 import { ensureStarterForms, listForms } from "@/server/onboarding-forms";
 import { seedDemo, type Seeded } from "@/server/seed";
@@ -34,6 +34,12 @@ describe("starting an onboarding", () => {
     expect(r.ok).toBe(true);
     const o = await inOrg((tx) => getOnboarding(tx, owner, r.ok ? r.data!.id : ""));
     expect(o!.items.map((i) => i.title)).toEqual(forms.slice(0, 2).map((f) => f.title));
+    // Progress counts every form chosen, optional ones included.
+    const all = await inOrg((tx) => startOnboarding(tx, owner, s.orgId, start({ poaEmail: "all@example.com" }), "https://app.test"));
+    const row = (await inOrg((tx) => listOnboardings(tx, owner))).find((x) => all.ok && x.p.id === all.data!.id)!;
+    expect(row.total).toBe(forms.length);
+    expect(row.optional).toBe(forms.filter((f) => !f.required).length);
+    expect(row.optional).toBeGreaterThan(0);
   });
 
   it("can be filled in by the home first, and the family gets nothing until it's sent", async () => {

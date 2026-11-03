@@ -169,9 +169,10 @@ export async function listOnboardings(tx: Tx, actor: Actor) {
   if (!packets.length) return [];
   const items = await tx.select({ packetId: onboardingItems.packetId, status: onboardingItems.status, required: onboardingItems.required }).from(onboardingItems).where(inArray(onboardingItems.packetId, packets.map((x) => x.p.id)));
   return packets.map(({ p, home }) => {
-    const mine = items.filter((i) => i.packetId === p.id && i.required);
+    // Every form chosen for this resident; optional ones count too, though admission only waits on the required ones.
+    const mine = items.filter((i) => i.packetId === p.id);
     const count = (s: ItemStatus) => mine.filter((i) => i.status === s).length;
-    return { p, home, total: mine.length, approved: count("approved"), submitted: count("submitted"), changes: count("changes") };
+    return { p, home, total: mine.length, optional: mine.filter((i) => !i.required).length, approved: count("approved"), submitted: count("submitted"), changes: count("changes") };
   });
 }
 
