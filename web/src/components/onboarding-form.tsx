@@ -22,6 +22,7 @@ export function OnboardingFormView({
   onChange,
   signatures = {},
   onSign,
+  signAgain,
   disabled,
 }: {
   blocks: Block[];
@@ -30,6 +31,8 @@ export function OnboardingFormView({
   onChange?: (id: string, value: string) => void;
   signatures?: Record<string, SignatureView>;
   onSign?: (block: Extract<Block, { type: "signature" }>) => void;
+  /** Signature lines cleared because an answer changed: they say why. */
+  signAgain?: Set<string>;
   disabled?: boolean;
 }) {
   return (
@@ -41,14 +44,17 @@ export function OnboardingFormView({
           const s = signatures[b.id];
           return (
             <div key={b.id} className={`ob-sign${s ? " signed" : ""}`}>
-              <div className="ob-label">{b.label} <span className="ob-who">{WHO_LABEL[b.who]}</span></div>
+              <div className="ob-label">{b.label} {b.label !== WHO_LABEL[b.who] && <span className="ob-who">{WHO_LABEL[b.who]}</span>}</div>
               {s ? (
                 <div className="ob-signature">
                   {s.image ? <img src={s.image} alt={`Signature of ${s.name}`} /> : <span className="ob-typed">{s.name}</span>}
                   <span className="small muted">Signed by {s.name} · {s.signedAt}</span>
                 </div>
               ) : b.who === who && onSign ? (
-                <button type="button" className="btn primary" disabled={disabled} onClick={() => onSign(b)}>Sign</button>
+                <>
+                  {signAgain?.has(b.id) && <p className="small" role="status" style={{ margin: 0 }}>An answer in this part changed, so please sign it again.</p>}
+                  <button type="button" className="btn primary" disabled={disabled} onClick={() => onSign(b)}>Sign</button>
+                </>
               ) : (
                 <div className="ob-line">{b.who === who ? "Not signed yet" : `To be signed by ${WHO_PHRASE[b.who]}`}</div>
               )}

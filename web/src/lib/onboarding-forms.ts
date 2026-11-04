@@ -182,6 +182,17 @@ export function signedPart(title: string, blocks: Block[], values: Values, signa
   return JSON.stringify({ title, blocks: part, values: answers });
 }
 
+/** The form's answers once one person's are saved: theirs, cleaned, and everyone else's as they were. */
+export function mergeAnswers(blocks: Block[], saved: Values, raw: Record<string, unknown>, w: Who): Values {
+  const others = Object.fromEntries(Object.entries(saved).filter(([k]) => blocks.some((b) => b.id === k && b.type === "field" && b.who !== w)));
+  return { ...others, ...cleanValues(blocks, raw, w) };
+}
+
+/** Which of these signature lines no longer match, because an answer their part shows changed. */
+export function changedSignatures(title: string, blocks: Block[], before: Values, after: Values, lines: string[]): string[] {
+  return lines.filter((id) => signedPart(title, blocks, before, id) !== signedPart(title, blocks, after, id));
+}
+
 /** Shows answers where the wording names a question: "Monthly fee: {{Monthly fee}}". Blank until answered. */
 export function withAnswers(text: string, blocks: Block[], values: Values): string {
   return text.replace(TOKEN, (all, name: string) => {

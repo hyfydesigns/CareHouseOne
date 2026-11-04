@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { FormLetterhead } from "@/components/form-letterhead";
 import { OnboardingFormView } from "@/components/onboarding-form";
 import { SignDialog } from "@/components/sign-dialog";
 import { Status, type FormState } from "@/components/status";
-import type { Block, Values } from "@/lib/onboarding-forms";
+import { changedSignatures, mergeAnswers, type Block, type Values } from "@/lib/onboarding-forms";
 import type { familyView } from "@/server/onboarding";
 import { removeFileAction, saveAction, signAction, submitAction } from "./actions";
 
@@ -113,6 +113,9 @@ export function FamilyPortal({ token, view, openItem, consentText }: { token: st
   );
 }
 
+/** Answers save on their own this long after the last change. */
+const AUTOSAVE_MS = 1000;
+
 function ItemPage({ head, token, item, poaName, consentText, locked }: { head: View["head"]; token: string; item: Item; poaName: string; consentText: string; locked: boolean }) {
   const router = useRouter();
   const [values, setValues] = useState<Values>(item.values);
@@ -121,15 +124,33 @@ function ItemPage({ head, token, item, poaName, consentText, locked }: { head: V
   const [busy, setBusy] = useState(false);
   const [signing, setSigning] = useState<Extract<Block, { type: "signature" }> | null>(null);
   const readOnly = locked || item.status === "approved";
-  const signatures = Object.fromEntries(Object.entries(item.signatures).map(([k, s]) => [k, { name: s.name, image: s.image, signedAt: new Date(s.signedAt).toLocaleString() }]));
+  const [signAgain, setSignAgain] = useState<Set<string>>(new Set());
+  const latest = useRef(values);
+  const saved = useRef(values);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // A signature comes off as soon as an answer on its part changes, before the save reaches the server.
+  const outdated = (v: Values) => changedSignatures(item.title, item.blocks, item.values, mergeAnswers(item.blocks, item.values, v, "poa"), Object.keys(item.signatures));
+  const stale = new Set(outdated(values));
+  const signatures = Object.fromEntries(Object.entries(item.signatures).filter(([k]) => !stale.has(k)).map(([k, s]) => [k, { name: s.name, image: s.image, signedAt: new Date(s.signedAt).toLocaleString() }]));
 
-  async function save(): Promise<boolean> {
-    if (!dirty) return true;
-    const r = await saveAction(token, item.id, values);
-    setState(r);
-    if (!r.error) setDirty(false);
-    return !r.error;
+  async function save(quiet = false): Promise<boolean> {
+    clearTimeout(timer.current);
+    const sending = latest.current;
+    if (sending === saved.current) return true;
+    const r = await saveAction(token, item.id, sending);
+    if (r.error || !quiet) setState(r);
+    if (r.error) return false;
+    saved.current = sending;
+    setDirty(latest.current !== sending);
+    return true;
   }
+
+  // Leaving within a moment of typing still keeps the answer.
+  useEffect(() => () => {
+    clearTimeout(timer.current);
+    if (latest.current !== saved.current) void saveAction(token, item.id, latest.current);
+  }, [token, item.id]);
+
   async function send() {
     setBusy(true);
     if (await save()) {
@@ -168,10 +189,16 @@ function ItemPage({ head, token, item, poaName, consentText, locked }: { head: V
           values={values}
           who="poa"
           onChange={readOnly ? undefined : (id, v) => {
-            setValues((x) => ({ ...x, [id]: v }));
+            const next = { ...latest.current, [id]: v };
+            latest.current = next;
+            setValues(next);
             setDirty(true);
+            setSignAgain((x) => new Set([...x, ...outdated(next)]));
+            clearTimeout(timer.current);
+            timer.current = setTimeout(() => void save(true), AUTOSAVE_MS);
           }}
           signatures={signatures}
+          signAgain={signAgain}
           onSign={readOnly ? undefined : async (b) => ((await save()) ? setSigning(b) : undefined)}
           disabled={busy}
         />

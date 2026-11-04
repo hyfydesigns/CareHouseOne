@@ -4,7 +4,7 @@ import { desc, eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createTestDb, withTenant, type DB } from "@/db/client";
 import { onboardingForms, outbox } from "@/db/schema";
-import { fillPlaceholders, partOf, type Block } from "@/lib/onboarding-forms";
+import { changedSignatures, fillPlaceholders, mergeAnswers, partOf, type Block } from "@/lib/onboarding-forms";
 import type { Actor } from "@/lib/permissions";
 import { cancelOnboarding, listOnboardings, familySaveValues, familySign, familyView, getOnboarding, packetByToken, resendLink, sendOnboarding, staffSaveValues, startOnboarding } from "@/server/onboarding";
 import { residentialAgreement } from "@/server/onboarding-agreement";
@@ -123,6 +123,23 @@ describe("a family member as responsible party", () => {
 });
 
 describe("signing a long form part by part", () => {
+  it("sees on the page which signatures an edit clears, the same way saving will", () => {
+    const blocks: Block[] = [
+      { id: "fee0", type: "field", label: "Monthly fee", input: "money", required: true, who: "staff" },
+      { id: "qone", type: "field", label: "Your phone", input: "text", required: true, who: "poa" },
+      { id: "sone", type: "signature", label: "Part 1", who: "poa" },
+      { id: "qtwo", type: "field", label: "Your address", input: "text", required: true, who: "poa" },
+      { id: "stwo", type: "signature", label: "Part 2", who: "poa" },
+    ];
+    const saved = { fee0: "2500.00", qone: "713", qtwo: "Elm" };
+    const typed = (v: Record<string, string>) => changedSignatures("Form", blocks, saved, mergeAnswers(blocks, saved, v, "poa"), ["sone", "stwo"]);
+    // The page holds the family's answers as typed, and the home's as saved.
+    expect(typed(saved)).toEqual([]);
+    expect(typed({ ...saved, qone: " 713 " })).toEqual([]);
+    expect(typed({ ...saved, qtwo: "Oak" })).toEqual(["stwo"]);
+    expect(typed({ ...saved, qone: "" })).toEqual(["sone"]);
+  });
+
   it("treats signature lines directly together as one part", () => {
     const sign = (id: string, who: "poa" | "staff"): Block => ({ id, type: "signature", label: id, who });
     const text = (id: string): Block => ({ id, type: "text", text: id });
