@@ -4,7 +4,7 @@ import { desc, eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createTestDb, withTenant, type DB } from "@/db/client";
 import { onboardingForms, outbox } from "@/db/schema";
-import { fillPlaceholders, type Block } from "@/lib/onboarding-forms";
+import { fillPlaceholders, partOf, type Block } from "@/lib/onboarding-forms";
 import type { Actor } from "@/lib/permissions";
 import { cancelOnboarding, listOnboardings, familySaveValues, familySign, familyView, getOnboarding, packetByToken, resendLink, sendOnboarding, staffSaveValues, startOnboarding } from "@/server/onboarding";
 import { residentialAgreement } from "@/server/onboarding-agreement";
@@ -123,7 +123,16 @@ describe("a family member as responsible party", () => {
 });
 
 describe("signing a long form part by part", () => {
-  it("each signature needs only the answers above it, and later answers don't clear it", async () => {
+  it("treats signature lines directly together as one part", () => {
+    const sign = (id: string, who: "poa" | "staff"): Block => ({ id, type: "signature", label: id, who });
+    const text = (id: string): Block => ({ id, type: "text", text: id });
+    const blocks = [text("aaaa"), sign("fam1", "poa"), sign("home1", "staff"), text("bbbb"), sign("fam2", "poa"), sign("home2", "staff")];
+    expect(partOf(blocks, "home1").map((b) => b.id)).toEqual(["aaaa", "fam1", "home1"]);
+    expect(partOf(blocks, "fam2").map((b) => b.id)).toEqual(["bbbb", "fam2"]);
+    expect(partOf(blocks, "home2").map((b) => b.id)).toEqual(["bbbb", "fam2", "home2"]);
+  });
+
+  it("each signature needs only its part's answers, and a change clears only the parts showing that answer", async () => {
     const blocks: Block[] = [
       { id: "fee0", type: "field", label: "Monthly fee", input: "money", required: true, who: "staff" },
       { id: "qone", type: "field", label: "Your phone", input: "text", required: true, who: "poa" },
@@ -155,9 +164,13 @@ describe("signing a long form part by part", () => {
     expect(await signatures()).toEqual(["sone", "stwo"]);
     // Changing part 2's answer clears only part 2's signature.
     const changed = await fam((tx) => familySaveValues(tx, p, itemId, { qone: "713-555-0100", qtwo: "14 Elm St" }));
-    expect(changed.ok && changed.message).toMatch(/a signature, so that part needs to be signed again/);
+    expect(changed.ok && changed.message).toMatch(/signed again/);
     expect(await signatures()).toEqual(["sone"]);
     await fam((tx) => familySign(tx, p, itemId, "stwo", sig, {}));
+    // Changing part 1's answer clears only part 1's signature, not the part below it.
+    await fam((tx) => familySaveValues(tx, p, itemId, { qone: "713-555-0199", qtwo: "14 Elm St" }));
+    expect(await signatures()).toEqual(["stwo"]);
+    await fam((tx) => familySign(tx, p, itemId, "sone", sig, {}));
     // The fee is above part 1 and quoted in part 2, so changing it clears both.
     await inOrg((tx) => staffSaveValues(tx, owner, id, itemId, { fee0: "2600" }));
     expect(await signatures()).toEqual([]);

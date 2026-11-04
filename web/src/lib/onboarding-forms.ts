@@ -149,14 +149,26 @@ export function fillPlaceholders(blocks: Block[], ctx: Record<Placeholder, strin
 }
 
 /**
- * What one signature line covers: the form's title, everything above the line, and the answers
- * shown there (questions above it, and any answer the wording above quotes, like {{Monthly fee}}).
- * Each part is signed as it's finished; changing an answer only affects the parts that show it.
+ * The part of a form a signature line belongs to: everything after the signature lines before it,
+ * down to this line. Signature lines directly together (the family's and the home's) share a part.
+ */
+export function partOf(blocks: Block[], signatureId: string): Block[] {
+  const at = blocks.findIndex((b) => b.id === signatureId && b.type === "signature");
+  if (at < 0) return [];
+  let start = at;
+  while (start > 0 && blocks[start - 1].type === "signature") start--;
+  while (start > 0 && blocks[start - 1].type !== "signature") start--;
+  return blocks.slice(start, at + 1);
+}
+
+/**
+ * What one signature line covers: the form's title, its part of the form, and the answers shown
+ * there (the part's questions, and any answer its wording quotes, like {{Monthly fee}}).
+ * Each part is signed on its own; changing an answer only affects the parts that show it.
  */
 export function signedPart(title: string, blocks: Block[], values: Values, signatureId: string): string | null {
-  const at = blocks.findIndex((b) => b.id === signatureId && b.type === "signature");
-  if (at < 0) return null;
-  const part = blocks.slice(0, at + 1);
+  const part = partOf(blocks, signatureId);
+  if (!part.length) return null;
   const fields = blocks.filter((b): b is Extract<Block, { type: "field" }> => b.type === "field");
   const shown = new Set(part.filter((b) => b.type === "field").map((b) => b.id));
   for (const b of part) {

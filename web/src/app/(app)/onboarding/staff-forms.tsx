@@ -138,7 +138,7 @@ export function StaffItem({
         <p className="muted" style={{ margin: 0 }}>Nothing uploaded yet.</p>
       )}
       {editable && hasStaffPart && item.status === "todo" && !Object.keys(item.signatures).length && (
-        <p className="small muted" style={{ margin: 0 }}>Tip: fill in the home&apos;s part before the family signs. Changing an answer clears any signature below it, and any that quotes it.</p>
+        <p className="small muted" style={{ margin: 0 }}>Tip: fill in the home&apos;s part before the family signs. Changing an answer clears the signatures on its part of the form, and on any part that quotes it.</p>
       )}
       <Status state={state} />
       {editable && draft && item.kind === "form" && hasStaffPart && (
