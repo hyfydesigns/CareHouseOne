@@ -4,7 +4,7 @@ import { desc, eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createTestDb, withTenant, type DB } from "@/db/client";
 import { auditLog, onboardingForms, outbox } from "@/db/schema";
-import { changedSignatures, fillPlaceholders, mergeAnswers, partOf, type Block } from "@/lib/onboarding-forms";
+import { blockSchema, changedSignatures, fillPlaceholders, mergeAnswers, partOf, type Block } from "@/lib/onboarding-forms";
 import type { Actor } from "@/lib/permissions";
 import { cancelOnboarding, listOnboardings, familySaveValues, familySign, familyView, getOnboarding, packetByToken, resendLink, sendOnboarding, staffSaveValues, staffSign, startOnboarding } from "@/server/onboarding";
 import { residentialAgreement } from "@/server/onboarding-agreement";
@@ -223,5 +223,20 @@ describe("signing a long form part by part", () => {
     // The fee is above part 1 and quoted in part 2, so changing it clears both.
     await inOrg((tx) => staffSaveValues(tx, owner, id, itemId, { fee0: "2600" }));
     expect(await signatures()).toEqual([]);
+  });
+});
+
+describe("the agreement's care levels", () => {
+  it("have a description under each choice, including in agreements organizations already added", async () => {
+    const level = (blocks: Block[]) => blocks.find((b) => b.type === "field" && b.label === "Care level") as Extract<Block, { type: "field" }>;
+    const fresh = level(residentialAgreement().blocks);
+    expect(Object.keys(fresh.optionHelp!)).toEqual(["Care Level A", "Care Level B"]);
+    expect((blockSchema.parse(fresh) as typeof fresh).optionHelp).toEqual(fresh.optionHelp);
+    const old = residentialAgreement().blocks.map((b) => (b.type === "field" && b.label === "Care level" ? { ...b, optionHelp: undefined } : b));
+    const [row] = await db.insert(onboardingForms).values({ orgId: s.orgId, title: "Residential Care Home Agreement", kind: "form", blocks: old, position: 93 }).returning();
+    for (const part of readFileSync(path.join(process.cwd(), "drizzle", "0037_care_level_descriptions.sql"), "utf8").split("--> statement-breakpoint")) await db.execute(sql.raw(part));
+    const [after] = await db.select().from(onboardingForms).where(eq(onboardingForms.id, row.id));
+    expect(level(after.blocks as Block[]).optionHelp).toEqual(fresh.optionHelp);
+    expect((after.blocks as Block[]).length).toBe(old.length);
   });
 });

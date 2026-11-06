@@ -290,6 +290,12 @@ td { padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: to
 .checklist-item:hover { border-color: var(--accent); }
 .checklist-item .grow { flex: 1; min-width: 0; }
 
+/* Choices with a description under each. */
+.ob-options { display: grid; gap: 8px; }
+.ob-option { display: flex; align-items: start; gap: 10px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); cursor: pointer; }
+.ob-option input { flex: none; margin-top: 4px; }
+.ob-option > span { display: grid; gap: 2px; }
+
 /* Starting an onboarding: which forms this resident needs. */
 .ob-pick { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 16px; }
 .ob-pick legend { font-weight: 600; padding: 0 4px; }

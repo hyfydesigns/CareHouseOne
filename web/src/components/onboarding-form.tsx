@@ -91,13 +91,24 @@ export function OnboardingFormView({
             <fieldset key={b.id} className="ob-field">
               <legend className="ob-label">{b.label}{b.required ? " *" : ""}{whose}</legend>
               {b.help && <div className="small muted">{b.help}</div>}
-              <div className="row" style={{ gap: 8 }}>
-                {opts.map(([val, label]) => (
-                  <label key={val} className="chip" style={{ gap: 8, cursor: "pointer" }}>
-                    <input type="radio" name={inputId} checked={v === val} disabled={disabled} onChange={() => set(val)} /> {label}
-                  </label>
-                ))}
-              </div>
+              {b.optionHelp ? (
+                <div className="ob-options">
+                  {opts.map(([val, label]) => (
+                    <label key={val} className="ob-option">
+                      <input type="radio" name={inputId} checked={v === val} disabled={disabled} onChange={() => set(val)} />
+                      <span><b>{label}</b>{b.optionHelp?.[val] && <span className="small muted">{b.optionHelp[val]}</span>}</span>
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <div className="row" style={{ gap: 8 }}>
+                  {opts.map(([val, label]) => (
+                    <label key={val} className="chip" style={{ gap: 8, cursor: "pointer" }}>
+                      <input type="radio" name={inputId} checked={v === val} disabled={disabled} onChange={() => set(val)} /> {label}
+                    </label>
+                  ))}
+                </div>
+              )}
             </fieldset>
           );
         }

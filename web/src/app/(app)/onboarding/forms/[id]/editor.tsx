@@ -148,6 +148,20 @@ function BlockEditor({ block: b, onChange }: { block: Block; onChange: (b: Block
         <div className="field">
           <label htmlFor={`o${b.id}`}>Choices, one per line</label>
           <textarea id={`o${b.id}`} rows={3} value={(b.options ?? []).join("\n")} onChange={(e) => onChange({ ...b, options: e.target.value.split("\n") })} />
+          {(b.options ?? []).filter((o) => o.trim()).map((o) => (
+            <div key={o} className="field">
+              <label htmlFor={`d${b.id}${o}`}>Description of &ldquo;{o}&rdquo; (optional)</label>
+              <input
+                id={`d${b.id}${o}`}
+                value={b.optionHelp?.[o] ?? ""}
+                maxLength={300}
+                onChange={(e) => {
+                  const optionHelp = Object.fromEntries(Object.entries({ ...b.optionHelp, [o]: e.target.value }).filter(([, d]) => d));
+                  onChange({ ...b, optionHelp: Object.keys(optionHelp).length ? optionHelp : undefined });
+                }}
+              />
+            </div>
+          ))}
         </div>
       )}
       <div className="row" style={{ alignItems: "end" }}>

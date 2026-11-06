@@ -11,7 +11,7 @@ export function residentialAgreement(): FormDef {
   const id = (p: string) => `ra${p}${(n++).toString(36).padStart(3, "0")}`;
   const h = (text: string): Block => ({ id: id("h"), type: "heading", text });
   const p = (text: string): Block => ({ id: id("p"), type: "text", text });
-  const f = (label: string, input: Extract<Block, { type: "field" }>["input"], o: { who?: Who; required?: boolean; options?: string[]; help?: string } = {}): Block => ({
+  const f = (label: string, input: Extract<Block, { type: "field" }>["input"], o: { who?: Who; required?: boolean; options?: string[]; optionHelp?: Record<string, string>; help?: string } = {}): Block => ({
     id: id("f"),
     type: "field",
     label,
@@ -19,6 +19,7 @@ export function residentialAgreement(): FormDef {
     required: o.required ?? true,
     who: o.who ?? "poa",
     ...(o.options && { options: o.options }),
+    ...(o.optionHelp && { optionHelp: o.optionHelp }),
     ...(o.help && { help: o.help }),
   });
   const sign = (label: string, who: Who): Block => ({ id: id("s"), type: "signature", label, who });
@@ -34,7 +35,7 @@ export function residentialAgreement(): FormDef {
       f("Room number", "text", { who: "staff", required: false }),
       f("Community fee", "money", { who: "staff", help: "One-time, non-refundable. For example: 1000" }),
       f("Monthly fee", "money", { who: "staff", help: "For example: 2500" }),
-      f("Care level", "choice", { who: "staff", options: ["Care Level A", "Care Level B"], help: "Every resident starts at Care Level A for at least the first thirty (30) days." }),
+      f("Care level", "choice", { who: "staff", options: ["Care Level A", "Care Level B"], optionHelp: { "Care Level A": "For residents who are able to maintain a high degree of independence, with minimal personal assistance and/or interventions or redirection.", "Care Level B": "For residents who require more assistance and/or interventions or redirection with activities of daily living than Level A residents." }, help: "Every resident starts at Care Level A for at least the first thirty (30) days." }),
 
       h("Residential Care Home Agreement"),
       p('THIS RESIDENCY AGREEMENT ("Agreement"), dated {{Agreement date}}, is made between {{Organization}}, located at {{Home address}} ("We", "Us", or "Community") & {{Responsible party}} on behalf of {{Resident name}} ("Resident" or "You"). If more than one person is signing this Agreement, these terms refer to both of you.'),

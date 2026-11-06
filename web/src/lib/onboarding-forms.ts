@@ -35,7 +35,7 @@ export type InputKind = keyof typeof INPUTS;
 export type Block =
   | { id: string; type: "heading"; text: string }
   | { id: string; type: "text"; text: string }
-  | { id: string; type: "field"; label: string; input: InputKind; options?: string[]; required: boolean; who: Who; help?: string }
+  | { id: string; type: "field"; label: string; input: InputKind; options?: string[]; optionHelp?: Record<string, string>; required: boolean; who: Who; help?: string }
   | { id: string; type: "signature"; label: string; who: Who };
 
 /** What a form asks for: blocks to fill and sign, or files to upload (ID cards, court papers). */
@@ -53,6 +53,8 @@ export const blockSchema = z.discriminatedUnion("type", [
     label: z.string().trim().min(1, "A field has no question.").max(300),
     input: z.enum(Object.keys(INPUTS) as [InputKind, ...InputKind[]]),
     options: z.array(z.string().trim().min(1).max(120)).max(20).optional(),
+    /** A description under each choice, by the choice's wording. */
+    optionHelp: z.record(z.string(), z.string().trim().max(300)).optional(),
     required: z.boolean(),
     who,
     help: z.string().trim().max(300).optional(),
