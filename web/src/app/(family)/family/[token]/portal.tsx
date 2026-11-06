@@ -7,7 +7,7 @@ import { FormLetterhead } from "@/components/form-letterhead";
 import { OnboardingFormView } from "@/components/onboarding-form";
 import { SignDialog } from "@/components/sign-dialog";
 import { Status, type FormState } from "@/components/status";
-import { changedSignatures, mergeAnswers, type Block, type Values } from "@/lib/onboarding-forms";
+import { changedAnswers, changedSignatures, mergeAnswers, type Block, type Values } from "@/lib/onboarding-forms";
 import type { familyView } from "@/server/onboarding";
 import { removeFileAction, saveAction, signAction, submitAction } from "./actions";
 
@@ -116,6 +116,9 @@ export function FamilyPortal({ token, view, openItem, consentText }: { token: st
 /** Answers save on their own this long after the last change. */
 const AUTOSAVE_MS = 1000;
 
+/** Only the answers changed here go to the server: the home may be helping with the same form. */
+const changesFrom = (from: Values, to: Values): Values => Object.fromEntries(changedAnswers(from, to).map((k) => [k, to[k] ?? ""]));
+
 function ItemPage({ head, token, item, poaName, consentText, locked }: { head: View["head"]; token: string; item: Item; poaName: string; consentText: string; locked: boolean }) {
   const router = useRouter();
   const [values, setValues] = useState<Values>(item.values);
@@ -137,7 +140,7 @@ function ItemPage({ head, token, item, poaName, consentText, locked }: { head: V
     clearTimeout(timer.current);
     const sending = latest.current;
     if (sending === saved.current) return true;
-    const r = await saveAction(token, item.id, sending);
+    const r = await saveAction(token, item.id, changesFrom(saved.current, sending));
     if (r.error || !quiet) setState(r);
     if (r.error) return false;
     saved.current = sending;
@@ -148,7 +151,7 @@ function ItemPage({ head, token, item, poaName, consentText, locked }: { head: V
   // Leaving within a moment of typing still keeps the answer.
   useEffect(() => () => {
     clearTimeout(timer.current);
-    if (latest.current !== saved.current) void saveAction(token, item.id, latest.current);
+    if (latest.current !== saved.current) void saveAction(token, item.id, changesFrom(saved.current, latest.current));
   }, [token, item.id]);
 
   async function send() {

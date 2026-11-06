@@ -5,7 +5,7 @@ import type { DB, Tx } from "@/db/client";
 import { facilities, onboardingAccess, onboardingFiles, onboardingItems, onboardingPackets, onboardingSignatures, organizations, outbox, residentDocuments, users } from "@/db/schema";
 import { randomToken, safeEqual, sha256 } from "@/lib/crypto";
 import { addressLine, contactLine } from "@/lib/home-contact";
-import { blockSchema, changedSignatures, fillPlaceholders, mergeAnswers, missingFor, partOf, signedPart, type Block, type Values, type Who } from "@/lib/onboarding-forms";
+import { blockSchema, changedAnswers, changedSignatures, fillPlaceholders, mergeAnswers, missingFor, partOf, signedPart, type Block, type Values, type Who } from "@/lib/onboarding-forms";
 import { canSeeFacility, type Actor } from "@/lib/permissions";
 import { MAX_ATTACHMENT_BYTES, normaliseAttachment } from "./attachments";
 import { audit, sendMail } from "./audit";
@@ -255,13 +255,16 @@ async function saveValues(tx: Tx, packet: Packet, itemId: string, raw: Record<st
   if ("error" in item) return { ok: false, error: item.error };
   const blocks = blocksOf(item);
   const values = mergeAnswers(blocks, item.values ?? {}, raw, party.who);
-  const changed = JSON.stringify(values) !== JSON.stringify(item.values ?? {});
-  if (!changed) return { ok: true, message: "Saved." };
+  const changed = changedAnswers(item.values ?? {}, values);
+  if (!changed.length) return { ok: true, message: "Saved." };
   const signed = await tx.select({ id: onboardingSignatures.id, blockId: onboardingSignatures.blockId }).from(onboardingSignatures).where(and(eq(onboardingSignatures.itemId, item.id), isNull(onboardingSignatures.voidedAt)));
   const lines = changedSignatures(item.title, blocks, item.values ?? {}, values, signed.map((s) => s.blockId));
   const affected = signed.filter((s) => lines.includes(s.blockId)).map((s) => s.id);
   const voided = affected.length ? await tx.update(onboardingSignatures).set({ voidedAt: now }).where(inArray(onboardingSignatures.id, affected)).returning({ id: onboardingSignatures.id }) : [];
   await tx.update(onboardingItems).set({ values, status: party.who === "poa" ? "todo" : item.status, updatedAt: now }).where(eq(onboardingItems.id, item.id));
+  // The home answering for the family is on the record: which questions, not what was answered.
+  const forFamily = party.who === "staff" ? changed.filter((id) => blocks.some((b) => b.id === id && b.type === "field" && b.who === "poa")) : [];
+  if (forFamily.length) await audit(tx, { orgId: packet.orgId, actorId: party.userId, action: "onboarding_answered_for_family", entity: "organization", entityId: packet.orgId, details: { packetId: packet.id, itemId: item.id, fields: forFamily } });
   if (voided.length) await audit(tx, { orgId: packet.orgId, actorId: party.userId, action: "onboarding_signatures_voided", entity: "organization", entityId: packet.orgId, details: { packetId: packet.id, itemId: item.id, count: voided.length, by: party.who } });
   return { ok: true, message: voided.length ? "Saved. The signed part showing that answer needs to be signed again." : "Saved." };
 }

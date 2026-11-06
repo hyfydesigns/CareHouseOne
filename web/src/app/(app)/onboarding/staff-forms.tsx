@@ -94,20 +94,23 @@ export function StaffItem({
   review: (decision: "approve" | "changes", note: string) => Promise<FormState>;
 }) {
   const router = useRouter();
-  const [values, setValues] = useState<Values>(item.values);
-  const [dirty, setDirty] = useState(false);
+  // Only what's changed here: the family may be filling in the same form.
+  const [edits, setEdits] = useState<Values>({});
+  const values = { ...item.values, ...edits };
+  const dirty = Object.keys(edits).length > 0;
   const [state, setState] = useState<FormState>({});
   const [busy, setBusy] = useState(false);
   const [signing, setSigning] = useState<Extract<Block, { type: "signature" }> | null>(null);
   const editable = open && item.status !== "approved";
   const signatures = Object.fromEntries(Object.entries(item.signatures).map(([k, s]) => [k, { name: s.name, image: s.image, signedAt: new Date(s.signedAt).toLocaleString() }]));
   const hasStaffPart = item.blocks.some((b) => (b.type === "field" || b.type === "signature") && b.who === "staff");
+  const hasFields = item.blocks.some((b) => b.type === "field");
 
   async function doSave(): Promise<boolean> {
     if (!dirty) return true;
-    const r = await save(values);
+    const r = await save(edits);
     setState(r);
-    if (!r.error) setDirty(false);
+    if (!r.error) setEdits({});
     router.refresh();
     return !r.error;
   }
@@ -119,7 +122,8 @@ export function StaffItem({
           blocks={item.blocks}
           values={values}
           who="staff"
-          onChange={editable ? (id, v) => { setValues((x) => ({ ...x, [id]: v })); setDirty(true); } : undefined}
+          onChange={editable ? (id, v) => setEdits((x) => ({ ...x, [id]: v })) : undefined}
+          answerAll
           signatures={signatures}
           onSign={editable ? async (b) => ((await doSave()) ? setSigning(b) : undefined) : undefined}
           disabled={busy}
@@ -141,12 +145,12 @@ export function StaffItem({
         <p className="small muted" style={{ margin: 0 }}>Tip: fill in the home&apos;s part before the family signs. Changing an answer clears the signatures on its part of the form, and on any part that quotes it.</p>
       )}
       <Status state={state} />
-      {editable && draft && item.kind === "form" && hasStaffPart && (
-        <div className="row"><button type="button" className="btn small primary" disabled={busy || !dirty} onClick={async () => { setBusy(true); await doSave(); setBusy(false); }}>Save the home&apos;s answers</button></div>
+      {editable && draft && item.kind === "form" && hasFields && (
+        <div className="row"><button type="button" className="btn small primary" disabled={busy || !dirty} onClick={async () => { setBusy(true); await doSave(); setBusy(false); }}>Save answers</button></div>
       )}
       {editable && !draft && (
         <div className="row" style={{ gap: 6 }}>
-          {item.kind === "form" && hasStaffPart && <button type="button" className="btn small" disabled={busy || !dirty} onClick={async () => { setBusy(true); await doSave(); setBusy(false); }}>Save the home&apos;s answers</button>}
+          {item.kind === "form" && hasFields && <button type="button" className="btn small" disabled={busy || !dirty} onClick={async () => { setBusy(true); await doSave(); setBusy(false); }}>Save answers</button>}
           <span className="spacer" />
           <button
             type="button"

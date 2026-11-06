@@ -13,13 +13,15 @@ export interface SignatureView {
 /**
  * One onboarding form as someone fills it in. The person filling (`who`) gets inputs for their own
  * fields; everyone else's answers show as text, or as a line waiting for that person. With no
- * `onChange` it is read-only (preview, review).
+ * `onChange` it is read-only (preview, review). `answerAll` also gives them inputs for everyone
+ * else's fields, for the home helping a family; signature lines stay each person's own.
  */
 export function OnboardingFormView({
   blocks,
   values,
   who,
   onChange,
+  answerAll,
   signatures = {},
   onSign,
   signAgain,
@@ -29,6 +31,7 @@ export function OnboardingFormView({
   values: Values;
   who: Who | null;
   onChange?: (id: string, value: string) => void;
+  answerAll?: boolean;
   signatures?: Record<string, SignatureView>;
   onSign?: (block: Extract<Block, { type: "signature" }>) => void;
   /** Signature lines cleared because an answer changed: they say why. */
@@ -61,7 +64,8 @@ export function OnboardingFormView({
             </div>
           );
         }
-        const mine = b.who === who && !!onChange;
+        const mine = (b.who === who || !!answerAll) && !!onChange;
+        const whose = b.who !== who && <span className="ob-who">{WHO_LABEL[b.who]}</span>;
         const v = values[b.id] ?? "";
         const inputId = `ob-${b.id}`;
         if (!mine) {
@@ -77,7 +81,7 @@ export function OnboardingFormView({
           return (
             <label key={b.id} className="check ob-field" style={{ alignItems: "start" }}>
               <input type="checkbox" checked={v === "yes"} disabled={disabled} onChange={(e) => set(e.target.checked ? "yes" : "")} />
-              <span>{b.label}{b.required ? " *" : ""}{b.help && <><br /><span className="small muted">{b.help}</span></>}</span>
+              <span>{b.label}{b.required ? " *" : ""}{whose}{b.help && <><br /><span className="small muted">{b.help}</span></>}</span>
             </label>
           );
         }
@@ -85,7 +89,7 @@ export function OnboardingFormView({
           const opts = b.input === "yesno" ? [["yes", "Yes"], ["no", "No"]] : (b.options ?? []).map((o) => [o, o]);
           return (
             <fieldset key={b.id} className="ob-field">
-              <legend className="ob-label">{b.label}{b.required ? " *" : ""}</legend>
+              <legend className="ob-label">{b.label}{b.required ? " *" : ""}{whose}</legend>
               {b.help && <div className="small muted">{b.help}</div>}
               <div className="row" style={{ gap: 8 }}>
                 {opts.map(([val, label]) => (
@@ -99,7 +103,7 @@ export function OnboardingFormView({
         }
         return (
           <div key={b.id} className="field ob-field">
-            <label htmlFor={inputId}>{b.label}{b.required ? " *" : ""}</label>
+            <label htmlFor={inputId}>{b.label}{b.required ? " *" : ""}{whose}</label>
             {b.help && <span className="small muted">{b.help}</span>}
             {b.input === "long" ? (
               <textarea id={inputId} rows={3} value={v} maxLength={4000} disabled={disabled} onChange={(e) => set(e.target.value)} />

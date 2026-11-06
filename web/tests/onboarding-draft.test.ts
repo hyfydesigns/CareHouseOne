@@ -3,10 +3,10 @@ import path from "node:path";
 import { desc, eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createTestDb, withTenant, type DB } from "@/db/client";
-import { onboardingForms, outbox } from "@/db/schema";
+import { auditLog, onboardingForms, outbox } from "@/db/schema";
 import { changedSignatures, fillPlaceholders, mergeAnswers, partOf, type Block } from "@/lib/onboarding-forms";
 import type { Actor } from "@/lib/permissions";
-import { cancelOnboarding, listOnboardings, familySaveValues, familySign, familyView, getOnboarding, packetByToken, resendLink, sendOnboarding, staffSaveValues, startOnboarding } from "@/server/onboarding";
+import { cancelOnboarding, listOnboardings, familySaveValues, familySign, familyView, getOnboarding, packetByToken, resendLink, sendOnboarding, staffSaveValues, staffSign, startOnboarding } from "@/server/onboarding";
 import { residentialAgreement } from "@/server/onboarding-agreement";
 import { ensureStarterForms, listForms } from "@/server/onboarding-forms";
 import { seedDemo, type Seeded } from "@/server/seed";
@@ -138,6 +138,38 @@ describe("signing a long form part by part", () => {
     expect(typed({ ...saved, qone: " 713 " })).toEqual([]);
     expect(typed({ ...saved, qtwo: "Oak" })).toEqual(["stwo"]);
     expect(typed({ ...saved, qone: "" })).toEqual(["sone"]);
+  });
+
+  it("lets the home fill in the family's questions, but not sign for them", async () => {
+    const blocks: Block[] = [
+      { id: "room", type: "field", label: "Room", input: "text", required: false, who: "staff" },
+      { id: "phone", type: "field", label: "Your phone", input: "text", required: true, who: "poa" },
+      { id: "city", type: "field", label: "Your city", input: "text", required: true, who: "poa" },
+      { id: "sign", type: "signature", label: "Responsible party", who: "poa" },
+    ];
+    const [form] = await db.insert(onboardingForms).values({ orgId: s.orgId, title: "Help form", kind: "form", blocks, position: 94 }).returning();
+    const r = await inOrg((tx) => startOnboarding(tx, owner, s.orgId, start({ poaEmail: "help@example.com", formIds: [form.id] }), "https://app.test"));
+    const id = r.ok ? r.data!.id : "";
+    const itemId = (await inOrg((tx) => getOnboarding(tx, owner, id)))!.items[0].id;
+    const p = (await packetByToken(db, /\/family\/([A-Za-z0-9_-]+)/.exec((await mailsTo("help@example.com"))[0].body)![1]))!;
+    const fam = <T>(fn: Parameters<typeof withTenant<T>>[2]) => withTenant(db, p.orgId, fn);
+    const answers = async () => (await inOrg((tx) => getOnboarding(tx, owner, id)))!.items[0].values;
+
+    // Each saves only what they changed, so neither overwrites the other.
+    await fam((tx) => familySaveValues(tx, p, itemId, { city: "Houston" }));
+    await inOrg((tx) => staffSaveValues(tx, owner, id, itemId, { phone: "713-555-0100" }));
+    expect(await answers()).toEqual({ phone: "713-555-0100", city: "Houston" });
+    // A blank clears only that answer.
+    await inOrg((tx) => staffSaveValues(tx, owner, id, itemId, { city: "" }));
+    expect(await answers()).toEqual({ phone: "713-555-0100" });
+    // The family still can't answer the home's questions, and the home can't sign for the family.
+    await fam((tx) => familySaveValues(tx, p, itemId, { room: "104" }));
+    expect((await answers()).room).toBeUndefined();
+    await inOrg((tx) => staffSaveValues(tx, owner, id, itemId, { city: "Houston" }));
+    expect((await inOrg((tx) => staffSign(tx, owner, id, itemId, "sign", { name: "Joy Owner", method: "typed", consent: true }, {}))).ok).toBe(false);
+    // It's on the record that the home answered for the family.
+    const log = await db.select().from(auditLog).where(eq(auditLog.action, "onboarding_answered_for_family"));
+    expect(log.filter((l) => (l.details as { packetId?: string }).packetId === id)).toHaveLength(3);
   });
 
   it("treats signature lines directly together as one part", () => {

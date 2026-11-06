@@ -89,11 +89,14 @@ export function missingFor(blocks: Block[], values: Values, signed: Set<string>,
   return out;
 }
 
-/** Checks and cleans one person's answers: only their own fields, in the right shape. */
+/** The family answers their own questions; the home can answer any, to help a family fill the form in. */
+const canAnswer = (b: Extract<Block, { type: "field" }>, w: Who) => w === "staff" || b.who === w;
+
+/** Checks and cleans one person's answers: only fields they can answer, in the right shape. */
 export function cleanValues(blocks: Block[], raw: Record<string, unknown>, w: Who): Values {
   const out: Values = {};
   for (const b of blocks) {
-    if (b.type !== "field" || b.who !== w) continue;
+    if (b.type !== "field" || !canAnswer(b, w)) continue;
     const v = typeof raw[b.id] === "string" ? (raw[b.id] as string).trim() : "";
     if (!v) continue;
     if (b.input === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(v)) continue;
@@ -182,10 +185,21 @@ export function signedPart(title: string, blocks: Block[], values: Values, signa
   return JSON.stringify({ title, blocks: part, values: answers });
 }
 
-/** The form's answers once one person's are saved: theirs, cleaned, and everyone else's as they were. */
+/** The form's answers after a save. Only the questions sent change (blank clears one), so the home and the family don't overwrite each other. */
 export function mergeAnswers(blocks: Block[], saved: Values, raw: Record<string, unknown>, w: Who): Values {
-  const others = Object.fromEntries(Object.entries(saved).filter(([k]) => blocks.some((b) => b.id === k && b.type === "field" && b.who !== w)));
-  return { ...others, ...cleanValues(blocks, raw, w) };
+  const clean = cleanValues(blocks, raw, w);
+  const out: Values = {};
+  for (const b of blocks) {
+    if (b.type !== "field") continue;
+    const v = canAnswer(b, w) && b.id in raw ? clean[b.id] : saved[b.id];
+    if (v !== undefined) out[b.id] = v;
+  }
+  return out;
+}
+
+/** The questions whose answers differ. */
+export function changedAnswers(before: Values, after: Values): string[] {
+  return [...new Set([...Object.keys(before), ...Object.keys(after)])].filter((k) => (before[k] ?? "") !== (after[k] ?? ""));
 }
 
 /** Which of these signature lines no longer match, because an answer their part shows changed. */
