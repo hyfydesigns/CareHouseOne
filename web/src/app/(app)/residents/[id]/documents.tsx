@@ -7,8 +7,8 @@ import { Status, type FormState } from "@/components/status";
 
 const MAX_MB = 9;
 
-/** Owners and admins: add a document to the resident's file by camera or from a file. */
-export function DocumentUpload({ residentId, categories }: { residentId: string; categories: Array<[string, string]> }) {
+/** Owners and admins: add a document to a resident's or staff member's file by camera or from a file. */
+export function DocumentUpload({ url, categories, example = "Admission agreement" }: { url: string; categories: Array<[string, string]>; example?: string }) {
   const router = useRouter();
   const form = useRef<HTMLFormElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -31,7 +31,7 @@ export function DocumentUpload({ residentId, categories }: { residentId: string;
     body.append("title", String(fd.get("title") ?? ""));
     body.append("category", String(fd.get("category") ?? ""));
     setBusy(true);
-    const res = await fetch(`/api/residents/${residentId}/documents`, { method: "POST", body }).catch(() => null);
+    const res = await fetch(url, { method: "POST", body }).catch(() => null);
     const json = (await res?.json().catch(() => null)) as { message?: string; error?: string } | null;
     setBusy(false);
     if (!res?.ok) return setState({ error: json?.error ?? "Couldn't upload. Check the connection and try again." });
@@ -47,7 +47,7 @@ export function DocumentUpload({ residentId, categories }: { residentId: string;
       <div className="row" style={{ alignItems: "end" }}>
         <div className="field" style={{ flex: "2 1 220px" }}>
           <label htmlFor="docTitle">Name</label>
-          <input id="docTitle" name="title" maxLength={120} placeholder="For example: Admission agreement" required />
+          <input id="docTitle" name="title" maxLength={120} placeholder={`For example: ${example}`} required />
         </div>
         <div className="field" style={{ flex: "1 1 200px" }}>
           <label htmlFor="docCat">Kind</label>
@@ -87,7 +87,7 @@ export function RemoveDocumentButton({ action, title }: { action: (reason: strin
         className="btn small"
         disabled={busy}
         onClick={async () => {
-          const reason = prompt(`Why remove "${title}" from the file? For example: wrong resident, or uploaded twice.`);
+          const reason = prompt(`Why remove "${title}" from the file? For example: wrong person, or uploaded twice.`);
           if (!reason) return;
           setBusy(true);
           const r = await action(reason);

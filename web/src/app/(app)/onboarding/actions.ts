@@ -4,17 +4,19 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { FormState } from "@/components/status";
 import { getDb, withTenant } from "@/db/client";
-import type { FormDef, FormKind } from "@/lib/onboarding-forms";
+import type { Audience, FormDef, FormKind } from "@/lib/onboarding-forms";
 import { appUrl, clientIp, requireUser, userAgent } from "@/lib/session";
-import { admitOnboarding, cancelOnboarding, resendLink, reviewItem, sendOnboarding, staffSaveValues, staffSign, startOnboarding } from "@/server/onboarding";
+import { admitOnboarding, cancelOnboarding, hireOnboarding, resendLink, reviewItem, sendOnboarding, staffSaveValues, staffSign, startOnboarding } from "@/server/onboarding";
 import { addMissingStarters, createForm, moveForm, saveForm, setFormHidden } from "@/server/onboarding-forms";
+import { adminLockedMessage } from "@/server/billing";
+import { deliverNow } from "@/server/mailer";
 import { renderOnboardingPdf } from "@/server/onboarding-pdf";
 
 const actorOf = (me: Awaited<ReturnType<typeof requireUser>>) => ({ id: me.id, role: me.role, facilityIds: me.facilityIds });
 
-export async function createFormAction(kind: FormKind): Promise<void> {
+export async function createFormAction(kind: FormKind, audience: Audience): Promise<void> {
   const me = await requireUser();
-  const r = await withTenant(await getDb(), me.orgId, (tx) => createForm(tx, actorOf(me), me.orgId, kind === "upload" ? "upload" : "form"));
+  const r = await withTenant(await getDb(), me.orgId, (tx) => createForm(tx, actorOf(me), me.orgId, kind === "upload" ? "upload" : "form", audience));
   if (r.ok) redirect(`/onboarding/forms/${r.data!.id}`);
 }
 
@@ -37,9 +39,9 @@ export async function moveFormAction(id: string, dir: -1 | 1): Promise<void> {
   revalidatePath("/onboarding/forms");
 }
 
-export async function addStartersAction(): Promise<void> {
+export async function addStartersAction(audience: Audience): Promise<void> {
   const me = await requireUser();
-  await withTenant(await getDb(), me.orgId, (tx) => addMissingStarters(tx, actorOf(me), me.orgId));
+  await withTenant(await getDb(), me.orgId, (tx) => addMissingStarters(tx, actorOf(me), me.orgId, audience));
   revalidatePath("/onboarding/forms");
 }
 
@@ -94,9 +96,25 @@ export async function staffSignAction(packetId: string, itemId: string, blockId:
 
 export async function reviewAction(packetId: string, itemId: string, decision: "approve" | "changes", note: string): Promise<FormState> {
   const me = await requireUser();
-  const r = await withTenant(await getDb(), me.orgId, (tx) => reviewItem(tx, actorOf(me), packetId, itemId, decision, note));
+  const r = await withTenant(await getDb(), me.orgId, (tx) => reviewItem(tx, actorOf(me), packetId, itemId, decision, note, new Date(), renderOnboardingPdf));
   revalidatePath(`/onboarding/${packetId}`);
   return r.ok ? { message: r.message } : { error: r.error };
+}
+
+export async function hireAction(packetId: string, _: FormState, fd: FormData): Promise<FormState> {
+  const me = await requireUser();
+  const url = await appUrl();
+  const raw = { role: fd.get("role"), facilityIds: fd.getAll("facilityIds").map(String) };
+  const db = await getDb();
+  // Hiring adds a person, which an unpaid subscription pauses.
+  const locked = await withTenant(db, me.orgId, adminLockedMessage);
+  if (locked) return { error: locked };
+  const r = await withTenant(db, me.orgId, (tx) => hireOnboarding(tx, actorOf(me), packetId, raw, renderOnboardingPdf, url));
+  if (!r.ok) return { error: r.error };
+  await deliverNow(db);
+  revalidatePath("/onboarding");
+  revalidatePath("/staff");
+  redirect(`/staff/${r.data!.userId}`);
 }
 
 export async function admitAction(packetId: string, _: FormState, fd: FormData): Promise<FormState> {

@@ -6,6 +6,7 @@ import type { Actor } from "@/lib/permissions";
 import { appUrl, requireUser } from "@/lib/session";
 import { adminLockedMessage } from "@/server/billing";
 import { deliverNow } from "@/server/mailer";
+import { removeStaffDocument } from "@/server/staff-documents";
 import { cancelInvite, deactivateStaff, inviteStaff, reactivateStaff, resendInvite, updateStaff, type Result } from "@/server/staff";
 
 export type StaffState = { error?: string; message?: string };
@@ -23,6 +24,10 @@ async function run(fn: (tx: Tx, actor: Actor, orgId: string) => Promise<Result>,
   if (r.ok) await deliverNow(db);
   revalidatePath("/staff");
   return r.ok ? { message: r.message } : { error: r.error };
+}
+
+export async function removeStaffDocumentAction(documentId: string, reason: string): Promise<StaffState> {
+  return run((tx, actor) => removeStaffDocument(tx, actor, documentId, reason));
 }
 
 export async function inviteAction(_: StaffState, fd: FormData): Promise<StaffState> {

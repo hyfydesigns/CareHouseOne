@@ -96,7 +96,7 @@ async function issueLink(tx: Tx, actor: Actor, user: { id: string; orgId: string
   return expiresAt;
 }
 
-export async function inviteStaff(tx: Tx, actor: Actor, orgId: string, raw: unknown, appUrl: string): Promise<Result> {
+export async function inviteStaff(tx: Tx, actor: Actor, orgId: string, raw: unknown, appUrl: string): Promise<Result & { id?: string }> {
   const parsed = inviteSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
   const input = parsed.data;
@@ -109,7 +109,7 @@ export async function inviteStaff(tx: Tx, actor: Actor, orgId: string, raw: unkn
   await tx.insert(userFacilities).values(input.facilityIds.map((facilityId) => ({ orgId, userId: u.id, facilityId })));
   const expiresAt = await issueLink(tx, actor, u, "invite", appUrl);
   await audit(tx, { orgId, actorId: actor.id, action: "invitation_sent", entity: "user", entityId: u.id, details: { role: input.role, facilityIds: input.facilityIds, expiresAt } });
-  return { ok: true, message: `Invitation sent to ${input.email}. It expires in ${INVITE_DAYS} days.` };
+  return { ok: true, message: `Invitation sent to ${input.email}. It expires in ${INVITE_DAYS} days.`, id: u.id };
 }
 
 export async function resendInvite(tx: Tx, actor: Actor, userId: string, appUrl: string): Promise<Result> {

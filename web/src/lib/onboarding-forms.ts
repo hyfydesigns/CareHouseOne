@@ -8,8 +8,16 @@ import { z } from "zod";
  */
 export type Who = "poa" | "staff";
 export const WHO_LABEL: Record<Who, string> = { poa: "Responsible party", staff: "Staff" };
+
+/** Who an onboarding is for: a new resident's family, or a new hire. */
+export type Audience = "resident" | "staff";
+export const asAudience = (v: unknown): Audience => (v === "staff" ? "staff" : "resident");
+const STAFF_LABEL: Record<Who, string> = { poa: "Employee", staff: "Manager" };
+const STAFF_PHRASE: Record<Who, string> = { poa: "the employee", staff: "the home" };
 /** "To be filled in by …" */
 export const WHO_PHRASE: Record<Who, string> = { poa: "the family", staff: "the home" };
+export const whoLabel = (w: Who, a: Audience = "resident") => (a === "staff" ? STAFF_LABEL : WHO_LABEL)[w];
+export const whoPhrase = (w: Who, a: Audience = "resident") => (a === "staff" ? STAFF_PHRASE : WHO_PHRASE)[w];
 
 export const INPUTS = {
   text: "Short answer",
@@ -66,6 +74,7 @@ export const formSchema = z
     title: z.string().trim().min(2, "Give the form a title.").max(120),
     description: z.string().trim().max(1000).default(""),
     kind: z.enum(["form", "upload"]),
+    afterHire: z.boolean().optional(),
     required: z.boolean(),
     blocks: z.array(blockSchema).max(200),
   })
@@ -133,7 +142,7 @@ export function answerText(b: Extract<Block, { type: "field" }>, v: string | und
  * family (so the signed copy keeps them even if the home's details change later); a placeholder
  * named after one of the form's questions shows that question's answer.
  */
-export const PLACEHOLDERS = ["Organization", "Home name", "Home address", "Home phone", "Home fax", "Home email", "Resident name", "Responsible party"] as const;
+export const PLACEHOLDERS = ["Organization", "Home name", "Home address", "Home phone", "Home fax", "Home email", "Resident name", "Responsible party", "Employee name"] as const;
 /** Earlier names that still work in forms written before the rename. */
 const PLACEHOLDER_ALIASES: Record<string, Placeholder> = { "poa name": "Responsible party" };
 export type Placeholder = (typeof PLACEHOLDERS)[number];

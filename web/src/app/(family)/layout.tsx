@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "Move-in paperwork", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Your paperwork", robots: { index: false, follow: false } };
 
 /** The family's pages: no app menu, readable on a phone. */
 export default function FamilyLayout({ children }: { children: React.ReactNode }) {

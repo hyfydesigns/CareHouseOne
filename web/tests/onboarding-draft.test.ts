@@ -101,7 +101,7 @@ describe("responsible party wording", () => {
       { id: "t1", type: "text", text: "I, {{Responsible party}}, agree." },
       { id: "s1", type: "signature", label: "Responsible party", who: "poa" },
     ]);
-    const ctx = { Organization: "", "Home name": "", "Home address": "", "Home phone": "", "Home fax": "", "Home email": "", "Resident name": "", "Responsible party": "Luis Ruiz" };
+    const ctx = { Organization: "", "Home name": "", "Home address": "", "Home phone": "", "Home fax": "", "Home email": "", "Resident name": "", "Responsible party": "Luis Ruiz", "Employee name": "" };
     expect(fillPlaceholders([old[1]], ctx)).toEqual([{ ...old[1], text: "I, Luis Ruiz, agree." }]);
   });
 });

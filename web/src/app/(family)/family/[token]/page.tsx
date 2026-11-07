@@ -19,8 +19,8 @@ export default async function FamilyPage({ params, searchParams }: { params: Pro
   if (!signedIn) {
     return (
       <div className="card">
-        <h1>Move-in paperwork for {packet.residentFirstName}</h1>
-        <p>To keep {packet.residentFirstName}&apos;s information private, we&apos;ll email a 6-digit code to the address this link was sent to.</p>
+        <h1>{packet.audience === "staff" ? "Your new hire paperwork" : `Move-in paperwork for ${packet.residentFirstName}`}</h1>
+        <p>To keep {packet.audience === "staff" ? "your" : <>{packet.residentFirstName}&apos;s</>} information private, we&apos;ll email a 6-digit code to the address this link was sent to.</p>
         <CodeGate sendCode={sendCodeAction.bind(null, token)} verify={verifyCodeAction.bind(null, token)} />
       </div>
     );

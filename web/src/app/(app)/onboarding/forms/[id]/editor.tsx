@@ -3,19 +3,21 @@
 import { useState } from "react";
 import { OnboardingFormView } from "@/components/onboarding-form";
 import { Status, type FormState } from "@/components/status";
-import { FORM_KINDS, INPUTS, newBlockId, PLACEHOLDERS, WHO_LABEL, type Block, type FormDef, type FormKind, type InputKind, type Who } from "@/lib/onboarding-forms";
+import { FORM_KINDS, INPUTS, newBlockId, PLACEHOLDERS, whoLabel, type Audience, type Block, type FormDef, type FormKind, type InputKind, type Who } from "@/lib/onboarding-forms";
 
 type Save = (form: FormDef) => Promise<FormState>;
 
-const ADD: Array<[string, () => Block]> = [
+const adders = (audience: Audience): Array<[string, () => Block]> => [
   ["Heading", () => ({ id: newBlockId(), type: "heading", text: "" })],
   ["Paragraph", () => ({ id: newBlockId(), type: "text", text: "" })],
   ["Question", () => ({ id: newBlockId(), type: "field", label: "", input: "text", required: true, who: "poa" })],
-  ["Signature line", () => ({ id: newBlockId(), type: "signature", label: "Responsible party", who: "poa" })],
+  ["Signature line", () => ({ id: newBlockId(), type: "signature", label: whoLabel("poa", audience), who: "poa" })],
 ];
 
 /** Owners and admins write a form: headings, paragraphs, questions and signature lines. */
-export function FormEditor({ initial, save }: { initial: FormDef; save: Save }) {
+export function FormEditor({ initial, audience, save }: { initial: FormDef; audience: Audience; save: Save }) {
+  const staff = audience === "staff";
+  const person = staff ? "the employee" : "the family";
   const [form, setForm] = useState<FormDef>(initial);
   const [state, setState] = useState<FormState>({});
   const [busy, setBusy] = useState(false);
@@ -55,21 +57,22 @@ export function FormEditor({ initial, save }: { initial: FormDef; save: Save }) 
           </div>
         </div>
         <div className="field">
-          <label htmlFor="fdesc">{form.kind === "upload" ? "What to upload (the family sees this)" : "Short description (the family sees this in the checklist)"}</label>
+          <label htmlFor="fdesc">{form.kind === "upload" ? `What to upload (${person} sees this)` : `Short description (${person} sees this in the checklist)`}</label>
           <input id="fdesc" value={form.description} maxLength={1000} onChange={(e) => setForm({ ...form, description: e.target.value })} />
         </div>
-        <label className="check"><input type="checkbox" checked={form.required} onChange={(e) => setForm({ ...form, required: e.target.checked })} /> Required before the resident can be admitted</label>
+        <label className="check"><input type="checkbox" checked={form.required} onChange={(e) => setForm({ ...form, required: e.target.checked })} /> {staff ? "Required before they can be hired" : "Required before the resident can be admitted"}</label>
+        {staff && <label className="check"><input type="checkbox" checked={!!form.afterHire} onChange={(e) => setForm({ ...form, afterHire: e.target.checked })} /> Done after hire, on the job: hiring doesn&apos;t wait for it</label>}
       </section>
 
       {form.kind === "form" && (
         <section className="card">
           <div className="row">
-            <h2 style={{ margin: 0 }}>{preview ? "Preview: what the family sees" : "Contents"}</h2>
+            <h2 style={{ margin: 0 }}>{preview ? `Preview: what ${person} sees` : "Contents"}</h2>
             <span className="spacer" />
             <button type="button" className="btn small" onClick={() => setPreview(!preview)}>{preview ? "Back to editing" : "Preview"}</button>
           </div>
           {preview ? (
-            <OnboardingFormView blocks={form.blocks} values={sample} who="poa" onChange={(id, v) => setSample((s) => ({ ...s, [id]: v }))} onSign={() => alert("The family signs here, by drawing or typing their name.")} />
+            <OnboardingFormView blocks={form.blocks} values={sample} who="poa" audience={audience} onChange={(id, v) => setSample((s) => ({ ...s, [id]: v }))} onSign={() => alert("They sign here, by drawing or typing their name.")} />
           ) : (
             <>
               {form.blocks.map((b, i) => (
@@ -81,7 +84,7 @@ export function FormEditor({ initial, save }: { initial: FormDef; save: Save }) 
                     <button type="button" className="btn small" onClick={() => move(i, 1)} disabled={i === form.blocks.length - 1} aria-label="Move down">↓</button>
                     <button type="button" className="btn small" onClick={() => remove(i)} aria-label="Remove">Remove</button>
                   </div>
-                  <BlockEditor block={b} onChange={(nb) => setBlock(i, nb)} />
+                  <BlockEditor block={b} audience={audience} onChange={(nb) => setBlock(i, nb)} />
                 </div>
               ))}
               <p className="small muted" style={{ margin: 0 }}>
@@ -89,33 +92,33 @@ export function FormEditor({ initial, save }: { initial: FormDef; save: Save }) 
               </p>
               <div className="row" style={{ gap: 6 }}>
                 <span className="small muted">Add:</span>
-                {ADD.map(([label, make]) => <button key={label} type="button" className="btn small" onClick={() => setForm((f) => ({ ...f, blocks: [...f.blocks, make()] }))}>+ {label}</button>)}
+                {adders(audience).map(([label, make]) => <button key={label} type="button" className="btn small" onClick={() => setForm((f) => ({ ...f, blocks: [...f.blocks, make()] }))}>+ {label}</button>)}
               </div>
             </>
           )}
         </section>
       )}
-      {form.kind === "upload" && <p className="muted">The family uploads photos or PDFs for this item, and staff check them before admission.</p>}
+      {form.kind === "upload" && <p className="muted">{staff ? "They upload photos or PDFs for this item, and you check them before hiring." : "The family uploads photos or PDFs for this item, and staff check them before admission."}</p>}
 
       <Status state={state} />
       <div className="row"><button type="button" className="btn primary" disabled={busy} onClick={onSave}>{busy ? "Saving…" : "Save form"}</button></div>
-      <p className="small muted" style={{ margin: 0 }}>Families who were already sent this form keep the version they received; changes apply to new onboardings.</p>
+      <p className="small muted" style={{ margin: 0 }}>People who were already sent this form keep the version they received; changes apply to new onboardings.</p>
     </div>
   );
 }
 
-function WhoSelect({ value, onChange, id }: { value: Who; onChange: (w: Who) => void; id: string }) {
+function WhoSelect({ value, onChange, id, audience }: { value: Who; onChange: (w: Who) => void; id: string; audience: Audience }) {
   return (
     <div className="field" style={{ flex: "0 1 170px" }}>
       <label htmlFor={id}>Completed by</label>
       <select id={id} value={value} onChange={(e) => onChange(e.target.value as Who)}>
-        {Object.entries(WHO_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+        {(["poa", "staff"] as const).map((k) => <option key={k} value={k}>{whoLabel(k, audience)}</option>)}
       </select>
     </div>
   );
 }
 
-function BlockEditor({ block: b, onChange }: { block: Block; onChange: (b: Block) => void }) {
+function BlockEditor({ block: b, onChange, audience }: { block: Block; onChange: (b: Block) => void; audience: Audience }) {
   if (b.type === "heading") return <input aria-label="Heading" value={b.text} maxLength={200} placeholder="Heading" onChange={(e) => onChange({ ...b, text: e.target.value })} />;
   if (b.type === "text") return <textarea aria-label="Paragraph" rows={4} value={b.text} maxLength={8000} placeholder="Terms, explanations or instructions" onChange={(e) => onChange({ ...b, text: e.target.value })} />;
   if (b.type === "signature") {
@@ -125,7 +128,7 @@ function BlockEditor({ block: b, onChange }: { block: Block; onChange: (b: Block
           <label htmlFor={`l${b.id}`}>Who signs (label)</label>
           <input id={`l${b.id}`} value={b.label} maxLength={200} onChange={(e) => onChange({ ...b, label: e.target.value })} />
         </div>
-        <WhoSelect id={`w${b.id}`} value={b.who} onChange={(who) => onChange({ ...b, who })} />
+        <WhoSelect id={`w${b.id}`} value={b.who} audience={audience} onChange={(who) => onChange({ ...b, who })} />
       </div>
     );
   }
@@ -142,7 +145,7 @@ function BlockEditor({ block: b, onChange }: { block: Block; onChange: (b: Block
             {Object.entries(INPUTS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
           </select>
         </div>
-        <WhoSelect id={`w${b.id}`} value={b.who} onChange={(who) => onChange({ ...b, who })} />
+        <WhoSelect id={`w${b.id}`} value={b.who} audience={audience} onChange={(who) => onChange({ ...b, who })} />
       </div>
       {b.input === "choice" && (
         <div className="field">

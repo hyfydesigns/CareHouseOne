@@ -7,7 +7,7 @@ import { FormLetterhead } from "@/components/form-letterhead";
 import { OnboardingFormView } from "@/components/onboarding-form";
 import { SignDialog } from "@/components/sign-dialog";
 import { Status, type FormState } from "@/components/status";
-import { changedAnswers, changedSignatures, mergeAnswers, type Block, type Values } from "@/lib/onboarding-forms";
+import { asAudience, changedAnswers, changedSignatures, mergeAnswers, type Audience, type Block, type Values } from "@/lib/onboarding-forms";
 import type { familyView } from "@/server/onboarding";
 import { removeFileAction, saveAction, signAction, submitAction } from "./actions";
 
@@ -54,7 +54,23 @@ export function CodeGate({ sendCode, verify }: { sendCode: () => Promise<FormSta
   );
 }
 
-/** The family's checklist, and one item at a time to fill in, sign, upload and send. */
+/** A list of signed copies to download. */
+function Downloads({ token, documents }: { token: string; documents: View["documents"] }) {
+  return (
+    <ul className="checklist" style={{ listStyle: "none", padding: 0 }}>
+      {documents.map((d) => (
+        <li key={d.id}>
+          <a className="checklist-item" href={`/api/family/${token}/documents/${d.id}?download=1`}>
+            <span className="grow"><b>{d.title}</b><br /><span className="small muted">{d.contentType === "application/pdf" ? "PDF" : "Photo"} · {(d.sizeBytes / 1024 / 1024).toFixed(1)} MB</span></span>
+            <span className="btn small">Download</span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** The family's or employee's checklist, and one item at a time to fill in, sign, upload and send. */
 export function FamilyPortal({ token, view, openItem, consentText }: { token: string; view: View; openItem: string | null; consentText: string }) {
   const { packet } = view;
   const item = view.items.find((i) => i.id === openItem);
@@ -67,33 +83,33 @@ export function FamilyPortal({ token, view, openItem, consentText }: { token: st
         <FormLetterhead head={view.head} />
         <h1>{packet.residentFirstName}&apos;s paperwork is complete</h1>
         <p>{view.org} ({view.home}) has admitted {packet.residentFirstName}. Here are your signed copies. Download them now: this page stops working after the date in the email.</p>
-        <ul className="checklist" style={{ listStyle: "none", padding: 0 }}>
-          {view.documents.map((d) => (
-            <li key={d.id}>
-              <a className="checklist-item" href={`/api/family/${token}/documents/${d.id}?download=1`}>
-                <span className="grow"><b>{d.title}</b><br /><span className="small muted">{d.contentType === "application/pdf" ? "PDF" : "Photo"} · {(d.sizeBytes / 1024 / 1024).toFixed(1)} MB</span></span>
-                <span className="btn small">Download</span>
-              </a>
-            </li>
-          ))}
-        </ul>
+        <Downloads token={token} documents={view.documents} />
       </div>
     );
   }
 
-  if (item) return <ItemPage key={item.id} head={view.head} token={token} item={item} poaName={packet.poaName} consentText={consentText} locked={packet.status !== "open"} />;
+  const audience = asAudience(packet.audience);
+  const hired = packet.status === "hired";
+  if (item) return <ItemPage key={item.id} head={view.head} token={token} item={item} poaName={packet.poaName} consentText={consentText} audience={audience} locked={packet.status !== "open" && !hired} />;
 
   return (
     <>
       <div className="card">
         <FormLetterhead head={view.head} />
-        <h1>Move-in paperwork for {packet.residentFirstName} {packet.residentLastName}</h1>
+        <h1>{audience === "staff" ? (hired ? `Welcome to ${view.org}` : "Your new hire paperwork") : `Move-in paperwork for ${packet.residentFirstName} ${packet.residentLastName}`}</h1>
         <p className="small muted" style={{ margin: 0 }}>
           Open each item, fill it in and sign, or upload the documents asked for, then send it to the home. Your answers are saved as you go, so you can stop and come back with the same link.
         </p>
         <div className="stat-row">
           <span className={`stat ${sent === required.length ? "good" : "info"}`}><b>{sent}/{required.length}</b><span>required items sent</span></span>
         </div>
+        {hired && view.documents.length > 0 && (
+          <>
+            <h2>Your signed copies</h2>
+            <p className="small muted" style={{ margin: 0 }}>Download them now: this page stops working after the date in the email.</p>
+            <Downloads token={token} documents={view.documents} />
+          </>
+        )}
       </div>
       <ul className="checklist" style={{ listStyle: "none", padding: 0, margin: 0 }}>
         {view.items.map((i) => (
@@ -119,7 +135,7 @@ const AUTOSAVE_MS = 1000;
 /** Only the answers changed here go to the server: the home may be helping with the same form. */
 const changesFrom = (from: Values, to: Values): Values => Object.fromEntries(changedAnswers(from, to).map((k) => [k, to[k] ?? ""]));
 
-function ItemPage({ head, token, item, poaName, consentText, locked }: { head: View["head"]; token: string; item: Item; poaName: string; consentText: string; locked: boolean }) {
+function ItemPage({ head, token, item, poaName, consentText, locked, audience }: { head: View["head"]; token: string; item: Item; poaName: string; consentText: string; locked: boolean; audience: Audience }) {
   const router = useRouter();
   const [values, setValues] = useState<Values>(item.values);
   const [dirty, setDirty] = useState(false);
@@ -191,6 +207,7 @@ function ItemPage({ head, token, item, poaName, consentText, locked }: { head: V
           blocks={item.blocks}
           values={values}
           who="poa"
+          audience={audience}
           onChange={readOnly ? undefined : (id, v) => {
             const next = { ...latest.current, [id]: v };
             latest.current = next;

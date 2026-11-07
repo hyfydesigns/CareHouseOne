@@ -811,6 +811,10 @@ export const onboardingForms = pgTable(
     /** "form" (fill and sign) or "upload" (documents to send). */
     kind: text("kind").notNull(),
     required: boolean("required").notNull().default(true),
+    /** "resident" (a family's move-in paperwork) or "staff" (a new hire's). */
+    audience: text("audience").notNull().default("resident"),
+    /** Staff forms done on the job: hiring doesn't wait for them. */
+    afterHire: boolean("after_hire").notNull().default(false),
     blocks: jsonb("blocks").$type<unknown[]>().notNull().default([]),
     position: integer("position").notNull(),
     version: integer("version").notNull().default(1),
@@ -821,6 +825,30 @@ export const onboardingForms = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }),
   },
   (t) => [index("onboarding_forms_org_idx").on(t.orgId, t.position)],
+);
+
+/** Documents on a staff member's file: signed onboarding forms, certificates and uploads. Owners and admins only. */
+export const staffDocuments = pgTable(
+  "staff_documents",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    category: text("category").notNull(),
+    title: text("title").notNull(),
+    filename: text("filename").notNull(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    data: bytea("data").notNull(),
+    /** "upload"; "onboarding" for the employee's signed forms; "onboarding_internal" for the home's own records, never offered to the employee. */
+    source: text("source").notNull().default("upload"),
+    uploadedBy: uuid("uploaded_by").notNull().references(() => users.id),
+    uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
+    removedAt: timestamp("removed_at", { withTimezone: true }),
+    removedBy: uuid("removed_by").references(() => users.id),
+    removedReason: text("removed_reason"),
+  },
+  (t) => [index("staff_documents_user_idx").on(t.userId, t.uploadedAt)],
 );
 
 /**
@@ -838,7 +866,9 @@ export const onboardingPackets = pgTable(
     residentLastName: text("resident_last_name").notNull(),
     poaName: text("poa_name").notNull(),
     poaEmail: text("poa_email").notNull(),
-    /** open, admitted or cancelled. */
+    /** "resident", or "staff" for a new hire: the resident name and POA columns then hold the applicant. */
+    audience: text("audience").notNull().default("resident"),
+    /** draft, open, admitted (resident), hired (staff) or cancelled. */
     status: text("status").notNull().default("open"),
     /** sha256 of the private link's token; the token itself is only ever in the email. */
     tokenHash: text("token_hash").notNull(),
@@ -846,6 +876,8 @@ export const onboardingPackets = pgTable(
     createdBy: uuid("created_by").notNull().references(() => users.id),
     createdAt: createdAt(),
     residentId: uuid("resident_id").references(() => residents.id),
+    /** The staff account a new hire's onboarding created. */
+    staffUserId: uuid("staff_user_id").references(() => users.id),
     admittedAt: timestamp("admitted_at", { withTimezone: true }),
     admittedBy: uuid("admitted_by").references(() => users.id),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
@@ -867,6 +899,7 @@ export const onboardingItems = pgTable(
     description: text("description").notNull().default(""),
     kind: text("kind").notNull(),
     required: boolean("required").notNull(),
+    afterHire: boolean("after_hire").notNull().default(false),
     blocks: jsonb("blocks").$type<unknown[]>().notNull().default([]),
     position: integer("position").notNull(),
     values: jsonb("values").$type<Record<string, string>>().notNull().default({}),

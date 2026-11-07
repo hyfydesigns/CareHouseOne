@@ -11,7 +11,7 @@ export async function GET(request: Request, { params }: Ctx) {
   const { token, docId } = await params;
   const d = await asFamily(token, async (tx, p) => {
     const doc = await familyDocument(tx, p, docId);
-    if (doc) await audit(tx, { orgId: p.orgId, actorId: null, action: "document_downloaded_by_family", entity: "resident", entityId: doc.residentId, details: { documentId: doc.id, packetId: p.id } });
+    if (doc) await audit(tx, { orgId: p.orgId, actorId: null, action: "document_downloaded_by_family", entity: "residentId" in doc ? "resident" : "user", entityId: "residentId" in doc ? doc.residentId : doc.userId, details: { documentId: doc.id, packetId: p.id } });
     return doc;
   });
   if (!d) return new NextResponse(null, { status: 404 });

@@ -15,10 +15,10 @@ export default async function EditOnboardingForm({ params }: { params: Promise<{
   return (
     <>
       <div>
-        <Link href="/onboarding/forms" className="small">‹ All forms</Link>
+        <Link href={`/onboarding/forms${form.audience === "staff" ? "?for=staff" : ""}`} className="small">‹ All forms</Link>
         <h1>{form.title}</h1>
       </div>
-      <FormEditor key={`${form.id}-${form.version}`} initial={{ title: form.title, description: form.description, kind: form.kind, required: form.required, blocks: form.blocks }} save={saveFormAction.bind(null, form.id)} />
+      <FormEditor key={`${form.id}-${form.version}`} initial={{ title: form.title, description: form.description, kind: form.kind, required: form.required, afterHire: form.afterHire, blocks: form.blocks }} audience={form.audience} save={saveFormAction.bind(null, form.id)} />
     </>
   );
 }

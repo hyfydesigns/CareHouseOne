@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- signatures are data: URLs drawn on the page */
 
-import { answerText, WHO_LABEL, WHO_PHRASE, withAnswers, type Block, type Values, type Who } from "@/lib/onboarding-forms";
+import { answerText, whoLabel, whoPhrase, withAnswers, type Audience, type Block, type Values, type Who } from "@/lib/onboarding-forms";
 
 export interface SignatureView {
   name: string;
@@ -22,6 +22,7 @@ export function OnboardingFormView({
   who,
   onChange,
   answerAll,
+  audience,
   signatures = {},
   onSign,
   signAgain,
@@ -32,6 +33,7 @@ export function OnboardingFormView({
   who: Who | null;
   onChange?: (id: string, value: string) => void;
   answerAll?: boolean;
+  audience?: Audience;
   signatures?: Record<string, SignatureView>;
   onSign?: (block: Extract<Block, { type: "signature" }>) => void;
   /** Signature lines cleared because an answer changed: they say why. */
@@ -47,11 +49,11 @@ export function OnboardingFormView({
           const s = signatures[b.id];
           return (
             <div key={b.id} className={`ob-sign${s ? " signed" : ""}`}>
-              <div className="ob-label">{b.label} {b.label !== WHO_LABEL[b.who] && <span className="ob-who">{WHO_LABEL[b.who]}</span>}</div>
+              <div className="ob-label">{b.label} {b.label !== whoLabel(b.who, audience) && <span className="ob-who">{whoLabel(b.who, audience)}</span>}</div>
               {s ? (
                 <div className="ob-signature">
                   {s.image ? <img src={s.image} alt={`Signature of ${s.name}`} /> : <span className="ob-typed">{s.name}</span>}
-                  <span className="small muted">Signed by {s.name} · {s.signedAt}</span>
+                  <span className="small muted" suppressHydrationWarning>Signed by {s.name} · {s.signedAt}</span>
                 </div>
               ) : b.who === who && onSign ? (
                 <>
@@ -59,20 +61,20 @@ export function OnboardingFormView({
                   <button type="button" className="btn primary" disabled={disabled} onClick={() => onSign(b)}>Sign</button>
                 </>
               ) : (
-                <div className="ob-line">{b.who === who ? "Not signed yet" : `To be signed by ${WHO_PHRASE[b.who]}`}</div>
+                <div className="ob-line">{b.who === who ? "Not signed yet" : `To be signed by ${whoPhrase(b.who, audience)}`}</div>
               )}
             </div>
           );
         }
         const mine = (b.who === who || !!answerAll) && !!onChange;
-        const whose = b.who !== who && <span className="ob-who">{WHO_LABEL[b.who]}</span>;
+        const whose = b.who !== who && <span className="ob-who">{whoLabel(b.who, audience)}</span>;
         const v = values[b.id] ?? "";
         const inputId = `ob-${b.id}`;
         if (!mine) {
           return (
             <div key={b.id} className="ob-field">
-              <div className="ob-label">{b.label}{b.required && b.input !== "check" ? " *" : ""} <span className="ob-who">{WHO_LABEL[b.who]}</span></div>
-              <div className={v ? "ob-answer" : "ob-line"}>{v ? answerText(b, v) : b.who === who ? "Not answered" : `To be filled in by ${WHO_PHRASE[b.who]}`}</div>
+              <div className="ob-label">{b.label}{b.required && b.input !== "check" ? " *" : ""} <span className="ob-who">{whoLabel(b.who, audience)}</span></div>
+              <div className={v ? "ob-answer" : "ob-line"}>{v ? answerText(b, v) : b.who === who ? "Not answered" : `To be filled in by ${whoPhrase(b.who, audience)}`}</div>
             </div>
           );
         }

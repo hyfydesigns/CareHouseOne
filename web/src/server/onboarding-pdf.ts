@@ -1,5 +1,5 @@
 import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
-import { answerText, WHO_LABEL, withAnswers } from "@/lib/onboarding-forms";
+import { answerText, asAudience, whoLabel, withAnswers } from "@/lib/onboarding-forms";
 import type { onboardingPackets } from "@/db/schema";
 import { E_SIGN_CONSENT, type Evidence, type ItemView, type Letterhead } from "./onboarding";
 
@@ -27,6 +27,8 @@ const grey = rgb(0.4, 0.4, 0.45);
  * signature covers. Letter size, standard fonts, so it opens anywhere.
  */
 export async function renderOnboardingPdf(packet: Packet, item: ItemView, head: Letterhead, sigEvidence: Evidence): Promise<Buffer> {
+  const audience = asAudience(packet.audience);
+  const staff = audience === "staff";
   const doc = await PDFDocument.create();
   doc.setTitle(latin(`${item.title} - ${packet.residentFirstName} ${packet.residentLastName}`));
   doc.setProducer("CareHouse One");
@@ -85,7 +87,7 @@ export async function renderOnboardingPdf(packet: Packet, item: ItemView, head: 
   if (head.logo) y = Math.min(y, top - 60);
   y -= 10;
   write(item.title, { font: bold, size: 18, gap: 2 });
-  write(`Resident: ${packet.residentFirstName} ${packet.residentLastName}  ·  Responsible party: ${packet.poaName}`, { size: 10, color: grey, gap: 10 });
+  write(staff ? `Employee: ${packet.poaName}` : `Resident: ${packet.residentFirstName} ${packet.residentLastName}  ·  Responsible party: ${packet.poaName}`, { size: 10, color: grey, gap: 10 });
   page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 1, color: rgb(0.8, 0.8, 0.85) });
   y -= 12;
 
@@ -101,7 +103,7 @@ export async function renderOnboardingPdf(packet: Packet, item: ItemView, head: 
     } else {
       const s = item.signatures[b.id];
       ensure(90);
-      write(`${b.label} (${WHO_LABEL[b.who]})`, { font: bold, size: 9.5, color: grey, gap: 4 });
+      write(`${b.label} (${whoLabel(b.who, audience)})`, { font: bold, size: 9.5, color: grey, gap: 4 });
       if (s?.image) {
         const png = await doc.embedPng(Buffer.from(s.image.split(",")[1], "base64"));
         const scale = Math.min(200 / png.width, 50 / png.height, 1);
@@ -124,7 +126,7 @@ export async function renderOnboardingPdf(packet: Packet, item: ItemView, head: 
   write("Electronic signature record", { font: bold, size: 11 });
   write(`Each signer agreed: "${E_SIGN_CONSENT}"`, { size: 8.5, color: grey, gap: 6 });
   for (const e of sigEvidence) {
-    write(`${e.name} (${e.signer === "poa" ? "responsible party" : "for the home"}), ${e.method}, ${e.signedAt.toISOString()}${e.ip ? `, from ${e.ip}` : ""}`, { size: 8.5, gap: 1 });
+    write(`${e.name} (${e.signer === "poa" ? (staff ? "employee" : "responsible party") : "for the home"}), ${e.method}, ${e.signedAt.toISOString()}${e.ip ? `, from ${e.ip}` : ""}`, { size: 8.5, gap: 1 });
     write(`Document fingerprint (SHA-256): ${e.documentHash}`, { size: 7.5, color: grey, gap: 6 });
   }
 

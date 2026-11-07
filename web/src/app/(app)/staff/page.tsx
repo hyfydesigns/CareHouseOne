@@ -27,6 +27,7 @@ export default async function StaffPage() {
         <h1>Staff</h1>
         <span className="muted">{rows.filter((r) => r.status === "active").length} active</span>
         <span className="spacer" />
+        {canManageCare(me) && <Link className="btn" href="/onboarding?for=staff">Onboard a new hire</Link>}
         {canManageCare(me) && <Link className="btn" href="/staff/training">Training and certifications</Link>}
       </div>
       {roles.length > 0 && <InviteForm action={inviteAction} roles={roles} homes={myHomes} />}
@@ -47,7 +48,7 @@ export default async function StaffPage() {
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id}>
-                  <td><b>{r.name}</b><br /><span className="small muted">{r.email}</span></td>
+                  <td>{canManageCare(me) ? <Link href={`/staff/${r.id}`}><b>{r.name}</b></Link> : <b>{r.name}</b>}<br /><span className="small muted">{r.email}</span></td>
                   <td>{ROLE_LABEL[r.role]}</td>
                   <td>{r.facilityNames.join(", ")}</td>
                   <td>

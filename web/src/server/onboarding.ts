@@ -2,15 +2,17 @@ import { and, asc, desc, eq, gt, inArray, isNull, like } from "drizzle-orm";
 import { randomInt } from "node:crypto";
 import { z } from "zod";
 import type { DB, Tx } from "@/db/client";
-import { facilities, onboardingAccess, onboardingFiles, onboardingItems, onboardingPackets, onboardingSignatures, organizations, outbox, residentDocuments, users } from "@/db/schema";
+import { facilities, onboardingAccess, onboardingFiles, onboardingItems, onboardingPackets, onboardingSignatures, organizations, outbox, residentDocuments, staffCertifications, staffDocuments, users } from "@/db/schema";
 import { randomToken, safeEqual, sha256 } from "@/lib/crypto";
 import { addressLine, contactLine } from "@/lib/home-contact";
-import { blockSchema, changedAnswers, changedSignatures, fillPlaceholders, mergeAnswers, missingFor, partOf, signedPart, type Block, type Values, type Who } from "@/lib/onboarding-forms";
+import { blockSchema, changedAnswers, changedSignatures, fillPlaceholders, mergeAnswers, missingFor, partOf, signedPart, type Audience, type Block, type Values, type Who } from "@/lib/onboarding-forms";
 import { canSeeFacility, type Actor } from "@/lib/permissions";
 import { MAX_ATTACHMENT_BYTES, normaliseAttachment } from "./attachments";
 import { audit, sendMail } from "./audit";
 import { canManageOnboarding, ensureStarterForms, listForms } from "./onboarding-forms";
 import { createResident, type Result } from "./residents";
+import { inviteStaff } from "./staff";
+import { staffDocCategoryFor } from "./staff-documents";
 
 export const LINK_DAYS = 30;
 /** After admission the family can download the signed copies for this long. */
@@ -43,10 +45,11 @@ export const signatureHash = (i: Pick<ItemRow, "title" | "blocks" | "values">, b
 
 const startSchema = z.object({
   facilityId: z.string().uuid("Choose the home."),
-  residentFirstName: z.string().trim().min(1, "Enter the resident's first name.").max(80),
-  residentLastName: z.string().trim().min(1, "Enter the resident's last name.").max(80),
+  residentFirstName: z.string().trim().min(1, "Enter the first name.").max(80),
+  residentLastName: z.string().trim().min(1, "Enter the last name.").max(80),
   poaName: z.string().trim().min(2, "Enter the responsible party's name.").max(160),
-  poaEmail: z.string().trim().toLowerCase().email("Enter the responsible party's email like name@example.com."),
+  poaEmail: z.string().trim().toLowerCase().email("Enter their email like name@example.com."),
+  audience: z.enum(["resident", "staff"]).default("resident"),
   /** The forms this resident needs; all of them when not given. */
   formIds: z.array(z.string()).optional(),
   /** Saved without sending, so the home can fill in its part (fees, room) before the family sees it. */
@@ -56,16 +59,17 @@ const startSchema = z.object({
 async function emailLink(tx: Tx, p: Packet, token: string, appUrl: string, kind: "invite" | "reminder") {
   const [org] = await tx.select({ name: organizations.name }).from(organizations).where(eq(organizations.id, p.orgId));
   const [home] = await tx.select({ name: facilities.name }).from(facilities).where(eq(facilities.id, p.facilityId));
+  const staff = p.audience === "staff";
   await sendMail(tx, {
     orgId: p.orgId,
     to: p.poaEmail,
-    subject: `${org.name}: move-in paperwork for ${p.residentFirstName}`,
+    subject: staff ? `${org.name}: your new hire paperwork` : `${org.name}: move-in paperwork for ${p.residentFirstName}`,
     body: [
       `Hi ${p.poaName},`,
       "",
       kind === "invite"
-        ? `${org.name} (${home.name}) has asked you to complete the move-in paperwork for ${p.residentFirstName}. You can fill in the forms, upload documents and sign online, from a phone or a computer.`
-        : `Here is a new link to the move-in paperwork for ${p.residentFirstName} at ${home.name}. The earlier link no longer works.`,
+        ? `${org.name} (${home.name}) has asked you to complete ${staff ? "your new hire paperwork" : `the move-in paperwork for ${p.residentFirstName}`}. You can fill in the forms, upload documents and sign online, from a phone or a computer.`
+        : `Here is a new link to ${staff ? "your new hire paperwork" : `the move-in paperwork for ${p.residentFirstName}`} at ${home.name}. The earlier link no longer works.`,
       "",
       `${appUrl}/family/${token}`,
       "",
@@ -82,11 +86,13 @@ async function emailLink(tx: Tx, p: Packet, token: string, appUrl: string, kind:
  */
 export async function startOnboarding(tx: Tx, actor: Actor, orgId: string, raw: unknown, appUrl: string, now = new Date()): Promise<Result<{ id: string }>> {
   if (!canManageOnboarding(actor)) return { ok: false, error: "Only owners and admins start onboardings." };
-  const p = startSchema.safeParse(raw);
+  // A new hire fills in their own forms, so they are the "responsible party" of their onboarding.
+  const input = raw as Record<string, unknown>;
+  const p = startSchema.safeParse(input.audience === "staff" ? { ...input, poaName: `${input.residentFirstName ?? ""} ${input.residentLastName ?? ""}` } : input);
   if (!p.success) return { ok: false, error: p.error.issues[0].message };
   if (!canSeeFacility(actor, p.data.facilityId)) return { ok: false, error: "Choose one of your homes." };
-  await ensureStarterForms(tx, orgId, actor.id);
-  const all = await listForms(tx, actor);
+  await ensureStarterForms(tx, orgId, actor.id, p.data.audience);
+  const all = await listForms(tx, actor, { audience: p.data.audience });
   if (!all.length) return { ok: false, error: "There are no onboarding forms to send. Add or show some under Onboarding forms." };
   const chosen = p.data.formIds && new Set(p.data.formIds);
   const forms = chosen ? all.filter((f) => chosen.has(f.id)) : all;
@@ -102,9 +108,10 @@ export async function startOnboarding(tx: Tx, actor: Actor, orgId: string, raw: 
     "Home email": home.email ?? "",
     "Resident name": `${p.data.residentFirstName} ${p.data.residentLastName}`,
     "Responsible party": p.data.poaName,
+    "Employee name": p.data.poaName,
   };
   const { draft, ...rest } = p.data;
-  const details = { facilityId: rest.facilityId, residentFirstName: rest.residentFirstName, residentLastName: rest.residentLastName, poaName: rest.poaName, poaEmail: rest.poaEmail };
+  const details = { facilityId: rest.facilityId, residentFirstName: rest.residentFirstName, residentLastName: rest.residentLastName, poaName: rest.poaName, poaEmail: rest.poaEmail, audience: rest.audience };
   // A draft's token is never sent anywhere; sending it makes a new one.
   const token = randomToken();
   const [packet] = await tx
@@ -112,7 +119,7 @@ export async function startOnboarding(tx: Tx, actor: Actor, orgId: string, raw: 
     .values({ orgId, ...details, status: draft ? "draft" : "open", tokenHash: sha256(token), expiresAt: new Date(now.getTime() + LINK_DAYS * 86_400_000), createdBy: actor.id, createdAt: now })
     .returning();
   await tx.insert(onboardingItems).values(
-    forms.map((f, i) => ({ orgId, packetId: packet.id, formId: f.id, formVersion: f.version, title: f.title, description: f.description, kind: f.kind, required: f.required, blocks: fillPlaceholders(f.blocks, ctx), position: i + 1 })),
+    forms.map((f, i) => ({ orgId, packetId: packet.id, formId: f.id, formVersion: f.version, title: f.title, description: f.description, kind: f.kind, required: f.required, afterHire: f.afterHire, blocks: fillPlaceholders(f.blocks, ctx), position: i + 1 })),
   );
   if (!draft) await emailLink(tx, packet, token, appUrl, "invite");
   await audit(tx, { orgId, actorId: actor.id, action: "onboarding_started", entity: "organization", entityId: orgId, details: { packetId: packet.id, facilityId: packet.facilityId, forms: forms.length, draft: !!draft } });
@@ -139,7 +146,7 @@ async function packetFor(tx: Tx, actor: Actor, id: string): Promise<Packet | nul
 /** A new link (the old one stops working), for a lost email or an expired link. */
 export async function resendLink(tx: Tx, actor: Actor, id: string, appUrl: string, now = new Date()): Promise<Result> {
   const p = await packetFor(tx, actor, id);
-  if (!p || p.status !== "open") return { ok: false, error: "That onboarding isn't open." };
+  if (!p || (p.status !== "open" && p.status !== "hired")) return { ok: false, error: "That onboarding isn't open." };
   const token = randomToken();
   const [fresh] = await tx.update(onboardingPackets).set({ tokenHash: sha256(token), expiresAt: new Date(now.getTime() + LINK_DAYS * 86_400_000) }).where(eq(onboardingPackets.id, p.id)).returning();
   await tx.update(onboardingAccess).set({ usedAt: now }).where(and(eq(onboardingAccess.packetId, p.id), isNull(onboardingAccess.usedAt)));
@@ -153,7 +160,7 @@ export async function cancelOnboarding(tx: Tx, actor: Actor, id: string, now = n
   if (!p || (p.status !== "open" && p.status !== "draft")) return { ok: false, error: "That onboarding isn't open." };
   await tx.update(onboardingPackets).set({ status: "cancelled", cancelledAt: now, cancelledBy: actor.id }).where(eq(onboardingPackets.id, p.id));
   await audit(tx, { orgId: p.orgId, actorId: actor.id, action: "onboarding_cancelled", entity: "organization", entityId: p.orgId, details: { packetId: p.id } });
-  return { ok: true, message: "Onboarding cancelled. The family's link no longer works." };
+  return { ok: true, message: "Onboarding cancelled. Their link no longer works." };
 }
 
 /** The demo sends no email: the latest family link from the outbox, so a presenter can open it. */
@@ -163,9 +170,9 @@ export async function demoFamilyLink(tx: Tx, p: Packet): Promise<string | null> 
 }
 
 /** Every onboarding the person can see, newest first, with how far along it is. */
-export async function listOnboardings(tx: Tx, actor: Actor) {
+export async function listOnboardings(tx: Tx, actor: Actor, audience: Audience = "resident") {
   if (!canManageOnboarding(actor)) return [];
-  const packets = (await tx.select({ p: onboardingPackets, home: facilities.name }).from(onboardingPackets).innerJoin(facilities, eq(facilities.id, onboardingPackets.facilityId)).orderBy(desc(onboardingPackets.createdAt))).filter((x) => canSeeFacility(actor, x.p.facilityId));
+  const packets = (await tx.select({ p: onboardingPackets, home: facilities.name }).from(onboardingPackets).innerJoin(facilities, eq(facilities.id, onboardingPackets.facilityId)).where(eq(onboardingPackets.audience, audience)).orderBy(desc(onboardingPackets.createdAt))).filter((x) => canSeeFacility(actor, x.p.facilityId));
   if (!packets.length) return [];
   const items = await tx.select({ packetId: onboardingItems.packetId, status: onboardingItems.status, required: onboardingItems.required }).from(onboardingItems).where(inArray(onboardingItems.packetId, packets.map((x) => x.p.id)));
   return packets.map(({ p, home }) => {
@@ -184,6 +191,10 @@ export interface ItemView {
   description: string;
   kind: "form" | "upload";
   required: boolean;
+  /** Done on the job: hiring doesn't wait for it. */
+  afterHire: boolean;
+  /** Only the home's questions and signatures: never shown to the family or employee. */
+  homeOnly: boolean;
   status: ItemStatus;
   staffNote: string | null;
   blocks: Block[];
@@ -214,6 +225,8 @@ async function itemsOf(tx: Tx, packetId: string): Promise<ItemView[]> {
       description: i.description,
       kind,
       required: i.required,
+      afterHire: i.afterHire,
+      homeOnly: kind === "form" && !blocks.some((b) => (b.type === "field" || b.type === "signature") && b.who === "poa"),
       status: (i.status in ITEM_STATUS ? i.status : "todo") as ItemStatus,
       staffNote: i.staffNote,
       blocks,
@@ -240,18 +253,20 @@ type Party = { who: Who; userId: string | null; orgId: string };
 type SignInput = { name: unknown; method: unknown; image?: unknown; consent: unknown };
 type Meta = { ip?: string; userAgent?: string };
 
-async function editableItem(tx: Tx, packet: Packet, itemId: string): Promise<ItemRow | { error: string }> {
-  if (packet.status !== "open" && packet.status !== "draft") return { error: "This onboarding is closed." };
+async function editableItem(tx: Tx, packet: Packet, itemId: string, who: Who): Promise<ItemRow | { error: string }> {
+  if (packet.status !== "open" && packet.status !== "draft" && packet.status !== "hired") return { error: "This onboarding is closed." };
   if (!/^[0-9a-f-]{36}$/i.test(itemId)) return { error: "That form isn't part of this onboarding." };
   const [item] = await tx.select().from(onboardingItems).where(and(eq(onboardingItems.id, itemId), eq(onboardingItems.packetId, packet.id)));
   if (!item) return { error: "That form isn't part of this onboarding." };
+  // Once hired only the after-hire forms are open, and the employee sees those only then.
+  if (packet.status === "hired" ? !item.afterHire : who === "poa" && item.afterHire) return { error: "This form isn't open." };
   if (item.status === "approved") return { error: "This form was approved and can't be changed. Ask the home if something needs correcting." };
   return item;
 }
 
 /** Saves one side's answers. Changing an answer voids the signatures on the parts of the form that show it. */
 async function saveValues(tx: Tx, packet: Packet, itemId: string, raw: Record<string, unknown>, party: Party, now: Date): Promise<Result> {
-  const item = await editableItem(tx, packet, itemId);
+  const item = await editableItem(tx, packet, itemId, party.who);
   if ("error" in item) return { ok: false, error: item.error };
   const blocks = blocksOf(item);
   const values = mergeAnswers(blocks, item.values ?? {}, raw, party.who);
@@ -278,7 +293,7 @@ const signSchema = z.object({
 
 /** Records a signature on one signature line, as evidence of exactly what was signed. */
 async function sign(tx: Tx, packet: Packet, itemId: string, blockId: string, raw: SignInput, party: Party, meta: Meta, now: Date): Promise<Result> {
-  const item = await editableItem(tx, packet, itemId);
+  const item = await editableItem(tx, packet, itemId, party.who);
   if ("error" in item) return { ok: false, error: item.error };
   const p = signSchema.safeParse(raw);
   if (!p.success) return { ok: false, error: p.error.issues[0].message };
@@ -331,11 +346,11 @@ export async function staffSign(tx: Tx, actor: Actor, packetId: string, itemId: 
 }
 
 /** Staff check an item: approve it (everything filled and signed) or send it back with a note. */
-export async function reviewItem(tx: Tx, actor: Actor, packetId: string, itemId: string, decision: "approve" | "changes", note: unknown, now = new Date()): Promise<Result> {
+export async function reviewItem(tx: Tx, actor: Actor, packetId: string, itemId: string, decision: "approve" | "changes", note: unknown, now = new Date(), render?: Renderer): Promise<Result> {
   const p = await packetFor(tx, actor, packetId);
   if (!p) return { ok: false, error: "That onboarding isn't available." };
   const item = (await itemsOf(tx, p.id)).find((i) => i.id === itemId);
-  if (!item || p.status !== "open") return { ok: false, error: "That form isn't open for review." };
+  if (!item || !(p.status === "open" || (p.status === "hired" && item.afterHire))) return { ok: false, error: "That form isn't open for review." };
   if (decision === "changes") {
     const n = z.string().trim().min(3, "Say what needs changing; the family sees this note.").max(1000).safeParse(note);
     if (!n.success) return { ok: false, error: n.error.issues[0].message };
@@ -347,6 +362,11 @@ export async function reviewItem(tx: Tx, actor: Actor, packetId: string, itemId:
   if (item.staffMissing.length) return { ok: false, error: `Complete the home's part first: ${item.staffMissing.slice(0, 3).join(", ")}.` };
   await tx.update(onboardingItems).set({ status: "approved", staffNote: null, reviewedAt: now, reviewedBy: actor.id }).where(eq(onboardingItems.id, item.id));
   await audit(tx, { orgId: p.orgId, actorId: actor.id, action: "onboarding_item_approved", entity: "organization", entityId: p.orgId, details: { packetId: p.id, itemId: item.id } });
+  // After hire, each form goes on the staff member's file as soon as it's approved.
+  if (p.status === "hired" && p.staffUserId && render) {
+    await fileForStaff(tx, actor, p, p.staffUserId, { ...item, status: "approved" }, await letterhead(tx, p), render, now);
+    return { ok: true, message: `${item.title} approved and added to their documents.` };
+  }
   return { ok: true, message: `${item.title} approved.` };
 }
 
@@ -367,7 +387,7 @@ export async function staffFile(tx: Tx, actor: Actor, fileId: string) {
 export async function packetByToken(db: DB, token: string, now = new Date()): Promise<Packet | null> {
   if (!/^[A-Za-z0-9_-]{20,100}$/.test(token)) return null;
   const [p] = await db.select().from(onboardingPackets).where(and(eq(onboardingPackets.tokenHash, sha256(token)), gt(onboardingPackets.expiresAt, now)));
-  return p && (p.status === "open" || p.status === "admitted") ? p : null;
+  return p && (p.status === "open" || p.status === "admitted" || p.status === "hired") ? p : null;
 }
 
 const mask = (email: string) => email.replace(/^(.)(.*)(@.*)$/, (_, a: string, b: string, c: string) => `${a}${"•".repeat(Math.min(b.length, 6))}${c}`);
@@ -432,15 +452,24 @@ export async function letterhead(tx: Tx, p: Pick<Packet, "orgId" | "facilityId">
 /** What the family sees: their checklist, or after admission their signed copies. */
 export async function familyView(tx: Tx, packet: Packet) {
   const head = await letterhead(tx, packet);
-  const documents = packet.residentId
+  const documents = packet.staffUserId
     ? await tx
-        .select({ id: residentDocuments.id, title: residentDocuments.title, contentType: residentDocuments.contentType, sizeBytes: residentDocuments.sizeBytes })
-        .from(residentDocuments)
-        .where(and(eq(residentDocuments.residentId, packet.residentId), eq(residentDocuments.source, "onboarding"), isNull(residentDocuments.removedAt)))
-        .orderBy(asc(residentDocuments.uploadedAt))
-    : [];
-  return { org: head.org, home: head.home, head: letterheadView(head), packet, items: await itemsOf(tx, packet.id), documents };
+        .select({ id: staffDocuments.id, title: staffDocuments.title, contentType: staffDocuments.contentType, sizeBytes: staffDocuments.sizeBytes })
+        .from(staffDocuments)
+        .where(and(eq(staffDocuments.userId, packet.staffUserId), eq(staffDocuments.source, "onboarding"), isNull(staffDocuments.removedAt)))
+        .orderBy(asc(staffDocuments.uploadedAt))
+    : packet.residentId
+      ? await tx
+          .select({ id: residentDocuments.id, title: residentDocuments.title, contentType: residentDocuments.contentType, sizeBytes: residentDocuments.sizeBytes })
+          .from(residentDocuments)
+          .where(and(eq(residentDocuments.residentId, packet.residentId), eq(residentDocuments.source, "onboarding"), isNull(residentDocuments.removedAt)))
+          .orderBy(asc(residentDocuments.uploadedAt))
+      : [];
+  return { org: head.org, home: head.home, head: letterheadView(head), packet, items: (await itemsOf(tx, packet.id)).filter((i) => forPerson(packet, i)), documents };
 }
+
+/** Whether the family or employee sees this item now. The home's own records never show. */
+const forPerson = (p: Packet, i: ItemView) => !i.homeOnly && (p.status === "hired" ? i.afterHire : !i.afterHire);
 
 const family = (p: Packet): Party => ({ who: "poa", userId: null, orgId: p.orgId });
 
@@ -449,7 +478,7 @@ export const familySign = (tx: Tx, p: Packet, itemId: string, blockId: string, r
 
 /** The family uploads one photo or PDF for a document request. */
 export async function familyUpload(tx: Tx, p: Packet, itemId: string, upload: { name: string; data: Buffer }, now = new Date()): Promise<Result> {
-  const item = await editableItem(tx, p, itemId);
+  const item = await editableItem(tx, p, itemId, "poa");
   if ("error" in item) return { ok: false, error: item.error };
   if (item.kind !== "upload") return { ok: false, error: "That item is a form, not a document upload." };
   if (upload.data.length > MAX_ATTACHMENT_BYTES) return { ok: false, error: `${upload.name} is too large. Use files under 9 MB.` };
@@ -466,7 +495,7 @@ export async function familyRemoveFile(tx: Tx, p: Packet, fileId: string, now = 
   if (!/^[0-9a-f-]{36}$/i.test(fileId)) return { ok: false, error: "That file isn't here." };
   const [f] = await tx.select().from(onboardingFiles).where(and(eq(onboardingFiles.id, fileId), eq(onboardingFiles.packetId, p.id), isNull(onboardingFiles.removedAt)));
   if (!f) return { ok: false, error: "That file isn't here." };
-  const item = await editableItem(tx, p, f.itemId);
+  const item = await editableItem(tx, p, f.itemId, "poa");
   if ("error" in item) return { ok: false, error: item.error };
   await tx.update(onboardingFiles).set({ removedAt: now }).where(eq(onboardingFiles.id, f.id));
   await tx.update(onboardingItems).set({ status: "todo", updatedAt: now }).where(eq(onboardingItems.id, item.id));
@@ -482,7 +511,12 @@ export async function familyFile(tx: Tx, p: Packet, fileId: string) {
 
 /** A signed copy, for the family after admission. */
 export async function familyDocument(tx: Tx, p: Packet, docId: string) {
-  if (!p.residentId || !/^[0-9a-f-]{36}$/i.test(docId)) return null;
+  if (!/^[0-9a-f-]{36}$/i.test(docId)) return null;
+  if (p.staffUserId) {
+    const [d] = await tx.select().from(staffDocuments).where(and(eq(staffDocuments.id, docId), eq(staffDocuments.userId, p.staffUserId), eq(staffDocuments.source, "onboarding"), isNull(staffDocuments.removedAt)));
+    return d ?? null;
+  }
+  if (!p.residentId) return null;
   const [d] = await tx.select().from(residentDocuments).where(and(eq(residentDocuments.id, docId), eq(residentDocuments.residentId, p.residentId), eq(residentDocuments.source, "onboarding"), isNull(residentDocuments.removedAt)));
   return d ?? null;
 }
@@ -490,17 +524,17 @@ export async function familyDocument(tx: Tx, p: Packet, docId: string) {
 /** The family sends a finished item for review; when the whole checklist is in, owners and admins hear about it. */
 export async function familySubmit(tx: Tx, p: Packet, itemId: string, now = new Date()): Promise<Result> {
   const item = (await itemsOf(tx, p.id)).find((i) => i.id === itemId);
-  if (!item || p.status !== "open") return { ok: false, error: "That form isn't open." };
+  if (!item || (p.status !== "open" && p.status !== "hired") || !forPerson(p, item)) return { ok: false, error: "That form isn't open." };
   if (item.status === "approved") return { ok: true, message: "Already approved." };
   if (item.poaMissing.length) return { ok: false, error: `Still to do: ${item.poaMissing.slice(0, 4).join(", ")}${item.poaMissing.length > 4 ? "…" : ""}.` };
   await tx.update(onboardingItems).set({ status: "submitted", submittedAt: now, updatedAt: now }).where(eq(onboardingItems.id, item.id));
   await audit(tx, { orgId: p.orgId, actorId: null, action: "onboarding_item_submitted", entity: "organization", entityId: p.orgId, details: { packetId: p.id, itemId: item.id } });
-  const rest = (await itemsOf(tx, p.id)).filter((i) => i.required && i.status !== "submitted" && i.status !== "approved");
+  const rest = (await itemsOf(tx, p.id)).filter((i) => forPerson(p, i) && i.required && i.status !== "submitted" && i.status !== "approved");
   if (!rest.length) {
     const [home] = await tx.select({ name: facilities.name }).from(facilities).where(eq(facilities.id, p.facilityId));
     const to = await tx.select({ email: users.email }).from(users).where(and(inArray(users.role, ["owner", "admin"]), eq(users.status, "active")));
     for (const { email } of to) {
-      await sendMail(tx, { orgId: p.orgId, to: email, subject: `Onboarding ready for review at ${home.name}`, body: `A family has finished the move-in paperwork for a new resident at ${home.name}. Sign in to CareHouse One and open Onboarding to check it, countersign and admit.` });
+      await sendMail(tx, { orgId: p.orgId, to: email, subject: `Onboarding ready for review at ${home.name}`, body: p.audience === "staff" ? `A new hire has finished their paperwork at ${home.name}. Sign in to CareHouse One and open Onboarding to check it and countersign.` : `A family has finished the move-in paperwork for a new resident at ${home.name}. Sign in to CareHouse One and open Onboarding to check it, countersign and admit.` });
     }
   }
   return { ok: true, message: rest.length ? `${item.title} sent to the home. ${rest.length} more to go.` : "Everything is sent. The home will check it and let you know." };
@@ -566,7 +600,7 @@ export async function admitOnboarding(
   now = new Date(),
 ): Promise<Result<{ residentId: string }>> {
   const p = await packetFor(tx, actor, packetId);
-  if (!p || p.status !== "open") return { ok: false, error: "That onboarding isn't open." };
+  if (!p || p.status !== "open" || p.audience !== "resident") return { ok: false, error: "That onboarding isn't open." };
   const items = await itemsOf(tx, p.id);
   const waiting = items.filter((i) => i.required && i.status !== "approved");
   if (waiting.length) return { ok: false, error: `Approve every required item first. Still waiting: ${waiting.map((i) => i.title).slice(0, 3).join(", ")}${waiting.length > 3 ? "…" : ""}.` };
@@ -608,4 +642,81 @@ export async function admitOnboarding(
   });
   await audit(tx, { orgId: p.orgId, actorId: actor.id, action: "onboarding_admitted", entity: "resident", entityId: residentId, details: { packetId: p.id, documents: items.filter((i) => i.status === "approved").length } });
   return { ok: true, message: `${p.residentFirstName} ${p.residentLastName} admitted. The signed forms are on the resident's Documents tab, and the family has been emailed a link to their copies.`, data: { residentId } };
+}
+
+// ---------------------------------------------------------------- hiring
+
+/** Puts one approved item on a staff member's file: its signed PDF, or the files uploaded for it. */
+async function fileForStaff(tx: Tx, actor: Actor, p: Packet, userId: string, item: ItemView, head: Letterhead, render: Renderer, now: Date) {
+  const base = { orgId: p.orgId, userId, category: staffDocCategoryFor(item.title), source: item.homeOnly ? "onboarding_internal" : "onboarding", uploadedBy: actor.id, uploadedAt: now };
+  if (item.kind === "form") {
+    const pdf = await render(p, item, head, await signatureEvidence(tx, item.id));
+    await tx.insert(staffDocuments).values({ ...base, title: `${item.title} (signed)`, filename: `${item.title.replace(/[^\w .()-]+/g, "").slice(0, 80) || "form"}.pdf`, contentType: "application/pdf", sizeBytes: pdf.length, data: pdf });
+    return;
+  }
+  const files = await tx.select().from(onboardingFiles).where(and(eq(onboardingFiles.itemId, item.id), isNull(onboardingFiles.removedAt)));
+  for (const [n, f] of files.entries()) {
+    await tx.insert(staffDocuments).values({ ...base, title: files.length > 1 ? `${item.title} (${n + 1} of ${files.length})` : item.title, filename: f.filename, contentType: f.contentType, sizeBytes: f.sizeBytes, data: f.data });
+  }
+}
+
+/** Dates the new hire gave that belong in Training and certifications. */
+function certificationsFrom(items: ItemView[]) {
+  const answer = (re: RegExp) => {
+    for (const i of items) for (const b of i.blocks) if (b.type === "field" && b.input === "date" && re.test(b.label) && i.values[b.id]) return i.values[b.id];
+    return null;
+  };
+  return [
+    { kind: "first_aid", issuedOn: answer(/^date of first aid/i), expiresOn: answer(/^first aid .*expiration/i) },
+    { kind: "cpr", issuedOn: answer(/^date of cpr/i), expiresOn: answer(/^cpr .*expiration/i) },
+    { kind: "tb_test", issuedOn: answer(/^tb .*date/i), expiresOn: null },
+  ].filter((c) => c.issuedOn || c.expiresOn);
+}
+
+const hireSchema = z.object({
+  role: z.string().min(1, "Choose their role."),
+  facilityIds: z.array(z.string()).min(1, "Choose at least one home."),
+});
+
+/**
+ * Hires a new employee: every required form before hire must be approved. Creates the staff account
+ * and sends the usual invitation, files the approved forms and uploads on their record, and emails
+ * them a link to their signed copies and any forms still to do on the job.
+ */
+export async function hireOnboarding(tx: Tx, actor: Actor, packetId: string, raw: unknown, render: Renderer, appUrl: string, now = new Date()): Promise<Result<{ userId: string }>> {
+  const p = await packetFor(tx, actor, packetId);
+  if (!p || p.status !== "open" || p.audience !== "staff") return { ok: false, error: "That onboarding isn't open." };
+  const parsed = hireSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+  const items = await itemsOf(tx, p.id);
+  const waiting = items.filter((i) => i.required && !i.afterHire && i.status !== "approved");
+  if (waiting.length) return { ok: false, error: `Approve every required form first. Still waiting: ${waiting.map((i) => i.title).slice(0, 3).join(", ")}${waiting.length > 3 ? "…" : ""}.` };
+  const invited = await inviteStaff(tx, actor, p.orgId, { name: p.poaName, email: p.poaEmail, role: parsed.data.role, facilityIds: parsed.data.facilityIds }, appUrl);
+  if (!invited.ok) return invited;
+  const userId = invited.id!;
+  const head = await letterhead(tx, p);
+  const approved = items.filter((i) => i.status === "approved");
+  for (const item of approved) await fileForStaff(tx, actor, p, userId, item, head, render, now);
+  const certs = certificationsFrom(items);
+  if (certs.length) await tx.insert(staffCertifications).values(certs.map((c) => ({ ...c, orgId: p.orgId, userId, notes: "From their onboarding forms", recordedBy: actor.id })));
+  const token = randomToken();
+  await tx.update(onboardingPackets).set({ status: "hired", staffUserId: userId, admittedAt: now, admittedBy: actor.id, tokenHash: sha256(token), expiresAt: new Date(now.getTime() + DOWNLOAD_DAYS * 86_400_000) }).where(eq(onboardingPackets.id, p.id));
+  await tx.update(onboardingAccess).set({ usedAt: now }).where(and(eq(onboardingAccess.packetId, p.id), isNull(onboardingAccess.usedAt)));
+  const onTheJob = items.some((i) => i.afterHire && !i.homeOnly);
+  await sendMail(tx, {
+    orgId: p.orgId,
+    to: p.poaEmail,
+    subject: `${head.org}: your signed paperwork`,
+    body: [
+      `Hi ${p.poaName},`,
+      "",
+      `Welcome to ${head.org}. You can download your signed paperwork here${onTheJob ? ", and complete the forms you'll do on the job" : ""}:`,
+      "",
+      `${appUrl}/family/${token}`,
+      "",
+      `We'll email you a code to confirm it's you. The link works for ${DOWNLOAD_DAYS} days; after that, ask the home for a new link or for copies. Your CareHouse One invitation comes in a separate email.`,
+    ].join("\n"),
+  });
+  await audit(tx, { orgId: p.orgId, actorId: actor.id, action: "onboarding_hired", entity: "user", entityId: userId, details: { packetId: p.id, documents: approved.length, certifications: certs.length } });
+  return { ok: true, message: `${p.poaName} hired. Their invitation is on its way and the signed forms are on their documents.`, data: { userId } };
 }

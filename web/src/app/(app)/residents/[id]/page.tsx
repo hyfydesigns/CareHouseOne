@@ -226,7 +226,7 @@ export default async function ResidentPage({ params, searchParams }: { params: P
 
       {tab === "documents" && (
         <>
-          <DocumentUpload residentId={r.id} categories={Object.entries(DOC_CATEGORIES)} />
+          <DocumentUpload url={`/api/residents/${r.id}/documents`} categories={Object.entries(DOC_CATEGORIES)} />
           {(Object.keys(DOC_CATEGORIES) as DocCategory[]).filter((c) => data.documents.some((d) => d.category === c)).map((c) => (
             <section key={c} className="card" aria-label={DOC_CATEGORIES[c]}>
               <h2>{DOC_CATEGORIES[c]}</h2>
