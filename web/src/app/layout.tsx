@@ -1,10 +1,27 @@
 import type { Metadata, Viewport } from "next";
-import { Atkinson_Hyperlegible, Lexend } from "next/font/google";
+import localFont from "next/font/local";
 import { connection } from "next/server";
 import "./globals.css";
 
-const display = Lexend({ subsets: ["latin"], weight: ["400", "600", "700"], variable: "--font-display" });
-const body = Atkinson_Hyperlegible({ subsets: ["latin"], weight: ["400", "700"], variable: "--font-body" });
+// The fonts ship with the app (SIL Open Font License, see ./fonts) so the build never has to
+// reach Google Fonts; a failed download there used to fail the deploy.
+const display = localFont({
+  src: [
+    { path: "./fonts/lexend-latin-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/lexend-latin-600-normal.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/lexend-latin-700-normal.woff2", weight: "700", style: "normal" },
+  ],
+  variable: "--font-display",
+  display: "swap",
+});
+const body = localFont({
+  src: [
+    { path: "./fonts/atkinson-hyperlegible-latin-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/atkinson-hyperlegible-latin-700-normal.woff2", weight: "700", style: "normal" },
+  ],
+  variable: "--font-body",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "CareHouse One",
