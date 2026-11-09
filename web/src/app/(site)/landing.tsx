@@ -37,7 +37,7 @@ const FEATURES: Array<{ title: string; body: string; d: string; color: string }>
   },
   {
     title: "Progress notes that hold up",
-    body: "Notes by shift and type. Once saved they can't be edited, only added to, and every note shows who wrote it and when.",
+    body: "Notes by shift and type, with photos or scanned papers attached from the tablet camera. Once saved they can't be edited, only added to, and every note shows who wrote it and when.",
     d: "M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6ZM14 3v6h6M8 13h8M8 17h5",
     color: "#2f7fd8",
   },
@@ -79,13 +79,31 @@ const FEATURES: Array<{ title: string; body: string; d: string; color: string }>
   },
   {
     title: "Ready for inspection day",
-    body: "Print or save any resident's month as a PDF: the medication record, vital signs, progress notes and incidents, with allergies and diagnoses up top.",
+    body: "Print or save any resident's month as a PDF, or the whole home at once: the medication record, vital signs, progress notes and incidents, with allergies and diagnoses up top.",
     d: "M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v7H6z",
     color: "#2f7fd8",
   },
   {
+    title: "Reports that answer the owner's questions",
+    body: "Medication, incidents, staffing and a resident summary for any home and date range. Print them, save them as a PDF or download a spreadsheet.",
+    d: "M4 20V10M10 20V4M16 20v-7M22 20H2",
+    color: "#5b4bdb",
+  },
+  {
+    title: "Every resident's file in one place",
+    body: "Admission papers, consents, ID and insurance cards, care plans: photograph or upload them to the resident's Documents. Nothing is ever deleted, only removed with a reason.",
+    d: "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z",
+    color: "#e07a2e",
+  },
+  {
+    title: "Daily care, activity by activity",
+    body: "Bathing, dressing, meals and the rest as clear blocks, with color-coded levels from independent to refused. Owners choose the activities each home records.",
+    d: "M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9",
+    color: "#2e9e5b",
+  },
+  {
     title: "Appointments, drills and training",
-    body: "Doctor visits with outcomes and follow-ups, fire drills by shift, and staff certifications with reminders before they expire.",
+    body: "Doctor visits with outcomes and follow-ups, shown on the tablet a few hours ahead with what to bring, plus a daily reminder email. Fire drills by shift, and staff certifications with reminders before they expire.",
     d: "M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2ZM3 10h18M8 3v4M16 3v4",
     color: "#1c9c7a",
   },
@@ -108,7 +126,7 @@ export function Landing() {
             <h1>Care records your caregivers can get right on the first try.</h1>
             <p className="lead">
               CareHouse One puts the medication pass, vital signs, progress notes and shift start and end on one shared tablet in each home, with large buttons, plain
-              words and hard stops where mistakes happen. Owners and admins see everything from any browser.
+              words and hard stops where mistakes happen. Owners and admins see everything from any browser, and onboard new residents and staff with forms signed online or on paper.
             </p>
             <div className="site-cta">
               {open ? (
@@ -151,7 +169,39 @@ export function Landing() {
         </div>
       </section>
 
-      <section className="site-section alt" aria-labelledby="how-h">
+      <section className="site-section alt" id="onboarding" aria-labelledby="onboarding-h">
+        <div className="site-wrap site-onboard">
+          <div>
+            <span className="site-kicker">New</span>
+            <h2 className="title" id="onboarding-h">Onboarding without the paper chase</h2>
+            <p className="sub">
+              Admission paperwork for new residents and hiring paperwork for new staff, built into the same app. Start from ready-made forms, change them in the
+              form builder, and add your home&apos;s logo and address.
+            </p>
+            <ul className="site-checks">
+              <li><b>A private link for the family or new hire.</b> They open it on their phone or computer, confirm a code sent by email, then fill in, upload and sign each form.</li>
+              <li><b>Signatures that hold up.</b> Drawn or typed, after agreeing to sign electronically. Each one records who signed, when and exactly what they signed.</li>
+              <li><b>The home fills in its part.</b> Fees, room and move-in date before the link goes out, then review, ask for changes and countersign.</li>
+              <li><b>Paper when it suits someone better.</b> Print any form, blank or with their name on it, then upload the signed scan. Mix paper and online in the same onboarding.</li>
+              <li><b>Filed for you.</b> Admit the resident or hire the employee and every signed form lands on their record. For new staff, the account, invitation and CPR, first aid and TB dates are set up too.</li>
+            </ul>
+          </div>
+          <div className="site-phone" role="img" aria-label="Illustration of a family's onboarding checklist on a phone, with forms signed, waiting and to do">
+            <div className="screen" aria-hidden="true">
+              <div className="bar"><span>Welcome to Cedar Ridge</span></div>
+              <p className="hello">Moving in: Ruth A. · 3 of 5 done</p>
+              <div className="meter"><span style={{ width: "60%" }} /></div>
+              <div className="item"><span>Resident information</span><span className="tag ok">Signed</span></div>
+              <div className="item"><span>Residential care home agreement</span><span className="tag ok">Signed</span></div>
+              <div className="item"><span>Insurance cards</span><span className="tag ok">Uploaded</span></div>
+              <div className="item"><span>Consent to administer medications</span><span className="tag todo">To sign</span></div>
+              <div className="item"><span>Photo and media consent</span><span className="tag todo">To sign</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="site-section" aria-labelledby="how-h">
         <div className="site-wrap">
           <h2 className="title" id="how-h">Up and running in an afternoon</h2>
           <ol className="site-steps">
@@ -171,7 +221,7 @@ export function Landing() {
         </div>
       </section>
 
-      <section className="site-section" id="pricing" aria-labelledby="pricing-h">
+      <section className="site-section alt" id="pricing" aria-labelledby="pricing-h">
         <div className="site-wrap">
           <h2 className="title" id="pricing-h">One plan. Priced per home.</h2>
           <p className="sub">A flat price for each home, not for logins, so every caregiver can have their own account. No contract and no setup fee.</p>
@@ -213,7 +263,7 @@ export function Landing() {
         </div>
       </section>
 
-      <section className="site-section alt" id="faq" aria-labelledby="faq-h">
+      <section className="site-section" id="faq" aria-labelledby="faq-h">
         <div className="site-wrap">
           <h2 className="title" id="faq-h">Questions</h2>
           <div className="site-faq">
@@ -229,6 +279,13 @@ export function Landing() {
             <details>
               <summary>What devices do we need?</summary>
               <p>Any recent tablet, phone or computer with a web browser. Most homes use one shared tablet; it installs from the browser like an app.</p>
+            </details>
+            <details>
+              <summary>What if a family member isn&apos;t comfortable filling in forms online?</summary>
+              <p>
+                Print the forms for them instead, with their name already on them, and upload a photo or scan of the signed pages. The form counts as done and the
+                scan is filed on the resident&apos;s record, just like one signed online. The same works for new staff.
+              </p>
             </details>
             <details>
               <summary>What happens when the internet goes down?</summary>
@@ -252,7 +309,7 @@ export function Landing() {
         </div>
       </section>
 
-      <section className="site-section" id="demo" aria-labelledby="demo-h">
+      <section className="site-section alt" id="demo" aria-labelledby="demo-h">
         <div className="site-wrap site-demo">
           <div>
             <h2 className="title" id="demo-h">See it with your own homes in mind</h2>

@@ -17,6 +17,7 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
           </Link>
           <nav aria-label="Site">
             <Link href="/#features">Features</Link>
+            <Link href="/#onboarding">Onboarding</Link>
             <Link href="/#pricing">Pricing</Link>
             <Link href="/#faq">Questions</Link>
             <a href={`${appBaseUrl()}/sign-in`}>Sign in</a>
