@@ -8,9 +8,9 @@
  * Only organization names, the billing contact and the monthly amount are ever sent.
  */
 
-import { INCLUDED_RESIDENTS, PRICE_PER_EXTRA_RESIDENT, PRICE_PER_HOME } from "@/lib/pricing";
+import { INTRO_MONTHS, INTRO_PRICE_PER_HOME, PRICE_PER_HOME, TRIAL_DAYS } from "@/lib/pricing";
 
-export const TRIAL_DAYS = 30;
+export { TRIAL_DAYS };
 
 export const paypalLive = () => process.env.PAYPAL_ENV === "live";
 const base = () => (paypalLive() ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com");
@@ -72,7 +72,7 @@ export function getSubscription(id: string): Promise<PaypalSubscription> {
 }
 
 /**
- * Changes the monthly amount (the quantity of $1 units). PayPal may need the payer to approve a higher amount;
+ * Changes the number of homes billed (the quantity). PayPal may need the payer to approve a higher amount;
  * then it returns an "approve" link for the billing screen.
  */
 export async function reviseQuantity(id: string, quantity: number): Promise<{ approvalUrl: string | null }> {
@@ -99,9 +99,9 @@ export async function verifyWebhook(headers: Headers, event: unknown): Promise<b
 }
 
 /**
- * One-time setup (scripts/paypal-setup.ts): the product and the monthly plan with a free trial.
- * The plan's unit is $1 and the quantity is the monthly total, because PayPal can only multiply
- * one price by a quantity and the bill is per home plus extra residents.
+ * One-time setup (scripts/paypal-setup.ts): the product and the monthly plan. The quantity is the
+ * number of homes, and PayPal runs the schedule: the free trial, the introductory months, then the
+ * regular price.
  */
 export async function createProductAndPlan(): Promise<{ productId: string; planId: string }> {
   const product = await call<{ id: string }>("POST", "/v1/catalogs/products", {
@@ -113,17 +113,24 @@ export async function createProductAndPlan(): Promise<{ productId: string; planI
   const plan = await call<{ id: string }>("POST", "/v1/billing/plans", {
     product_id: product.id,
     name: "CareHouse One",
-    description: `$${PRICE_PER_HOME} per home per month (up to ${INCLUDED_RESIDENTS} residents), $${PRICE_PER_EXTRA_RESIDENT} per extra resident; ${TRIAL_DAYS}-day free trial`,
+    description: `${TRIAL_DAYS}-day free trial, then $${INTRO_PRICE_PER_HOME} per home per month for ${INTRO_MONTHS} months, then $${PRICE_PER_HOME} per home per month`,
     status: "ACTIVE",
     quantity_supported: true,
     billing_cycles: [
       { frequency: { interval_unit: "DAY", interval_count: TRIAL_DAYS }, tenure_type: "TRIAL", sequence: 1, total_cycles: 1 },
       {
         frequency: { interval_unit: "MONTH", interval_count: 1 },
-        tenure_type: "REGULAR",
+        tenure_type: "TRIAL",
         sequence: 2,
+        total_cycles: INTRO_MONTHS,
+        pricing_scheme: { fixed_price: { value: String(INTRO_PRICE_PER_HOME), currency_code: "USD" } },
+      },
+      {
+        frequency: { interval_unit: "MONTH", interval_count: 1 },
+        tenure_type: "REGULAR",
+        sequence: 3,
         total_cycles: 0,
-        pricing_scheme: { fixed_price: { value: "1", currency_code: "USD" } },
+        pricing_scheme: { fixed_price: { value: String(PRICE_PER_HOME), currency_code: "USD" } },
       },
     ],
     payment_preferences: { auto_bill_outstanding: true, payment_failure_threshold: 3 },

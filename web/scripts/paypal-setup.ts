@@ -6,15 +6,15 @@
  *
  * Use the sandbox first; run it again with PAYPAL_ENV=live and the live app's credentials at launch.
  */
-import { INCLUDED_RESIDENTS, PRICE_PER_EXTRA_RESIDENT, PRICE_PER_HOME } from "../src/lib/pricing";
-import { createProductAndPlan, TRIAL_DAYS } from "../src/server/paypal";
+import { PRICE_SUMMARY, TRIAL_DAYS } from "../src/lib/pricing";
+import { createProductAndPlan } from "../src/server/paypal";
 
 async function main() {
   if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) throw new Error("Set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET.");
   const env = process.env.PAYPAL_ENV === "live" ? "live" : "sandbox";
   const { productId, planId } = await createProductAndPlan();
   console.log(`PayPal ${env}: product ${productId}`);
-  console.log(`Plan ($${PRICE_PER_HOME} per home with up to ${INCLUDED_RESIDENTS} residents, $${PRICE_PER_EXTRA_RESIDENT} per extra resident, ${TRIAL_DAYS}-day free trial): ${planId}`);
+  console.log(`Plan (${TRIAL_DAYS}-day free trial, then ${PRICE_SUMMARY}): ${planId}`);
   console.log(`Set PAYPAL_PLAN_ID=${planId}`);
 }
 

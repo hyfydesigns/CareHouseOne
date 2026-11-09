@@ -263,7 +263,7 @@ describe("homes", () => {
     const oak = r.data!.id;
     const links = await db.select().from(userFacilities).where(eq(userFacilities.facilityId, oak));
     expect(links.map((l) => l.userId)).toContain(s.users.owner.id);
-    expect((await orgBill(db, s.orgId)).total).toBe(before.total + 149);
+    expect((await orgBill(db, s.orgId)).homes).toBe(before.homes + 1);
 
     const edit = await inOrg((tx) => updateHome(tx, owner, oak, { name: "Oak House North", timeZone: "America/New_York", beds: 8 }));
     expect(edit.ok).toBe(true);

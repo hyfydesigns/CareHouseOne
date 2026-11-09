@@ -2,7 +2,7 @@
 
 import Script from "next/script";
 import { useEffect, useRef, useState } from "react";
-import { INCLUDED_RESIDENTS, PRICE_PER_EXTRA_RESIDENT, PRICE_PER_HOME, usd } from "@/lib/pricing";
+import { INTRO_MONTHS, INTRO_PRICE_PER_HOME, PRICE_PER_HOME, usd } from "@/lib/pricing";
 
 type PaypalButtons = {
   Buttons: (o: {
@@ -30,10 +30,10 @@ export function Subscribe(props: {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const box = useRef<HTMLDivElement>(null);
-  // PayPal bills $1 units, so the quantity is the monthly amount in dollars.
-  const amount = useRef(homes * PRICE_PER_HOME);
+  // The subscription's quantity is the number of homes; PayPal's plan has the prices.
+  const quantity = useRef(homes);
   useEffect(() => {
-    amount.current = homes * PRICE_PER_HOME;
+    quantity.current = homes;
   }, [homes]);
 
   useEffect(() => {
@@ -42,7 +42,7 @@ export function Subscribe(props: {
     box.current.innerHTML = "";
     const buttons = pp.Buttons({
       style: { shape: "rect", label: "subscribe", layout: "vertical" },
-      createSubscription: (_d, actions) => actions.subscription.create({ plan_id: planId, quantity: String(amount.current) }),
+      createSubscription: (_d, actions) => actions.subscription.create({ plan_id: planId, quantity: String(quantity.current) }),
       onApprove: async (data) => {
         setBusy(true);
         const r = await onSubscribed(data.subscriptionID ?? "");
@@ -60,7 +60,7 @@ export function Subscribe(props: {
     };
   }, [ready, planId, onSubscribed]);
 
-  const monthly = homes * PRICE_PER_HOME;
+
   return (
     <div className="card" style={{ gap: 16 }}>
       <Script
@@ -80,12 +80,11 @@ export function Subscribe(props: {
           onChange={(e) => setHomes(Math.min(100, Math.max(1, Number(e.target.value.replace(/[^0-9]/g, "")) || 1)))}
         />
         <span id="homesHint" className="small muted">
-          {usd(PRICE_PER_HOME)} per home includes up to {INCLUDED_RESIDENTS} residents; each resident over {INCLUDED_RESIDENTS} in a home is {usd(PRICE_PER_EXTRA_RESIDENT)}. The
-          amount updates to your homes and active residents on the 1st of each month.
+          Priced per home, with any number of residents. If you add a home later, the amount updates on the 1st of the next month.
         </span>
       </div>
       <p style={{ margin: 0 }}>
-        <b>{usd(monthly)} a month</b> after {props.trialDays} days free.
+        {props.trialDays} days free, then <b>{usd(homes * INTRO_PRICE_PER_HOME)} a month</b> for {INTRO_MONTHS} months, then <b>{usd(homes * PRICE_PER_HOME)} a month</b>.
       </p>
       {busy ? <p className="notice" role="status">Confirming with PayPal…</p> : <div ref={box} aria-label="PayPal subscription button" />}
       {error && <p className="error" role="alert">{error}</p>}

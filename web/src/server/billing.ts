@@ -1,10 +1,10 @@
 import { and, count, eq, gt, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
 import { z } from "zod";
 import type { DB, Tx } from "@/db/client";
-import { billingEvents, facilities, residents, subscriptions, users, type Subscription } from "@/db/schema";
+import { billingEvents, facilities, subscriptions, users, type Subscription } from "@/db/schema";
 import { randomToken, sha256 } from "@/lib/crypto";
 import { appBaseUrl } from "@/lib/hosts";
-import { describeBill, monthlyBill, PRICE_PER_HOME, usd, type MonthlyBill } from "@/lib/pricing";
+import { describeBill, INTRO_MONTHS, INTRO_PRICE_PER_HOME, monthlyBill, PRICE_PER_HOME, usd, type MonthlyBill, type PriceStage } from "@/lib/pricing";
 import { audit, sendMail } from "./audit";
 import { getSubscription, paypalConfigured, reviseQuantity, TRIAL_DAYS, type PaypalSubscription } from "./paypal";
 import { provisionOrganization, provisionSchema } from "./provision";
@@ -47,7 +47,7 @@ export async function registerSubscription(db: DB, subscriptionId: string, appUr
   if (p.plan_id !== process.env.PAYPAL_PLAN_ID) return { ok: false, error: "That isn't a CareHouse One subscription." };
   if (!["APPROVED", "ACTIVE"].includes(p.status)) return { ok: false, error: "PayPal hasn't approved this subscription." };
   const v = fromPaypal(p, now);
-  if (v.quantity < PRICE_PER_HOME) return { ok: false, error: "That subscription's amount doesn't match a CareHouse One plan. Email us and we'll sort it out." };
+  if (v.quantity > 100) return { ok: false, error: "That subscription's number of homes doesn't look right. Email us and we'll sort it out." };
   const token = randomToken();
   const setup = { setupTokenHash: sha256(token), setupExpiresAt: new Date(now.getTime() + SETUP_DAYS * DAY) };
   const [existing] = await db.select().from(subscriptions).where(eq(subscriptions.paypalSubscriptionId, p.id));
@@ -157,21 +157,15 @@ export async function handleWebhook(db: DB, event: PaypalEvent, now = new Date()
   return "applied";
 }
 
-/** What an organization owes this month: its homes, and each home's active residents over the included number. */
-export async function orgBill(db: DB | Tx, orgId: string): Promise<MonthlyBill> {
-  const homes = await db.select({ id: facilities.id }).from(facilities).where(eq(facilities.orgId, orgId));
-  const counts = await db
-    .select({ facilityId: residents.facilityId, n: count() })
-    .from(residents)
-    .where(and(eq(residents.orgId, orgId), eq(residents.status, "active")))
-    .groupBy(residents.facilityId);
-  const byHome = new Map(counts.map((c) => [c.facilityId, c.n]));
-  return monthlyBill(homes.map((h) => byHome.get(h.id) ?? 0));
+/** What an organization is billed for: its homes, at the price for that point in the schedule. */
+export async function orgBill(db: DB | Tx, orgId: string, stage: PriceStage = "regular"): Promise<MonthlyBill> {
+  const [{ n }] = await db.select({ n: count() }).from(facilities).where(eq(facilities.orgId, orgId));
+  return monthlyBill(n, stage);
 }
 
 /**
  * Housekeeping (from /api/cron): refresh subscriptions every 6 hours in case a webhook was missed,
- * on the first of the month send PayPal the month's amount (homes and extra residents), and
+ * on the first of the month send PayPal the number of homes, and
  * remind people whose free trial ends within 3 days.
  */
 export async function syncSubscriptions(db: DB, now = new Date()): Promise<{ refreshed: number; counted: number; reminded: number }> {
@@ -209,7 +203,7 @@ export async function syncSubscriptions(db: DB, now = new Date()): Promise<{ ref
       try {
         const bill = await orgBill(db, row.orgId!);
         let approvalUrl: string | null = null;
-        if (bill.total !== row.quantity) approvalUrl = (await reviseQuantity(row.paypalSubscriptionId, bill.total)).approvalUrl;
+        if (bill.homes !== row.quantity) approvalUrl = (await reviseQuantity(row.paypalSubscriptionId, bill.homes)).approvalUrl;
         await db.update(subscriptions).set({ quantitySyncedMonth: month, approvalUrl }).where(eq(subscriptions.id, row.id));
         await audit(db, { orgId: row.orgId!, actorId: null, action: "billing_count_sent", entity: "subscription", entityId: row.id, details: { ...bill, needsApproval: !!approvalUrl } });
         counted++;
@@ -247,7 +241,7 @@ async function remindTrialEnding(db: DB, now: Date): Promise<number> {
     if (left <= 0 || left > TRIAL_REMINDER_DAYS * DAY) continue;
     const [home] = row.orgId ? await db.select({ tz: facilities.timeZone }).from(facilities).where(eq(facilities.orgId, row.orgId)).limit(1) : [];
     const day = charge.toLocaleDateString("en-US", { timeZone: home?.tz ?? "America/Chicago", weekday: "long", month: "long", day: "numeric" });
-    const covers = row.orgId ? ` (${describeBill(await orgBill(db, row.orgId))})` : "";
+    const first = monthlyBill(row.quantity, "intro");
     let setupNote = "";
     if (!row.orgId) {
       const token = randomToken();
@@ -261,8 +255,9 @@ async function remindTrialEnding(db: DB, now: Date): Promise<number> {
         to,
         subject: `Your CareHouse One free trial ends on ${day}`,
         body:
-          `Your ${TRIAL_DAYS}-day free trial of CareHouse One ends soon. PayPal will take the first monthly payment of ${usd(row.quantity)}${covers} on ${day}.\n\n` +
-          `To keep using CareHouse One you don't need to do anything. On the 1st of each month the amount updates to your homes and active residents.\n\n` +
+          `Your ${TRIAL_DAYS}-day free trial of CareHouse One ends soon. PayPal will take the first monthly payment of ${usd(first.total)} (${describeBill(first)}) on ${day}.\n\n` +
+          `That's the introductory price of ${usd(INTRO_PRICE_PER_HOME)} per home a month for your first ${INTRO_MONTHS} months. After that it's ${usd(PRICE_PER_HOME)} per home a month.\n\n` +
+          `To keep using CareHouse One you don't need to do anything. If you add or remove a home, the amount updates on the 1st of the next month.\n\n` +
           `To cancel before you're charged, sign in to PayPal and go to Settings > Payments > Automatic payments, then cancel CareHouse One.` +
           setupNote,
       });

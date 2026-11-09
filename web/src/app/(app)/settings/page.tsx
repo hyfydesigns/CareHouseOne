@@ -3,10 +3,10 @@ import { REMINDER_TIMES } from "@/server/org";
 import { getDb, withTenant } from "@/db/client";
 import { canViewAudit } from "@/lib/permissions";
 import { currentDevice, requireUser } from "@/lib/session";
-import { and, asc, count, eq } from "drizzle-orm";
-import { facilities, residents } from "@/db/schema";
+import { asc } from "drizzle-orm";
+import { facilities } from "@/db/schema";
 import { billingState, orgSubscription } from "@/server/billing";
-import { describeBill, INCLUDED_RESIDENTS, monthlyBill, PRICE_PER_EXTRA_RESIDENT, PRICE_PER_HOME, usd } from "@/lib/pricing";
+import { describeBill, introEndsAt, monthlyBill, perHomeAt, PRICE_SUMMARY, priceStage, trialEndsAt, usd } from "@/lib/pricing";
 import { paypalLive } from "@/server/paypal";
 import { CONTACT_EMAIL } from "../../(site)/shell";
 import { listDevices } from "@/server/devices";
@@ -27,7 +27,6 @@ export default async function SettingsPage() {
     sub: await orgSubscription(tx),
     homeRows: canManageHomes(me) ? await listHomes(tx) : [],
     activities: await listActivities(tx, { includeHidden: true }),
-    residentsByHome: await tx.select({ facilityId: residents.facilityId, n: count() }).from(residents).where(and(eq(residents.orgId, me.orgId), eq(residents.status, "active"))).groupBy(residents.facilityId),
   }));
   if (!data.org) redirect("/dashboard");
   const here = await currentDevice();
@@ -38,10 +37,20 @@ export default async function SettingsPage() {
   const now = new Date();
   const firstOfNext = `1st of ${new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toLocaleDateString("en-US", { timeZone: "UTC", month: "long" })}`;
   const bill = billingState(data.sub);
-  const byHome = new Map(data.residentsByHome.map((r) => [r.facilityId, r.n]));
-  const homeCounts = data.homes.map((h) => ({ name: h.name, n: byHome.get(h.id) ?? 0 }));
-  const next = monthlyBill(homeCounts.map((h) => h.n));
   const day = (d: Date | null) => (d ? d.toLocaleDateString("en-US", { timeZone: tz, month: "long", day: "numeric", year: "numeric" }) : "—");
+  // Where the subscription is in the schedule (free trial, introductory months, regular price), and
+  // what the next payment will be for the homes the organization has today. PayPal bills a few
+  // hours either side of the day, hence the half-day allowance.
+  const stage = data.sub ? priceStage(data.sub.createdAt, now) : "regular";
+  const nextAt = data.sub?.nextBillingAt ?? null;
+  const next = monthlyBill(data.homes.length, data.sub ? priceStage(data.sub.createdAt, new Date((nextAt ?? now).getTime() + 43_200_000)) : "regular");
+  const stageNote = !data.sub
+    ? ""
+    : stage === "trial"
+      ? `Free trial until ${day(trialEndsAt(data.sub.createdAt))}`
+      : stage === "intro"
+        ? `Introductory price until ${day(introEndsAt(data.sub.createdAt))}`
+        : "Regular price";
   const paypalAccount = paypalLive() ? "https://www.paypal.com/myaccount/autopay/" : "https://www.sandbox.paypal.com/myaccount/autopay/";
   return (
     <>
@@ -63,7 +72,7 @@ export default async function SettingsPage() {
               </tbody>
             </table>
           </div>
-          <AddHomeForm action={addHomeAction} costNote={data.sub ? `Each home adds ${usd(PRICE_PER_HOME)} a month, from the ${firstOfNext}. You'll be asked to approve the new amount in PayPal.` : null} />
+          <AddHomeForm action={addHomeAction} costNote={data.sub ? `Each home adds ${stage === "regular" ? usd(perHomeAt("regular")) : `${usd(perHomeAt("intro"))} (then ${usd(perHomeAt("regular"))})`} a month, from the ${firstOfNext}. You'll be asked to approve the new amount in PayPal.` : null} />
           <p className="small muted" style={{ margin: 0 }}>
             A home can only be removed if it was added by mistake: no resident has ever lived there and no shift was worked there.
           </p>
@@ -138,34 +147,17 @@ export default async function SettingsPage() {
         {data.sub ? (
           <>
             <div className="kpis">
-              <div><span className="small muted">Plan</span><br /><b>{usd(PRICE_PER_HOME)} per home per month</b></div>
-              <div><span className="small muted">This month</span><br /><b>{usd(data.sub.quantity)}</b></div>
-              <div><span className="small muted">Next month, as of today</span><br /><b>{usd(next.total)}</b><br /><span className="small muted">{describeBill(next)}</span></div>
-              <div><span className="small muted">Next payment</span><br /><b>{day(data.sub.nextBillingAt)}</b></div>
-            </div>
-            <div className="tablewrap">
-              <table>
-                <thead><tr><th>Home</th><th>Active residents</th><th>Extra this month</th></tr></thead>
-                <tbody>
-                  {homeCounts.map((h) => {
-                    const extra = Math.max(0, h.n - INCLUDED_RESIDENTS);
-                    return (
-                      <tr key={h.name}>
-                        <td>{h.name}</td>
-                        <td>{h.n} of {INCLUDED_RESIDENTS} included</td>
-                        <td>{extra ? <span className="pill warn">{extra} extra · {usd(extra * PRICE_PER_EXTRA_RESIDENT)}</span> : <span className="muted">None</span>}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <div><span className="small muted">Plan</span><br /><b>{PRICE_SUMMARY} per home per month</b><br /><span className="small muted">{stageNote}</span></div>
+              <div><span className="small muted">Billed for</span><br /><b>{describeBill({ homes: data.sub.quantity })}</b></div>
+              <div><span className="small muted">Next payment, as of today</span><br /><b>{usd(next.total)}</b><br /><span className="small muted">{describeBill(next)} × {usd(next.perHome)}</span></div>
+              <div><span className="small muted">Next payment date</span><br /><b>{day(nextAt)}</b></div>
             </div>
             {bill.warning && <p className={bill.tone === "crit" ? "error" : "notice"} style={{ margin: 0 }}>{bill.warning}</p>}
             {data.sub.approvalUrl && (
               <a className="btn primary" href={data.sub.approvalUrl} target="_blank" rel="noreferrer" style={{ justifySelf: "start" }}>Approve the new amount in PayPal</a>
             )}
             <p className="small muted" style={{ margin: 0 }}>
-              Each home includes up to {INCLUDED_RESIDENTS} active residents; each one over that is {usd(PRICE_PER_EXTRA_RESIDENT)} a month. The amount is sent to PayPal on the first of each month. Change the payment method or cancel in your PayPal account
+              Priced per home, with any number of residents. PayPal moves to the regular price by itself after the introductory months. If you add or remove a home, the number of homes is sent to PayPal on the first of the next month. Change the payment method or cancel in your PayPal account
               {data.sub.payerEmail ? ` (${data.sub.payerEmail})` : ""}: <a href={paypalAccount} target="_blank" rel="noreferrer">PayPal automatic payments</a>. Care
               records are never locked for a missed payment. CareHouse One never sees or stores card details.
             </p>

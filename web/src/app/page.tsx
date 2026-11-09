@@ -9,7 +9,7 @@ export async function generateMetadata(): Promise<Metadata> {
   if (!isSiteHost((await headers()).get("host"))) return {};
   return {
     title: "CareHouse One · Care records for group homes",
-    description: "Medication pass, vital signs, progress notes and shifts on one shared tablet per home, plus resident and staff onboarding with forms signed online or on paper. $149 per home per month.",
+    description: "Medication pass, vital signs, progress notes and shifts on one shared tablet per home, plus resident and staff onboarding with forms signed online or on paper. 30-day free trial, then from $49 per home per month.",
     robots: { index: true, follow: true },
   };
 }

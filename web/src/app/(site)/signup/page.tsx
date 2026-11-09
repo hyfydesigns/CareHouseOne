@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { signupOpen } from "@/server/billing";
-import { INCLUDED_RESIDENTS, PRICE_PER_HOME, usd } from "@/lib/pricing";
+import { PRICE_SUMMARY } from "@/lib/pricing";
 import { TRIAL_DAYS } from "@/server/paypal";
 import { subscribedAction } from "../actions";
 import { Subscribe } from "./subscribe";
@@ -28,7 +28,7 @@ export default async function SignupPage() {
         <div>
           <h1>Start your {TRIAL_DAYS}-day free trial</h1>
           <p className="muted">
-            {usd(PRICE_PER_HOME)} per home per month, up to {INCLUDED_RESIDENTS} residents each, after the trial. No contract: pay by card or PayPal and cancel anytime.
+            After the trial, {PRICE_SUMMARY} per home per month, for any number of residents. No contract: pay by card or PayPal and cancel anytime.
             Cancel in PayPal before the trial ends and you won&apos;t be charged.
           </p>
         </div>

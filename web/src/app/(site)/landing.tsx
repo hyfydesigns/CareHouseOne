@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { INCLUDED_RESIDENTS, monthlyBill, PRICE_PER_EXTRA_RESIDENT, PRICE_PER_HOME, usd } from "@/lib/pricing";
-import { TRIAL_DAYS } from "@/server/paypal";
+import { INTRO_MONTHS, INTRO_PRICE_PER_HOME, monthlyBill, PRICE_PER_HOME, TRIAL_DAYS, usd } from "@/lib/pricing";
 import { signupOpen } from "@/server/billing";
 import { demoAction } from "./actions";
 import { DemoForm } from "./demo-form";
@@ -109,11 +108,7 @@ const FEATURES: Array<{ title: string; body: string; d: string; color: string }>
   },
 ];
 
-const EXAMPLES: Array<{ label: string; homes: number[] }> = [
-  { label: "1 home, 6 residents", homes: [6] },
-  { label: "3 homes, 4 to 6 residents each", homes: [4, 6, 5] },
-  { label: "1 home, 12 residents", homes: [12] },
-];
+const EXAMPLES = [1, 3, 5];
 
 export function Landing() {
   const open = signupOpen();
@@ -224,12 +219,16 @@ export function Landing() {
       <section className="site-section alt" id="pricing" aria-labelledby="pricing-h">
         <div className="site-wrap">
           <h2 className="title" id="pricing-h">One plan. Priced per home.</h2>
-          <p className="sub">A flat price for each home, not for logins, so every caregiver can have their own account. No contract and no setup fee.</p>
+          <p className="sub">A flat price for each home, not for logins or residents, so every caregiver can have their own account. No contract and no setup fee.</p>
           <div className="site-price">
             <div className="site-plan">
               <div>
-                <div className="amount">{usd(PRICE_PER_HOME)} <small>per home per month</small></div>
-                <p className="muted" style={{ margin: "8px 0 0" }}>Up to {INCLUDED_RESIDENTS} residents included · {TRIAL_DAYS}-day free trial · pay by card or PayPal · cancel anytime</p>
+                <span className="site-kicker" style={{ marginBottom: 10 }}>Introductory price</span>
+                <div className="amount">{usd(INTRO_PRICE_PER_HOME)} <small>per home per month</small></div>
+                <p style={{ margin: "8px 0 0" }}>
+                  For your first {INTRO_MONTHS} months, after a {TRIAL_DAYS}-day free trial. Then <b>{usd(PRICE_PER_HOME)} per home per month</b>.
+                </p>
+                <p className="muted" style={{ margin: "6px 0 0" }}>Any number of residents · pay by card or PayPal · cancel anytime</p>
               </div>
               <ul>
                 <li>Every feature, in every home</li>
@@ -247,16 +246,24 @@ export function Landing() {
               )}
             </div>
             <div className="stack">
+              <h3>How the price works</h3>
+              <ol className="site-timeline">
+                <li><span>First {TRIAL_DAYS} days</span><b>Free</b></li>
+                <li><span>Next {INTRO_MONTHS} months</span><b>{usd(INTRO_PRICE_PER_HOME)} per home a month</b></li>
+                <li><span>After that</span><b>{usd(PRICE_PER_HOME)} per home a month</b></li>
+              </ol>
               <h3>What it costs</h3>
               <div className="site-examples">
-                {EXAMPLES.map((x) => (
-                  <div key={x.label}><span>{x.label}</span><b>{usd(monthlyBill(x.homes).total)} a month</b></div>
+                {EXAMPLES.map((homes) => (
+                  <div key={homes}>
+                    <span>{homes} home{homes === 1 ? "" : "s"}</span>
+                    <b>{usd(monthlyBill(homes, "intro").total)}, then {usd(monthlyBill(homes).total)} a month</b>
+                  </div>
                 ))}
               </div>
               <p className="small muted" style={{ margin: 0 }}>
-                A home with more than {INCLUDED_RESIDENTS} residents adds {usd(PRICE_PER_EXTRA_RESIDENT)} a month for each extra resident. We count active residents on the
-                first of each month; discharged residents aren&apos;t counted. PayPal sees only your organization&apos;s name, the billing contact and the monthly amount,
-                never anything about residents.
+                A home costs the same with 4 residents or 14. Add a home and the bill goes up from the 1st of the next month. PayPal moves to the regular price by
+                itself, and sees only your organization&apos;s name, the billing contact and the amount, never anything about residents.
               </p>
             </div>
           </div>
@@ -295,10 +302,17 @@ export function Landing() {
               </p>
             </details>
             <details>
-              <summary>What counts as a home, and what if a home has more than {INCLUDED_RESIDENTS} residents?</summary>
+              <summary>What counts as a home?</summary>
               <p>
-                A home is each house you add in CareHouse One, with its own tablet and shifts. Each home includes up to {INCLUDED_RESIDENTS} active residents; each
-                one over that is {usd(PRICE_PER_EXTRA_RESIDENT)} a month. You can always admit a resident; the bill adjusts on the first of the next month.
+                A home is each house you add in CareHouse One, with its own tablet and shifts. The price is the same however many residents live there, and you can
+                always admit a resident. Add a home and the bill goes up from the 1st of the next month.
+              </p>
+            </details>
+            <details>
+              <summary>What happens when the introductory price ends?</summary>
+              <p>
+                After the {TRIAL_DAYS}-day free trial you pay {usd(INTRO_PRICE_PER_HOME)} per home a month for {INTRO_MONTHS} months. From the next payment it&apos;s{" "}
+                {usd(PRICE_PER_HOME)} per home a month. PayPal moves to the regular price by itself, so you don&apos;t need to do anything, and you can still cancel anytime.
               </p>
             </details>
             <details>
