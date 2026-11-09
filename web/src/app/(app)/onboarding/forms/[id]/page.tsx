@@ -16,7 +16,12 @@ export default async function EditOnboardingForm({ params }: { params: Promise<{
     <>
       <div>
         <Link href={`/onboarding/forms${form.audience === "staff" ? "?for=staff" : ""}`} className="small">‹ All forms</Link>
-        <h1>{form.title}</h1>
+        <div className="row">
+          <h1>{form.title}</h1>
+          <span className="spacer" />
+          {form.kind === "form" && <a className="btn small" href={`/api/onboarding/forms/${form.id}/paper`} target="_blank" rel="noreferrer">Print a blank copy</a>}
+        </div>
+        {form.kind === "form" && <p className="small muted" style={{ margin: 0 }}>Print uses the last saved version. Save your changes first.</p>}
       </div>
       <FormEditor key={`${form.id}-${form.version}`} initial={{ title: form.title, description: form.description, kind: form.kind, required: form.required, afterHire: form.afterHire, blocks: form.blocks }} audience={form.audience} save={saveFormAction.bind(null, form.id)} />
     </>

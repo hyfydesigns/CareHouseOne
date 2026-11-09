@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState } from "react";
+import { Icon } from "@/components/icon";
 import { OnboardingFormView } from "@/components/onboarding-form";
 import { SignDialog } from "@/components/sign-dialog";
 import { Status, type FormState } from "@/components/status";
@@ -84,6 +85,7 @@ export function StaffItem({
   save,
   sign,
   review,
+  paperUndo,
 }: {
   packetId: string;
   item: ItemView;
@@ -96,6 +98,7 @@ export function StaffItem({
   save: (values: Values) => Promise<FormState>;
   sign: (blockId: string, s: { name: string; method: string; image?: string; consent: boolean }) => Promise<FormState>;
   review: (decision: "approve" | "changes", note: string) => Promise<FormState>;
+  paperUndo?: () => Promise<FormState>;
 }) {
   const router = useRouter();
   // Only what's changed here: the family may be filling in the same form.
@@ -120,6 +123,22 @@ export function StaffItem({
     return !r.error;
   }
 
+  if (item.paper) {
+    return (
+      <div className="stack">
+        <p className="small" style={{ margin: 0 }}>Filled in and signed on paper. The scan below is filed in place of an online copy.</p>
+        <FileList files={item.files} />
+        {open && <PaperUpload packetId={packetId} itemId={item.id} label="Add another page" />}
+        <Status state={state} />
+        {paperUndo && (
+          <div className="row">
+            <button type="button" className="btn small" disabled={busy} onClick={async () => { if (!confirm("Remove the paper copy? The form goes back on the online checklist.")) return; setBusy(true); setState(await paperUndo()); setBusy(false); router.refresh(); }}>Remove the paper copy</button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="stack">
       {item.kind === "form" ? (
@@ -135,15 +154,7 @@ export function StaffItem({
           disabled={busy}
         />
       ) : item.files.length ? (
-        <ul className="stack" style={{ listStyle: "none", padding: 0, margin: 0, gap: 6 }}>
-          {item.files.map((f) => (
-            <li key={f.id} className="attach-chip">
-              <span className="attach-pdf" aria-hidden="true">{f.contentType === "application/pdf" ? "PDF" : "IMG"}</span>
-              <a href={`/api/onboarding/files/${f.id}`} target="_blank" rel="noreferrer">{f.filename}</a>
-              <span className="small muted">{(f.sizeBytes / 1024 / 1024).toFixed(1)} MB</span>
-            </li>
-          ))}
-        </ul>
+        <FileList files={item.files} />
       ) : (
         <p className="muted" style={{ margin: 0 }}>Nothing uploaded yet.</p>
       )}
@@ -179,6 +190,18 @@ export function StaffItem({
       {item.kind === "form" && Object.keys(item.signatures).length > 0 && (
         <a className="small" href={`/api/onboarding/items/${item.id}/pdf?packet=${packetId}`} target="_blank" rel="noreferrer">Preview the signed PDF</a>
       )}
+      {item.kind === "form" && editable && !item.homeOnly && (
+        <details className="paper-copy">
+          <summary className="small">Doing this form on paper instead?</summary>
+          <div className="stack" style={{ gap: 8, marginTop: 8 }}>
+            <p className="small muted" style={{ margin: 0 }}>Print it for {person} to fill in and sign by hand. It has their name and any answers already given. When it comes back, scan or photograph each page and upload it here: the form then counts as done and the scan is filed on {audience === "staff" ? "their staff record" : "the resident's documents"}.</p>
+            <div className="row" style={{ gap: 6 }}>
+              <a className="btn small" href={`/api/onboarding/items/${item.id}/paper?packet=${packetId}`} target="_blank" rel="noreferrer">Print to fill in by hand</a>
+            </div>
+            <PaperUpload packetId={packetId} itemId={item.id} label="Upload the signed copy" />
+          </div>
+        </details>
+      )}
       {signing && (
         <SignDialog
           label={signing.label}
@@ -194,6 +217,61 @@ export function StaffItem({
           }}
         />
       )}
+    </div>
+  );
+}
+
+function FileList({ files }: { files: ItemView["files"] }) {
+  return (
+    <ul className="stack" style={{ listStyle: "none", padding: 0, margin: 0, gap: 6 }}>
+      {files.map((f) => (
+        <li key={f.id} className="attach-chip">
+          <span className="attach-pdf" aria-hidden="true">{f.contentType === "application/pdf" ? "PDF" : "IMG"}</span>
+          <a href={`/api/onboarding/files/${f.id}`} target="_blank" rel="noreferrer">{f.filename}</a>
+          <span className="small muted">{(f.sizeBytes / 1024 / 1024).toFixed(1)} MB</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** The signed paper copy of a form: a photo of each page, or a scanned PDF. */
+function PaperUpload({ packetId, itemId, label }: { packetId: string; itemId: string; label: string }) {
+  const router = useRouter();
+  const input = useRef<HTMLInputElement>(null);
+  const camera = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [state, setState] = useState<FormState>({});
+  async function send(list: FileList | null) {
+    const file = list?.[0];
+    if (!file) return;
+    if (file.size > 9 * 1024 * 1024) return setState({ error: `${file.name} is too large. Use files under 9 MB, or scan fewer pages at a time.` });
+    const body = new FormData();
+    body.append("file", file, file.name || "scan.jpg");
+    setBusy(true);
+    const res = await fetch(`/api/onboarding/items/${itemId}/paper?packet=${packetId}`, { method: "POST", body }).catch(() => null);
+    const json = (await res?.json().catch(() => null)) as { message?: string; error?: string } | null;
+    setBusy(false);
+    if (input.current) input.current.value = "";
+    if (camera.current) camera.current.value = "";
+    setState(res?.ok ? { message: json?.message ?? "Uploaded." } : { error: json?.error ?? "Couldn't upload. Check the connection and try again." });
+    if (res?.ok) router.refresh();
+  }
+  return (
+    <div className="stack" style={{ gap: 6 }}>
+      <div className="row" style={{ gap: 6 }}>
+        <span className="small"><b>{label}:</b></span>
+        <label className={`btn small${busy ? " disabled" : ""}`}>
+          <Icon name="camera" size={16} />Take a photo
+          <input ref={camera} type="file" accept="image/*" capture="environment" hidden disabled={busy} onChange={(e) => send(e.target.files)} />
+        </label>
+        <label className={`btn small${busy ? " disabled" : ""}`}>
+          <Icon name="paperclip" size={16} />Choose a file
+          <input ref={input} type="file" accept="image/*,application/pdf" hidden disabled={busy} onChange={(e) => send(e.target.files)} />
+        </label>
+        {busy && <span className="small muted">Uploading…</span>}
+      </div>
+      <Status state={state} />
     </div>
   );
 }

@@ -6,7 +6,7 @@ import type { FormState } from "@/components/status";
 import { getDb, withTenant } from "@/db/client";
 import type { Audience, FormDef, FormKind } from "@/lib/onboarding-forms";
 import { appUrl, clientIp, requireUser, userAgent } from "@/lib/session";
-import { admitOnboarding, cancelOnboarding, hireOnboarding, resendLink, reviewItem, sendOnboarding, staffSaveValues, staffSign, startOnboarding } from "@/server/onboarding";
+import { admitOnboarding, cancelOnboarding, hireOnboarding, paperUndo, resendLink, reviewItem, sendOnboarding, staffSaveValues, staffSign, startOnboarding } from "@/server/onboarding";
 import { addMissingStarters, createForm, moveForm, saveForm, setFormHidden } from "@/server/onboarding-forms";
 import { adminLockedMessage } from "@/server/billing";
 import { deliverNow } from "@/server/mailer";
@@ -54,6 +54,13 @@ export async function startOnboardingAction(_: FormState, fd: FormData): Promise
   const r = await withTenant(await getDb(), me.orgId, (tx) => startOnboarding(tx, actorOf(me), me.orgId, raw, url));
   if (!r.ok) return { error: r.error };
   redirect(`/onboarding/${r.data!.id}`);
+}
+
+export async function paperUndoAction(packetId: string, itemId: string): Promise<FormState> {
+  const me = await requireUser();
+  const r = await withTenant(await getDb(), me.orgId, (tx) => paperUndo(tx, actorOf(me), packetId, itemId));
+  revalidatePath(`/onboarding/${packetId}`);
+  return r.ok ? { message: r.message } : { error: r.error };
 }
 
 export async function sendOnboardingAction(packetId: string): Promise<FormState> {

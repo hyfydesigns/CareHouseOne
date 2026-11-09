@@ -9,7 +9,7 @@ import { demoFamilyLink, E_SIGN_CONSENT, getOnboarding, ITEM_STATUS, letterheadV
 import { asAudience, missingFor } from "@/lib/onboarding-forms";
 import { canInvite, ROLE_LABEL } from "@/lib/permissions";
 import { canManageOnboarding } from "@/server/onboarding-forms";
-import { admitAction, cancelOnboardingAction, hireAction, resendLinkAction, reviewAction, sendOnboardingAction, staffSaveAction, staffSignAction } from "../actions";
+import { admitAction, cancelOnboardingAction, hireAction, paperUndoAction, resendLinkAction, reviewAction, sendOnboardingAction, staffSaveAction, staffSignAction } from "../actions";
 import { AdmitForm, HireForm, PacketButtons, StaffItem } from "../staff-forms";
 
 const TONE = { todo: "", submitted: "warn", changes: "info", approved: "ok" } as const;
@@ -34,7 +34,7 @@ export default async function OnboardingDetail({ params }: { params: Promise<{ i
   const myHomes = o.allHomes.filter((h) => canInvite(actor, "caregiver", [h.id]));
   const roles = roleEnum.enumValues.filter((r) => myHomes.some((h) => canInvite(actor, r, [h.id]))).map((r) => ({ value: r, label: ROLE_LABEL[r] }));
   // The home's answers (not its signatures, which come after the family's part).
-  const homeFields = (i: (typeof items)[number]) => missingFor(i.blocks.filter((b) => b.type === "field"), i.values, new Set(), "staff");
+  const homeFields = (i: (typeof items)[number]) => i.paper ? [] : missingFor(i.blocks.filter((b) => b.type === "field"), i.values, new Set(), "staff");
   const homeToDo = items.filter((i) => homeFields(i).length);
   const sendWarning = homeToDo.length
     ? `The home's part isn't filled in yet on: ${homeToDo.map((i) => i.title).join(", ")}. Send the link to ${p.poaEmail} anyway?`
@@ -72,7 +72,7 @@ export default async function OnboardingDetail({ params }: { params: Promise<{ i
             {i.afterHire && <span className="small muted">after hire</span>}
             {i.homeOnly && <span className="small muted">home only</span>}
             <span className="spacer" />
-            <span className={`pill ${TONE[i.status]}`}>{i.status === "submitted" ? "Ready for review" : ITEM_STATUS[i.status]}</span>
+            <span className={`pill ${TONE[i.status]}`}>{i.paper ? "Done on paper" : i.status === "submitted" ? "Ready for review" : ITEM_STATUS[i.status]}</span>
           </summary>
           {i.status === "changes" && i.staffNote && <p className="small"><b>Asked {person}:</b> {i.staffNote}</p>}
           {draft && homeFields(i).length > 0 && <p className="small muted" style={{ margin: 0 }}>Home to fill in: {homeFields(i).join(", ")}.</p>}
@@ -93,6 +93,7 @@ export default async function OnboardingDetail({ params }: { params: Promise<{ i
             save={staffSaveAction.bind(null, p.id, i.id)}
             sign={staffSignAction.bind(null, p.id, i.id)}
             review={reviewAction.bind(null, p.id, i.id)}
+            paperUndo={open || draft ? paperUndoAction.bind(null, p.id, i.id) : undefined}
           />
         </details>
       ))}

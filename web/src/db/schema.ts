@@ -909,6 +909,9 @@ export const onboardingItems = pgTable(
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
     reviewedBy: uuid("reviewed_by").references(() => users.id),
+    /** Filled in and signed on paper instead: the home uploaded the signed scan (in onboarding_files). */
+    paperAt: timestamp("paper_at", { withTimezone: true }),
+    paperBy: uuid("paper_by").references(() => users.id),
     updatedAt: timestamp("updated_at", { withTimezone: true }),
   },
   (t) => [index("onboarding_items_packet_idx").on(t.packetId, t.position)],

@@ -55,6 +55,7 @@ export default async function OnboardingFormsPage({ searchParams }: { searchPara
                           <form action={moveFormAction.bind(null, f.id, 1)} style={{ display: "inline" }}><button className="btn small" disabled={i === shown.length - 1} aria-label={`Move ${f.title} down`}>↓</button></form>{" "}
                         </>
                       )}
+                      {f.kind === "form" && <><a className="btn small" href={`/api/onboarding/forms/${f.id}/paper`} target="_blank" rel="noreferrer" title="A blank copy to fill in and sign by hand">Print</a>{" "}</>}
                       <Link className="btn small" href={`/onboarding/forms/${f.id}`}>Edit</Link>{" "}
                       <form action={hideFormAction.bind(null, f.id, !f.hidden)} style={{ display: "inline" }}><button className="btn small">{f.hidden ? "Show" : "Hide"}</button></form>
                     </td>
@@ -68,6 +69,7 @@ export default async function OnboardingFormsPage({ searchParams }: { searchPara
           <form action={createFormAction.bind(null, "form", audience)}><button className="btn primary">+ Add a form</button></form>
           <form action={createFormAction.bind(null, "upload", audience)}><button className="btn">+ Ask for a document</button></form>
         </div>
+        <p className="small muted" style={{ margin: 0 }}>Print gives a blank copy to fill in and sign by hand, for anyone who can&apos;t do it online. To use a paper copy for someone&apos;s onboarding, print it from their onboarding instead (it has their name on it), then upload the signed scan there.</p>
       </section>
     </>
   );

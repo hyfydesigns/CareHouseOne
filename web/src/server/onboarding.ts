@@ -2,14 +2,15 @@ import { and, asc, desc, eq, gt, inArray, isNull, like } from "drizzle-orm";
 import { randomInt } from "node:crypto";
 import { z } from "zod";
 import type { DB, Tx } from "@/db/client";
-import { facilities, onboardingAccess, onboardingFiles, onboardingItems, onboardingPackets, onboardingSignatures, organizations, outbox, residentDocuments, staffCertifications, staffDocuments, users } from "@/db/schema";
+import { facilities, onboardingAccess, onboardingFiles, onboardingForms, onboardingItems, onboardingPackets, onboardingSignatures, organizations, outbox, residentDocuments, staffCertifications, staffDocuments, users } from "@/db/schema";
 import { randomToken, safeEqual, sha256 } from "@/lib/crypto";
 import { addressLine, contactLine } from "@/lib/home-contact";
-import { blockSchema, changedAnswers, changedSignatures, fillPlaceholders, mergeAnswers, missingFor, partOf, signedPart, type Audience, type Block, type Values, type Who } from "@/lib/onboarding-forms";
+import { asAudience, blockSchema, changedAnswers, changedSignatures, fillPlaceholders, mergeAnswers, missingFor, partOf, signedPart, type Audience, type Block, type Values, type Who } from "@/lib/onboarding-forms";
 import { canSeeFacility, type Actor } from "@/lib/permissions";
 import { MAX_ATTACHMENT_BYTES, normaliseAttachment } from "./attachments";
 import { audit, sendMail } from "./audit";
-import { canManageOnboarding, ensureStarterForms, listForms } from "./onboarding-forms";
+import { canManageOnboarding, ensureStarterForms, getForm, listForms } from "./onboarding-forms";
+import type { PaperForm } from "./onboarding-pdf";
 import { createResident, type Result } from "./residents";
 import { inviteStaff } from "./staff";
 import { staffDocCategoryFor } from "./staff-documents";
@@ -195,6 +196,8 @@ export interface ItemView {
   afterHire: boolean;
   /** Only the home's questions and signatures: never shown to the family or employee. */
   homeOnly: boolean;
+  /** Done on paper: the signed scan is in files, and it's off the family's online checklist. */
+  paper: boolean;
   status: ItemStatus;
   staffNote: string | null;
   blocks: Block[];
@@ -219,6 +222,7 @@ async function itemsOf(tx: Tx, packetId: string): Promise<ItemView[]> {
     const signed = new Set(mineSigs.map((s) => s.blockId));
     const myFiles = files.filter((f) => f.itemId === i.id);
     const kind = i.kind === "upload" ? "upload" : "form";
+    const paper = kind === "form" && !!i.paperAt;
     return {
       id: i.id,
       title: i.title,
@@ -227,14 +231,15 @@ async function itemsOf(tx: Tx, packetId: string): Promise<ItemView[]> {
       required: i.required,
       afterHire: i.afterHire,
       homeOnly: kind === "form" && !blocks.some((b) => (b.type === "field" || b.type === "signature") && b.who === "poa"),
+      paper,
       status: (i.status in ITEM_STATUS ? i.status : "todo") as ItemStatus,
       staffNote: i.staffNote,
       blocks,
       values: i.values ?? {},
       signatures: Object.fromEntries(mineSigs.map((s) => [s.blockId, { name: s.name, image: s.image ? `data:image/png;base64,${Buffer.from(s.image).toString("base64")}` : null, signedAt: s.signedAt, signer: s.signer as Who, method: s.method }])),
       files: myFiles,
-      poaMissing: kind === "upload" ? (myFiles.length ? [] : ["At least one file"]) : missingFor(blocks, i.values ?? {}, signed, "poa"),
-      staffMissing: kind === "upload" ? [] : missingFor(blocks, i.values ?? {}, signed, "staff"),
+      poaMissing: kind === "upload" ? (myFiles.length ? [] : ["At least one file"]) : paper ? [] : missingFor(blocks, i.values ?? {}, signed, "poa"),
+      staffMissing: kind === "upload" || paper ? [] : missingFor(blocks, i.values ?? {}, signed, "staff"),
     } satisfies ItemView;
   });
 }
@@ -378,6 +383,86 @@ export async function staffFile(tx: Tx, actor: Actor, fileId: string) {
   return f;
 }
 
+// ---------------------------------------------------------------- paper copies
+
+/**
+ * The home received a form filled in and signed on paper: it uploads the scan (a page at a time,
+ * photos or PDFs), and the form counts as done and approved. The scan is filed in place of the
+ * signed PDF on admission or hiring, or straight away for a form done after hire.
+ */
+export async function paperUpload(tx: Tx, actor: Actor, packetId: string, itemId: string, upload: { name: string; data: Buffer }, now = new Date()): Promise<Result> {
+  const p = await packetFor(tx, actor, packetId);
+  if (!p || !/^[0-9a-f-]{36}$/i.test(itemId)) return { ok: false, error: "That onboarding isn't available." };
+  const [item] = await tx.select().from(onboardingItems).where(and(eq(onboardingItems.id, itemId), eq(onboardingItems.packetId, p.id)));
+  if (!item || item.kind !== "form") return { ok: false, error: "That form isn't part of this onboarding." };
+  const open = p.status === "open" || p.status === "draft" || (p.status === "hired" && item.afterHire);
+  if (!open) return { ok: false, error: "This onboarding is closed. Add the scan on their documents instead." };
+  if (item.status === "approved" && !item.paperAt) return { ok: false, error: "This form was already completed and approved online." };
+  if (upload.data.length > MAX_ATTACHMENT_BYTES) return { ok: false, error: `${upload.name} is too large. Use files under 9 MB.` };
+  const existing = await tx.select({ id: onboardingFiles.id }).from(onboardingFiles).where(and(eq(onboardingFiles.itemId, item.id), isNull(onboardingFiles.removedAt)));
+  if (existing.length >= MAX_FILES_PER_ITEM) return { ok: false, error: `Up to ${MAX_FILES_PER_ITEM} files per form. Scan the pages into one PDF if you can.` };
+  const file = await normaliseAttachment(upload.data, upload.name);
+  if ("error" in file) return { ok: false, error: file.error };
+  await tx.insert(onboardingFiles).values({ orgId: p.orgId, packetId: p.id, itemId: item.id, filename: file.filename, contentType: file.contentType, sizeBytes: file.data.length, data: file.data, uploadedAt: now });
+  await tx.update(onboardingItems).set({ paperAt: item.paperAt ?? now, paperBy: item.paperBy ?? actor.id, status: "approved", staffNote: null, reviewedAt: now, reviewedBy: actor.id, updatedAt: now }).where(eq(onboardingItems.id, item.id));
+  await audit(tx, { orgId: p.orgId, actorId: actor.id, action: "onboarding_paper_received", entity: "organization", entityId: p.orgId, details: { packetId: p.id, itemId: item.id } });
+  // After hire there's no filing step left: this page goes on their record now.
+  if (p.status === "hired" && p.staffUserId) {
+    await tx.insert(staffDocuments).values({ orgId: p.orgId, userId: p.staffUserId, category: staffDocCategoryFor(item.title), source: "onboarding", title: fileTitle({ title: item.title, paper: true }, existing.length, existing.length + 1), filename: file.filename, contentType: file.contentType, sizeBytes: file.data.length, data: file.data, uploadedBy: actor.id, uploadedAt: now });
+    return { ok: true, message: `${file.filename} added. ${item.title} is done and on their documents.` };
+  }
+  return { ok: true, message: `${file.filename} added. ${item.title} counts as done on paper.` };
+}
+
+/** Takes a paper copy back off (the wrong file, say): the form goes back on the online checklist. */
+export async function paperUndo(tx: Tx, actor: Actor, packetId: string, itemId: string, now = new Date()): Promise<Result> {
+  const p = await packetFor(tx, actor, packetId);
+  if (!p || !/^[0-9a-f-]{36}$/i.test(itemId)) return { ok: false, error: "That onboarding isn't available." };
+  const [item] = await tx.select().from(onboardingItems).where(and(eq(onboardingItems.id, itemId), eq(onboardingItems.packetId, p.id)));
+  if (!item?.paperAt) return { ok: false, error: "That form wasn't done on paper." };
+  if (p.status !== "open" && p.status !== "draft") return { ok: false, error: "The scan is already filed. Remove it from their documents instead." };
+  await tx.update(onboardingFiles).set({ removedAt: now }).where(and(eq(onboardingFiles.itemId, item.id), isNull(onboardingFiles.removedAt)));
+  await tx.update(onboardingItems).set({ paperAt: null, paperBy: null, status: "todo", reviewedAt: null, reviewedBy: null, updatedAt: now }).where(eq(onboardingItems.id, item.id));
+  await audit(tx, { orgId: p.orgId, actorId: actor.id, action: "onboarding_paper_removed", entity: "organization", entityId: p.orgId, details: { packetId: p.id, itemId: item.id } });
+  return { ok: true, message: `The paper copy was removed. ${item.title} is back on the online checklist.` };
+}
+
+/** One form of someone's onboarding, to print and fill in by hand: their names and the answers given so far. */
+export async function paperCopyOf(tx: Tx, actor: Actor, packetId: string, itemId: string): Promise<{ form: PaperForm; head: Letterhead } | null> {
+  const o = await getOnboarding(tx, actor, packetId);
+  const item = o?.items.find((i) => i.id === itemId && i.kind === "form");
+  if (!o || !item) return null;
+  const audience = asAudience(o.p.audience);
+  const names = audience === "staff" ? { person: o.p.poaName } : { resident: `${o.p.residentFirstName} ${o.p.residentLastName}`, person: o.p.poaName };
+  return { form: { title: item.title, description: item.description, blocks: item.blocks, values: item.values, audience, names }, head: o.head };
+}
+
+/**
+ * A form from the list, blank, to print. The organization's details are filled in, and the home's
+ * when there is only one to choose; everything else is a line to write on.
+ */
+export async function blankFormOf(tx: Tx, actor: Actor, formId: string): Promise<{ form: PaperForm; head: Letterhead } | null> {
+  const f = await getForm(tx, actor, formId);
+  if (!f || f.kind !== "form") return null;
+  const [{ orgId }] = await tx.select({ orgId: onboardingForms.orgId }).from(onboardingForms).where(eq(onboardingForms.id, f.id));
+  const [org] = await tx.select({ name: organizations.name, logo: organizations.logo }).from(organizations).where(eq(organizations.id, orgId));
+  const homes = (await tx.select().from(facilities).where(eq(facilities.orgId, orgId))).filter((h) => canSeeFacility(actor, h.id));
+  const home = homes.length === 1 ? homes[0] : null;
+  const ctx = {
+    Organization: org.name,
+    "Home name": home?.name ?? "",
+    "Home address": home ? addressLine(home) : "",
+    "Home phone": home?.phone ?? "",
+    "Home fax": home?.fax ?? "",
+    "Home email": home?.email ?? "",
+    "Resident name": "",
+    "Responsible party": "",
+    "Employee name": "",
+  };
+  const head: Letterhead = { org: org.name, logo: org.logo ?? null, home: home?.name ?? "", address: home ? addressLine(home) : "", contact: home ? contactLine(home) : "" };
+  return { form: { title: f.title, description: f.description, blocks: fillPlaceholders(f.blocks, ctx), audience: f.audience, names: {} }, head };
+}
+
 // ---------------------------------------------------------------- the family's side
 
 /**
@@ -469,7 +554,7 @@ export async function familyView(tx: Tx, packet: Packet) {
 }
 
 /** Whether the family or employee sees this item now. The home's own records never show. */
-const forPerson = (p: Packet, i: ItemView) => !i.homeOnly && (p.status === "hired" ? i.afterHire : !i.afterHire);
+const forPerson = (p: Packet, i: ItemView) => !i.homeOnly && !i.paper && (p.status === "hired" ? i.afterHire : !i.afterHire);
 
 const family = (p: Packet): Party => ({ who: "poa", userId: null, orgId: p.orgId });
 
@@ -554,6 +639,12 @@ export async function signatureEvidence(tx: Tx, itemId: string): Promise<Evidenc
     .orderBy(asc(onboardingSignatures.signedAt));
 }
 
+/** A filed upload's title: "Agreement (signed paper copy, 2 of 3)". */
+const fileTitle = (item: Pick<ItemView, "title" | "paper">, n: number, of: number) => {
+  const notes = [item.paper ? "signed paper copy" : "", of > 1 ? `${n + 1} of ${of}` : ""].filter(Boolean).join(", ");
+  return notes ? `${item.title} (${notes})` : item.title;
+};
+
 const DOC_CATEGORY_FOR = (title: string, kind: string): string => {
   if (kind === "form") return /consent|photo|media/i.test(title) ? "consent" : "admission";
   if (/attorney|guardian|court/i.test(title)) return "legal";
@@ -613,13 +704,13 @@ export async function admitOnboarding(
   const org = { name: head.org };
   const home = { name: head.home };
   for (const item of items.filter((i) => i.status === "approved")) {
-    if (item.kind === "form") {
+    if (item.kind === "form" && !item.paper) {
       const pdf = await render(p, item, head, await signatureEvidence(tx, item.id));
       await tx.insert(residentDocuments).values({ orgId: p.orgId, residentId, category: DOC_CATEGORY_FOR(item.title, "form"), title: `${item.title} (signed)`, filename: `${item.title.replace(/[^\w .()-]+/g, "").slice(0, 80) || "form"}.pdf`, contentType: "application/pdf", sizeBytes: pdf.length, data: pdf, source: "onboarding", uploadedBy: actor.id, uploadedAt: now });
     } else {
       const files = await tx.select().from(onboardingFiles).where(and(eq(onboardingFiles.itemId, item.id), isNull(onboardingFiles.removedAt)));
       for (const [n, f] of files.entries()) {
-        await tx.insert(residentDocuments).values({ orgId: p.orgId, residentId, category: DOC_CATEGORY_FOR(item.title, "upload"), title: files.length > 1 ? `${item.title} (${n + 1} of ${files.length})` : item.title, filename: f.filename, contentType: f.contentType, sizeBytes: f.sizeBytes, data: f.data, source: "onboarding", uploadedBy: actor.id, uploadedAt: now });
+        await tx.insert(residentDocuments).values({ orgId: p.orgId, residentId, category: DOC_CATEGORY_FOR(item.title, item.kind), title: fileTitle(item, n, files.length), filename: f.filename, contentType: f.contentType, sizeBytes: f.sizeBytes, data: f.data, source: "onboarding", uploadedBy: actor.id, uploadedAt: now });
       }
     }
   }
@@ -649,14 +740,14 @@ export async function admitOnboarding(
 /** Puts one approved item on a staff member's file: its signed PDF, or the files uploaded for it. */
 async function fileForStaff(tx: Tx, actor: Actor, p: Packet, userId: string, item: ItemView, head: Letterhead, render: Renderer, now: Date) {
   const base = { orgId: p.orgId, userId, category: staffDocCategoryFor(item.title), source: item.homeOnly ? "onboarding_internal" : "onboarding", uploadedBy: actor.id, uploadedAt: now };
-  if (item.kind === "form") {
+  if (item.kind === "form" && !item.paper) {
     const pdf = await render(p, item, head, await signatureEvidence(tx, item.id));
     await tx.insert(staffDocuments).values({ ...base, title: `${item.title} (signed)`, filename: `${item.title.replace(/[^\w .()-]+/g, "").slice(0, 80) || "form"}.pdf`, contentType: "application/pdf", sizeBytes: pdf.length, data: pdf });
     return;
   }
   const files = await tx.select().from(onboardingFiles).where(and(eq(onboardingFiles.itemId, item.id), isNull(onboardingFiles.removedAt)));
   for (const [n, f] of files.entries()) {
-    await tx.insert(staffDocuments).values({ ...base, title: files.length > 1 ? `${item.title} (${n + 1} of ${files.length})` : item.title, filename: f.filename, contentType: f.contentType, sizeBytes: f.sizeBytes, data: f.data });
+    await tx.insert(staffDocuments).values({ ...base, title: fileTitle(item, n, files.length), filename: f.filename, contentType: f.contentType, sizeBytes: f.sizeBytes, data: f.data });
   }
 }
 
