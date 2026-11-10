@@ -9,10 +9,9 @@ import { remindCertifications } from "@/server/training";
 
 /**
  * Housekeeping, called every 5 minutes by Cloud Scheduler with the CRON_SECRET bearer token:
- * retries emails that couldn't be sent, refreshes PayPal subscriptions (and sends the resident
- * count on the first of the month), reminds owners about expiring staff training and the day's
- * appointments, and clears
- * old rate-limit counters.
+ * retries emails that couldn't be sent, refreshes PayPal subscriptions and runs the billing
+ * calendar (invoices on the 29th, due on the 5th, late on the 10th), reminds owners about expiring
+ * staff training and the day's appointments, and clears old rate-limit counters.
  */
 export async function POST(request: Request) {
   if (!cronAuthorized(request)) return NextResponse.json({ error: "Not allowed." }, { status: 401 });

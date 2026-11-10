@@ -5,7 +5,7 @@
  *   PAYPAL_CLIENT_SECRET  secret (Secret Manager)
  *   PAYPAL_PLAN_ID        the CareHouse One plan, created with scripts/paypal-setup.ts
  *   PAYPAL_WEBHOOK_ID     the webhook registered in the PayPal developer dashboard
- * Only organization names, the billing contact and the monthly amount are ever sent.
+ * Only organization names, the billing contact and the amounts are ever sent.
  */
 
 import { INTRO_MONTHS, INTRO_PRICE_PER_HOME, PRICE_PER_HOME, TRIAL_DAYS } from "@/lib/pricing";
@@ -62,13 +62,38 @@ export interface PaypalSubscription {
   status: string;
   quantity?: string;
   subscriber?: { email_address?: string; name?: { given_name?: string; surname?: string } };
-  billing_info?: { next_billing_time?: string; failed_payments_count?: number };
+  start_time?: string;
+  create_time?: string;
+  billing_info?: {
+    next_billing_time?: string;
+    failed_payments_count?: number;
+    last_payment?: { amount?: { value?: string }; time?: string };
+    outstanding_balance?: { value?: string };
+  };
+  /** Only with `withPlan`: the plan as this subscription runs it, overrides included. */
+  plan?: { billing_cycles?: Array<{ sequence?: number; total_cycles?: number; pricing_scheme?: { fixed_price?: { value?: string } } }> };
   links?: Array<{ rel: string; href: string }>;
 }
 
-export function getSubscription(id: string): Promise<PaypalSubscription> {
+export function getSubscription(id: string, withPlan = false): Promise<PaypalSubscription> {
   if (!/^I-[A-Z0-9]{6,32}$/.test(id)) return Promise.reject(new Error("Not a PayPal subscription ID"));
-  return call<PaypalSubscription>("GET", `/v1/billing/subscriptions/${id}`);
+  return call<PaypalSubscription>("GET", `/v1/billing/subscriptions/${id}${withPlan ? "?fields=plan" : ""}`);
+}
+
+/**
+ * A late fee can't be added to a subscription payment, so it goes out as a separate PayPal
+ * invoice that PayPal emails to the payer. Returns PayPal's invoice ID.
+ */
+export async function sendLateFeeInvoice(email: string, amountCents: number, note: string): Promise<string> {
+  const created = await call<{ id?: string; href?: string; links?: Array<{ rel: string; href: string }> }>("POST", "/v2/invoicing/invoices", {
+    detail: { currency_code: "USD", note, payment_term: { term_type: "DUE_ON_RECEIPT" } },
+    primary_recipients: [{ billing_info: { email_address: email } }],
+    items: [{ name: "CareHouse One late fee", quantity: "1", unit_amount: { currency_code: "USD", value: (amountCents / 100).toFixed(2) } }],
+  });
+  const id = created.id ?? (created.href ?? created.links?.find((l) => l.rel === "self")?.href ?? "").split("/").pop();
+  if (!id || !/^INV2-[A-Z0-9-]{4,40}$/.test(id)) throw new Error("PayPal didn't return an invoice ID");
+  await call("POST", `/v2/invoicing/invoices/${id}/send`, { send_to_recipient: true, send_to_invoicer: false });
+  return id;
 }
 
 /**
@@ -100,8 +125,10 @@ export async function verifyWebhook(headers: Headers, event: unknown): Promise<b
 
 /**
  * One-time setup (scripts/paypal-setup.ts): the product and the monthly plan. The quantity is the
- * number of homes, and PayPal runs the schedule: the free trial, the introductory months, then the
- * regular price.
+ * number of homes. There's no free cycle: each subscription starts charging on its first payment
+ * day (a 5th), and the free trial is the time before that. Each subscription overrides the first
+ * cycle with its prorated price (paypalTerms in lib/billing-cycle.ts); then come the introductory
+ * months and the regular price.
  */
 export async function createProductAndPlan(): Promise<{ productId: string; planId: string }> {
   const product = await call<{ id: string }>("POST", "/v1/catalogs/products", {
@@ -113,11 +140,17 @@ export async function createProductAndPlan(): Promise<{ productId: string; planI
   const plan = await call<{ id: string }>("POST", "/v1/billing/plans", {
     product_id: product.id,
     name: "CareHouse One",
-    description: `${TRIAL_DAYS}-day free trial, then $${INTRO_PRICE_PER_HOME} per home per month for ${INTRO_MONTHS} months, then $${PRICE_PER_HOME} per home per month`,
+    description: `${TRIAL_DAYS}-day free trial, then $${INTRO_PRICE_PER_HOME} per home per month for ${INTRO_MONTHS} months, then $${PRICE_PER_HOME} per home per month. Charged on the 5th.`,
     status: "ACTIVE",
     quantity_supported: true,
     billing_cycles: [
-      { frequency: { interval_unit: "DAY", interval_count: TRIAL_DAYS }, tenure_type: "TRIAL", sequence: 1, total_cycles: 1 },
+      {
+        frequency: { interval_unit: "MONTH", interval_count: 1 },
+        tenure_type: "TRIAL",
+        sequence: 1,
+        total_cycles: 1,
+        pricing_scheme: { fixed_price: { value: String(INTRO_PRICE_PER_HOME), currency_code: "USD" } },
+      },
       {
         frequency: { interval_unit: "MONTH", interval_count: 1 },
         tenure_type: "TRIAL",

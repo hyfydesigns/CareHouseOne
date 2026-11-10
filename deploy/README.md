@@ -190,7 +190,7 @@ Demo requests are stored in the `leads` table and emailed to `LEADS_EMAIL`.
 ### 9b. PayPal in sandbox (test money)
 
 1. developer.paypal.com > Apps & Credentials > **Sandbox** > Create App. Copy the client ID and secret.
-2. Create the product and plan (in Cloud Shell, from `~/CareHouseOne/web`). It prints the plan ID. The subscription quantity is the number of homes, and the plan has three steps: the free trial, 3 months at $49, then $99 a month:
+2. Create the product and plan (in Cloud Shell, from `~/CareHouseOne/web`). It prints the plan ID. The subscription quantity is the number of homes, and the plan has three steps: the prorated first month, 3 months at $49, then $99 a month. Each subscription starts charging on the 5th after its free trial and first billing cycle (cycles run from the 28th to the 28th), and sets its own prorated first-month price when it's created:
 
 ```bash
 PAYPAL_ENV=sandbox PAYPAL_CLIENT_ID='CLIENT_ID' PAYPAL_CLIENT_SECRET='SECRET' npm run paypal:setup
@@ -203,10 +203,10 @@ printf '%s' 'SECRET' | gcloud secrets create paypal-client-secret --data-file=-
 gcloud secrets add-iam-policy-binding paypal-client-secret --member="serviceAccount:carehouse-run@carehouseone.iam.gserviceaccount.com" --role=roles/secretmanager.secretAccessor
 ```
 
-4. In the PayPal app, add a webhook: URL `https://app.carehouseone.com/api/paypal/webhook`, events `BILLING.SUBSCRIPTION.ACTIVATED`, `BILLING.SUBSCRIPTION.UPDATED`, `BILLING.SUBSCRIPTION.CANCELLED`, `BILLING.SUBSCRIPTION.SUSPENDED`, `BILLING.SUBSCRIPTION.EXPIRED`, `BILLING.SUBSCRIPTION.PAYMENT.FAILED` and `PAYMENT.SALE.COMPLETED`. Copy the webhook ID.
+4. In the PayPal app, add a webhook: URL `https://app.carehouseone.com/api/paypal/webhook`, events `BILLING.SUBSCRIPTION.ACTIVATED`, `BILLING.SUBSCRIPTION.UPDATED`, `BILLING.SUBSCRIPTION.CANCELLED`, `BILLING.SUBSCRIPTION.SUSPENDED`, `BILLING.SUBSCRIPTION.EXPIRED`, `BILLING.SUBSCRIPTION.PAYMENT.FAILED` and `PAYMENT.SALE.COMPLETED`. Copy the webhook ID. Also make sure the app has **Invoicing** turned on (app settings > Features): late fees go out as PayPal invoices.
 5. GitHub variables: `PAYPAL_ENV` = `sandbox`, `PAYPAL_CLIENT_ID`, `PAYPAL_PLAN_ID`, `PAYPAL_WEBHOOK_ID`. Leave `SIGNUP_OPEN` unset. Run Deploy.
 
-**Changing the price** (as when it moved from $149 per home with extra residents to $49 then $99 per home): run step 2 again for a new plan, update `PAYPAL_PLAN_ID` (GitHub variable and `.env.local`) and deploy. Subscriptions on an older plan are never re-priced automatically; cancel test ones in PayPal and remove them with `npm run org:remove`.
+**Changing the price or the plan's shape** (as when it moved from $149 per home with extra residents to $49 then $99 per home, and again for the 28th-to-28th billing calendar): run step 2 again for a new plan, update `PAYPAL_PLAN_ID` (GitHub variable and `.env.local`) and deploy. Subscriptions on an older plan are never re-priced automatically; cancel test ones in PayPal and remove them with `npm run org:remove`.
 
 **Try the whole flow locally** with the sandbox (sign-up is open only on your computer). In `web/.env.local` (never committed):
 

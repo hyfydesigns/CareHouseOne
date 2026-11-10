@@ -5,8 +5,9 @@ import { canViewAudit } from "@/lib/permissions";
 import { currentDevice, requireUser } from "@/lib/session";
 import { asc } from "drizzle-orm";
 import { facilities } from "@/db/schema";
-import { billingState, orgSubscription } from "@/server/billing";
-import { describeBill, introEndsAt, monthlyBill, perHomeAt, PRICE_SUMMARY, priceStage, trialEndsAt, usd } from "@/lib/pricing";
+import { billingState, invoiceNumber, orgInvoices, orgSubscription, scheduleOf } from "@/server/billing";
+import { cents, cycleOn, CYCLE_DAY, dayIn, DUE_DAY, LATE_DAY, LATE_FEE, showDay, showPeriod } from "@/lib/billing-cycle";
+import { describeBill, INTRO_PRICE_PER_HOME, PRICE_PER_HOME, PRICE_SUMMARY, usd } from "@/lib/pricing";
 import { paypalLive } from "@/server/paypal";
 import { CONTACT_EMAIL } from "../../(site)/shell";
 import { listDevices } from "@/server/devices";
@@ -25,6 +26,7 @@ export default async function SettingsPage() {
   const actor = { id: me.id, role: me.role, facilityIds: me.facilityIds };
   const data = await withTenant(await getDb(), me.orgId, async (tx) => ({ org: await getOrg(tx, me.orgId), devices: await listDevices(tx, actor), homes: await tx.select().from(facilities).orderBy(asc(facilities.name)),
     sub: await orgSubscription(tx),
+    invoices: await orgInvoices(tx),
     homeRows: canManageHomes(me) ? await listHomes(tx) : [],
     activities: await listActivities(tx, { includeHidden: true }),
   }));
@@ -34,23 +36,17 @@ export default async function SettingsPage() {
   const when = (d: Date | null) => (d ? d.toLocaleString("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true }) : "—");
   const active = data.devices.filter((r) => !r.d.revokedAt);
   const homeOptions = data.homes.map((h) => ({ id: h.id, name: h.name }));
-  const now = new Date();
-  const firstOfNext = `1st of ${new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toLocaleDateString("en-US", { timeZone: "UTC", month: "long" })}`;
   const bill = billingState(data.sub);
-  const day = (d: Date | null) => (d ? d.toLocaleDateString("en-US", { timeZone: tz, month: "long", day: "numeric", year: "numeric" }) : "—");
-  // Where the subscription is in the schedule (free trial, introductory months, regular price), and
-  // what the next payment will be for the homes the organization has today. PayPal bills a few
-  // hours either side of the day, hence the half-day allowance.
-  const stage = data.sub ? priceStage(data.sub.createdAt, now) : "regular";
-  const nextAt = data.sub?.nextBillingAt ?? null;
-  const next = monthlyBill(data.homes.length, data.sub ? priceStage(data.sub.createdAt, new Date((nextAt ?? now).getTime() + 43_200_000)) : "regular");
-  const stageNote = !data.sub
-    ? ""
-    : stage === "trial"
-      ? `Free trial until ${day(trialEndsAt(data.sub.createdAt))}`
-      : stage === "intro"
-        ? `Introductory price until ${day(introEndsAt(data.sub.createdAt))}`
-        : "Regular price";
+  // Where the subscription is on the billing calendar: the cycle running today, and the next
+  // payment (an invoice that's out and unpaid, or else an estimate for this cycle's homes).
+  const today = dayIn(new Date());
+  const schedule = data.sub ? scheduleOf(data.sub) : null;
+  const cycle = schedule ? cycleOn(schedule, today) : null;
+  const inTrial = !!schedule && today < schedule.trialEndsOn;
+  const unpaid = data.invoices.filter((i) => !i.paidAt).sort((a, b) => a.dueOn.localeCompare(b.dueOn))[0] ?? null;
+  const homesNow = Math.max(1, data.homes.length);
+  const stageNote = !cycle ? "" : inTrial ? `Free trial until ${showDay(schedule!.trialEndsOn, true)}` : cycle.stage === "regular" ? "Regular price" : "Introductory price";
+  const homeCost = !cycle || cycle.stage === "regular" ? usd(PRICE_PER_HOME) : `${usd(INTRO_PRICE_PER_HOME)} (then ${usd(PRICE_PER_HOME)})`;
   const paypalAccount = paypalLive() ? "https://www.paypal.com/myaccount/autopay/" : "https://www.sandbox.paypal.com/myaccount/autopay/";
   return (
     <>
@@ -72,7 +68,7 @@ export default async function SettingsPage() {
               </tbody>
             </table>
           </div>
-          <AddHomeForm action={addHomeAction} costNote={data.sub ? `Each home adds ${stage === "regular" ? usd(perHomeAt("regular")) : `${usd(perHomeAt("intro"))} (then ${usd(perHomeAt("regular"))})`} a month, from the ${firstOfNext}. You'll be asked to approve the new amount in PayPal.` : null} />
+          <AddHomeForm action={addHomeAction} costNote={data.sub ? `Each home adds ${homeCost} a month, from the next invoice. You may be asked to approve the new amount in PayPal.` : null} />
           <p className="small muted" style={{ margin: 0 }}>
             A home can only be removed if it was added by mistake: no resident has ever lived there and no shift was worked there.
           </p>
@@ -148,16 +144,63 @@ export default async function SettingsPage() {
           <>
             <div className="kpis">
               <div><span className="small muted">Plan</span><br /><b>{PRICE_SUMMARY} per home per month</b><br /><span className="small muted">{stageNote}</span></div>
+              <div>
+                <span className="small muted">This billing cycle</span><br />
+                <b>{cycle ? showPeriod(cycle) : "—"}</b><br />
+                <span className="small muted">{cycle ? `Invoice on ${showDay(cycle.invoiceOn)}` : ""}</span>
+              </div>
+              {unpaid ? (
+                <div>
+                  <span className="small muted">{unpaid.lateAt ? "Late" : "Next payment"}</span><br />
+                  <b>{cents(unpaid.amountCents)}</b><br />
+                  <span className="small muted">Invoice {invoiceNumber(unpaid)}, due {showDay(unpaid.dueOn, true)}</span>
+                </div>
+              ) : (
+                cycle && (
+                  <div>
+                    <span className="small muted">Next payment, as of today</span><br />
+                    <b>{cents(homesNow * cycle.perHomeCents)}</b><br />
+                    <span className="small muted">{describeBill({ homes: homesNow })} × {cents(cycle.perHomeCents)}, charged {showDay(cycle.dueOn, true)}</span>
+                  </div>
+                )
+              )}
               <div><span className="small muted">Billed for</span><br /><b>{describeBill({ homes: data.sub.quantity })}</b></div>
-              <div><span className="small muted">Next payment, as of today</span><br /><b>{usd(next.total)}</b><br /><span className="small muted">{describeBill(next)} × {usd(next.perHome)}</span></div>
-              <div><span className="small muted">Next payment date</span><br /><b>{day(nextAt)}</b></div>
             </div>
             {bill.warning && <p className={bill.tone === "crit" ? "error" : "notice"} style={{ margin: 0 }}>{bill.warning}</p>}
             {data.sub.approvalUrl && (
               <a className="btn primary" href={data.sub.approvalUrl} target="_blank" rel="noreferrer" style={{ justifySelf: "start" }}>Approve the new amount in PayPal</a>
             )}
+            {data.invoices.length > 0 && (
+              <div className="tablewrap">
+                <table>
+                  <thead><tr><th>Invoice</th><th>Billing period</th><th>Homes</th><th>Amount</th><th>Due</th><th>Status</th></tr></thead>
+                  <tbody>
+                    {data.invoices.map((i) => (
+                      <tr key={i.id}>
+                        <td>{invoiceNumber(i)}</td>
+                        <td>{showPeriod({ start: i.periodStart, end: i.periodEnd })}</td>
+                        <td>{i.homes} × {cents(i.perHomeCents)}</td>
+                        <td>{cents(i.amountCents)}{i.lateFeeCents > 0 && <span className="small muted"> + {cents(i.lateFeeCents)} late fee</span>}</td>
+                        <td>{showDay(i.dueOn, true)}</td>
+                        <td>
+                          {i.paidAt ? (
+                            <span className="pill ok">Paid {showDay(dayIn(i.paidAt))}</span>
+                          ) : i.lateAt ? (
+                            <span className="pill crit">Late</span>
+                          ) : (
+                            <span className="pill mute">Due</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
             <p className="small muted" style={{ margin: 0 }}>
-              Priced per home, with any number of residents. PayPal moves to the regular price by itself after the introductory months. If you add or remove a home, the number of homes is sent to PayPal on the first of the next month. Change the payment method or cancel in your PayPal account
+              Priced per home, with any number of residents. Every billing cycle runs from the {CYCLE_DAY}th of one month to the {CYCLE_DAY}th of the next. The
+              invoice goes out the day after, uses the number of homes you have then, and PayPal takes the payment automatically on the {DUE_DAY}th. A payment
+              still missing on the {LATE_DAY}th is late: a {usd(LATE_FEE)} late fee is added and admin features pause until it&apos;s paid. Change the payment method or cancel in your PayPal account
               {data.sub.payerEmail ? ` (${data.sub.payerEmail})` : ""}: <a href={paypalAccount} target="_blank" rel="noreferrer">PayPal automatic payments</a>. Care
               records are never locked for a missed payment. CareHouse One never sees or stores card details.
             </p>

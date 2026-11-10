@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { signupOpen } from "@/server/billing";
+import { scheduleFor } from "@/lib/billing-cycle";
 import { PRICE_SUMMARY } from "@/lib/pricing";
 import { TRIAL_DAYS } from "@/server/paypal";
-import { subscribedAction } from "../actions";
+import { subscribedAction, subscriptionTermsAction } from "../actions";
 import { Subscribe } from "./subscribe";
 
 export const metadata: Metadata = { title: "Start your free trial · CareHouse One" };
@@ -28,8 +29,8 @@ export default async function SignupPage() {
         <div>
           <h1>Start your {TRIAL_DAYS}-day free trial</h1>
           <p className="muted">
-            After the trial, {PRICE_SUMMARY} per home per month, for any number of residents. No contract: pay by card or PayPal and cancel anytime.
-            Cancel in PayPal before the trial ends and you won&apos;t be charged.
+            After the trial, {PRICE_SUMMARY} per home per month, for any number of residents, billed monthly in arrears. No contract: pay by card or
+            PayPal and cancel anytime. Cancel in PayPal before your first payment and you won&apos;t be charged.
           </p>
         </div>
         <Subscribe
@@ -37,6 +38,8 @@ export default async function SignupPage() {
           planId={process.env.PAYPAL_PLAN_ID!}
           nonce={nonce}
           trialDays={TRIAL_DAYS}
+          schedule={scheduleFor(new Date())}
+          terms={subscriptionTermsAction}
           onSubscribed={subscribedAction}
         />
         <p className="small muted" style={{ margin: 0 }}>

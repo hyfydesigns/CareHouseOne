@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LATE_FEE } from "@/lib/billing-cycle";
 import { INTRO_MONTHS, INTRO_PRICE_PER_HOME, monthlyBill, PRICE_PER_HOME, TRIAL_DAYS, usd } from "@/lib/pricing";
 import { signupOpen } from "@/server/billing";
 import { demoAction } from "./actions";
@@ -262,8 +263,8 @@ export function Landing() {
                 ))}
               </div>
               <p className="small muted" style={{ margin: 0 }}>
-                A home costs the same with 4 residents or 14. Add a home and the bill goes up from the 1st of the next month. PayPal moves to the regular price by
-                itself, and sees only your organization&apos;s name, the billing contact and the amount, never anything about residents.
+                A home costs the same with 4 residents or 14. Every billing cycle runs from the 28th to the 28th; the invoice goes out the next day and PayPal
+                takes the payment on the 5th. PayPal sees only your organization&apos;s name, the billing contact and the amount, never anything about residents.
               </p>
             </div>
           </div>
@@ -305,7 +306,7 @@ export function Landing() {
               <summary>What counts as a home?</summary>
               <p>
                 A home is each house you add in CareHouse One, with its own tablet and shifts. The price is the same however many residents live there, and you can
-                always admit a resident. Add a home and the bill goes up from the 1st of the next month.
+                always admit a resident. Add a home and the next invoice includes it.
               </p>
             </details>
             <details>
@@ -313,6 +314,15 @@ export function Landing() {
               <p>
                 After the {TRIAL_DAYS}-day free trial you pay {usd(INTRO_PRICE_PER_HOME)} per home a month for {INTRO_MONTHS} months. From the next payment it&apos;s{" "}
                 {usd(PRICE_PER_HOME)} per home a month. PayPal moves to the regular price by itself, so you don&apos;t need to do anything, and you can still cancel anytime.
+              </p>
+            </details>
+            <details>
+              <summary>When are we billed?</summary>
+              <p>
+                Everyone is on the same monthly cycle, from the 28th of one month to the 28th of the next, billed after the month is over. The invoice is
+                emailed the day after a cycle ends and PayPal takes the payment automatically on the 5th. Your first invoice covers only the days from the end
+                of your free trial to the 28th. A payment still missing on the 10th is late: there&apos;s a {usd(LATE_FEE)} late fee, and adding staff,
+                tablets and settings changes pause until it&apos;s paid. Care records never do.
               </p>
             </details>
             <details>

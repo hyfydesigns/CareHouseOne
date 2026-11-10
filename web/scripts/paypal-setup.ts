@@ -1,6 +1,7 @@
 /**
- * Creates the CareHouse One product and its monthly plan (with the free trial) in
- * PayPal, and prints the plan ID to set as PAYPAL_PLAN_ID. Run once per PayPal environment:
+ * Creates the CareHouse One product and its monthly plan in PayPal, and prints the plan ID to set
+ * as PAYPAL_PLAN_ID. Each subscription sets its own start date (the 5th) and prorated first month
+ * on top of the plan (see lib/billing-cycle.ts). Run once per PayPal environment:
  *
  *   PAYPAL_ENV=sandbox PAYPAL_CLIENT_ID=... PAYPAL_CLIENT_SECRET=... npm run paypal:setup
  *

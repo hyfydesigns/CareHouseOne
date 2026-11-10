@@ -509,8 +509,8 @@ export type Facility = typeof facilities.$inferSelect;
  * A PayPal subscription. Created when someone approves a subscription on the public site; linked
  * to an organization once they finish setting it up. Organizations created by the developer
  * (invoiced customers, the first client) have none. PayPal only ever sees the organization's
- * name, the billing contact and the monthly amount, never anything about residents. The plan's
- * unit is $1, so quantity is the monthly total in dollars (see lib/pricing.ts).
+ * name, the billing contact and the monthly amount, never anything about residents. The quantity
+ * is the number of homes; the billing calendar is in lib/billing-cycle.ts.
  */
 export const subscriptions = pgTable("subscriptions", {
   id: id(),
@@ -524,21 +524,63 @@ export const subscriptions = pgTable("subscriptions", {
   payerName: text("payer_name"),
   nextBillingAt: timestamp("next_billing_at", { withTimezone: true }),
   failedPayments: integer("failed_payments").notNull().default(0),
-  /** First failed payment or suspension; admin features go read-only 14 days later. */
+  /** First failed payment or suspension (cleared when PayPal is paid up). */
   pastDueSince: timestamp("past_due_since", { withTimezone: true }),
+  /** An invoice went unpaid past the 10th: admin features pause until it's paid. */
+  lateSince: timestamp("late_since", { withTimezone: true }),
+  /** PayPal's last successful payment. */
+  lastPaymentAt: timestamp("last_payment_at", { withTimezone: true }),
+  /** The billing schedule fixed at sign-up (see scheduleFor in lib/billing-cycle.ts). */
+  trialEndsOn: text("trial_ends_on"),
+  firstCycleEnd: text("first_cycle_end"),
+  firstPerHomeCents: integer("first_per_home_cents"),
+  introCycles: integer("intro_cycles"),
+  startsOn: text("starts_on"),
   /** Single-use link to the organization setup page, emailed to the payer. */
   setupTokenHash: text("setup_token_hash").unique(),
   setupExpiresAt: timestamp("setup_expires_at", { withTimezone: true }),
   setupUsedAt: timestamp("setup_used_at", { withTimezone: true }),
   /** When PayPal needs the payer to approve a new monthly amount. */
   approvalUrl: text("approval_url"),
-  /** YYYY-MM of the last first-of-month amount sent to PayPal. */
-  quantitySyncedMonth: text("quantity_synced_month"),
   /** The "your trial ends soon" email went out (once per subscription). */
   trialReminderSentAt: timestamp("trial_reminder_sent_at", { withTimezone: true }),
   syncedAt: timestamp("synced_at", { withTimezone: true }),
   createdAt: createdAt(),
 });
+
+/**
+ * One invoice per billing cycle, issued the day after the cycle ends. PayPal charges it on the
+ * 5th; still unpaid on the 10th, it's late and a late fee is invoiced through PayPal.
+ * Written only by server code; an organization can read its own.
+ */
+export const billingInvoices = pgTable(
+  "billing_invoices",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    subscriptionId: uuid("subscription_id").notNull().references(() => subscriptions.id),
+    /** The days billed: from periodStart to the 28th it ends on. */
+    periodStart: text("period_start").notNull(),
+    periodEnd: text("period_end").notNull(),
+    /** first (prorated), intro or regular */
+    stage: text("stage").notNull(),
+    homes: integer("homes").notNull(),
+    perHomeCents: integer("per_home_cents").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    issuedOn: text("issued_on").notNull(),
+    dueOn: text("due_on").notNull(),
+    lateOn: text("late_on").notNull(),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    /** The "PayPal takes the payment today" email went out on the due day. */
+    remindedAt: timestamp("reminded_at", { withTimezone: true }),
+    lateAt: timestamp("late_at", { withTimezone: true }),
+    lateFeeCents: integer("late_fee_cents").notNull().default(0),
+    /** PayPal's invoice for the late fee, when one was sent. */
+    lateFeeInvoiceId: text("late_fee_invoice_id"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("billing_invoices_cycle_uq").on(t.subscriptionId, t.periodEnd), index("billing_invoices_org_idx").on(t.orgId)],
+);
 
 /** Every PayPal webhook received, once each (PayPal retries deliveries). */
 export const billingEvents = pgTable("billing_events", {
@@ -561,6 +603,7 @@ export const leads = pgTable("leads", {
   createdAt: createdAt(),
 });
 export type Subscription = typeof subscriptions.$inferSelect;
+export type BillingInvoice = typeof billingInvoices.$inferSelect;
 
 /**
  * A resident's photo, so caregivers can confirm they have the right person. Kept in the database

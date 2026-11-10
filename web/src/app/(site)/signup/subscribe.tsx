@@ -2,12 +2,15 @@
 
 import Script from "next/script";
 import { useEffect, useRef, useState } from "react";
-import { INTRO_MONTHS, INTRO_PRICE_PER_HOME, PRICE_PER_HOME, usd } from "@/lib/pricing";
+import { cents, CYCLE_DAY, DUE_DAY, LATE_DAY, LATE_FEE, showDay, showPeriod, type BillingSchedule } from "@/lib/billing-cycle";
+import { INTRO_PRICE_PER_HOME, PRICE_PER_HOME, usd } from "@/lib/pricing";
+
+type Terms = { start_time: string; plan: unknown };
 
 type PaypalButtons = {
   Buttons: (o: {
     style?: Record<string, string>;
-    createSubscription: (data: unknown, actions: { subscription: { create: (o: { plan_id: string; quantity: string }) => Promise<string> } }) => Promise<string>;
+    createSubscription: (data: unknown, actions: { subscription: { create: (o: { plan_id: string; quantity: string } & Terms) => Promise<string> } }) => Promise<string>;
     onApprove: (data: { subscriptionID?: string }) => Promise<void>;
     onError?: (e: unknown) => void;
   }) => { render: (el: HTMLElement) => Promise<void>; close?: () => Promise<void> };
@@ -22,9 +25,12 @@ export function Subscribe(props: {
   planId: string;
   nonce?: string;
   trialDays: number;
+  /** The schedule for someone signing up today, for the summary; the button asks the server again. */
+  schedule: BillingSchedule;
+  terms: () => Promise<Terms>;
   onSubscribed: (subscriptionId: string) => Promise<{ setupUrl?: string; error?: string }>;
 }) {
-  const { planId, onSubscribed } = props;
+  const { planId, onSubscribed, terms, schedule } = props;
   const [homes, setHomes] = useState(1);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +48,7 @@ export function Subscribe(props: {
     box.current.innerHTML = "";
     const buttons = pp.Buttons({
       style: { shape: "rect", label: "subscribe", layout: "vertical" },
-      createSubscription: (_d, actions) => actions.subscription.create({ plan_id: planId, quantity: String(quantity.current) }),
+      createSubscription: async (_d, actions) => actions.subscription.create({ plan_id: planId, quantity: String(quantity.current), ...(await terms()) }),
       onApprove: async (data) => {
         setBusy(true);
         const r = await onSubscribed(data.subscriptionID ?? "");
@@ -58,7 +64,7 @@ export function Subscribe(props: {
     return () => {
       buttons.close?.().catch(() => {});
     };
-  }, [ready, planId, onSubscribed]);
+  }, [ready, planId, onSubscribed, terms]);
 
 
   return (
@@ -80,12 +86,23 @@ export function Subscribe(props: {
           onChange={(e) => setHomes(Math.min(100, Math.max(1, Number(e.target.value.replace(/[^0-9]/g, "")) || 1)))}
         />
         <span id="homesHint" className="small muted">
-          Priced per home, with any number of residents. If you add a home later, the amount updates on the 1st of the next month.
+          Priced per home, with any number of residents. If you add a home later, the next invoice uses the new number.
         </span>
       </div>
-      <p style={{ margin: 0 }}>
-        {props.trialDays} days free, then <b>{usd(homes * INTRO_PRICE_PER_HOME)} a month</b> for {INTRO_MONTHS} months, then <b>{usd(homes * PRICE_PER_HOME)} a month</b>.
-      </p>
+      <ul className="small" style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 4 }}>
+        <li>Free until {showDay(schedule.trialEndsOn, true)}.</li>
+        <li>
+          First invoice, for {showPeriod({ start: schedule.trialEndsOn, end: schedule.firstCycleEnd })}: <b>{cents(homes * schedule.firstPerHomeCents)}</b>, charged on{" "}
+          {showDay(schedule.startsOn, true)}.
+        </li>
+        <li>
+          Then <b>{usd(homes * INTRO_PRICE_PER_HOME)} a month</b> for {schedule.introCycles} months, then <b>{usd(homes * PRICE_PER_HOME)} a month</b>.
+        </li>
+        <li className="muted">
+          Every billing cycle runs from the {CYCLE_DAY}th to the {CYCLE_DAY}th. The invoice goes out the next day and PayPal takes the payment on the {DUE_DAY}th; a
+          payment still missing on the {LATE_DAY}th is late ({usd(LATE_FEE)} late fee).
+        </li>
+      </ul>
       {busy ? <p className="notice" role="status">Confirming with PayPal…</p> : <div ref={box} aria-label="PayPal subscription button" />}
       {error && <p className="error" role="alert">{error}</p>}
     </div>
