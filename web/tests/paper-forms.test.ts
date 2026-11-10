@@ -1,10 +1,11 @@
 import { and, eq } from "drizzle-orm";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, PDFName } from "pdf-lib";
+import sharp from "sharp";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createTestDb, withTenant, type DB } from "@/db/client";
 import { residentDocuments, staffDocuments } from "@/db/schema";
 import type { Actor } from "@/lib/permissions";
-import { admitOnboarding, blankFormOf, familyView, getOnboarding, hireOnboarding, paperCopyOf, paperUndo, paperUpload, startOnboarding } from "@/server/onboarding";
+import { admitOnboarding, blankFormOf, printHomes, familyView, getOnboarding, hireOnboarding, paperCopyOf, paperUndo, paperUpload, startOnboarding } from "@/server/onboarding";
 import { ensureStarterForms, listForms } from "@/server/onboarding-forms";
 import { renderOnboardingPdf, renderPaperFormPdf } from "@/server/onboarding-pdf";
 import { seedDemo, type Seeded } from "@/server/seed";
@@ -42,6 +43,27 @@ describe("blank forms to print", () => {
       }
       expect(await inOrg((tx) => blankFormOf(tx, caregiver, forms[0].id))).toBeNull();
     }
+  });
+
+  it("puts the chosen home's details and the organization's logo on the blank copy", async () => {
+    const [form] = (await inOrg((tx) => listForms(tx, owner))).filter((f) => f.kind === "form");
+    const homes = await inOrg((tx) => printHomes(tx, owner, s.orgId));
+    expect(homes.map((h) => h.id).sort()).toEqual([s.facilities.cedarRidge, s.facilities.mapleHouse].sort());
+    // An owner with two homes gets none unless one is chosen.
+    expect((await inOrg((tx) => blankFormOf(tx, owner, form.id)))!.head.home).toBe("");
+    const maple = (await inOrg((tx) => blankFormOf(tx, owner, form.id, s.facilities.mapleHouse)))!;
+    expect(maple.head.home).toBe(homes.find((h) => h.id === s.facilities.mapleHouse)!.name);
+    expect((await inOrg((tx) => blankFormOf(tx, owner, form.id, null)))!.head.home).toBe("");
+    // A home that isn't theirs prints nothing.
+    expect(await inOrg((tx) => blankFormOf(tx, owner, form.id, "00000000-0000-0000-0000-000000000000"))).toBeNull();
+
+    // The logo is drawn at the top of the first page.
+    const png = await sharp({ create: { width: 120, height: 60, channels: 3, background: "#3355aa" } }).png().toBuffer();
+    const withLogo = await renderPaperFormPdf(maple.form, { ...maple.head, logo: png });
+    const without = await renderPaperFormPdf(maple.form, { ...maple.head, logo: null });
+    const images = async (pdf: Buffer) => (await PDFDocument.load(pdf)).context.enumerateIndirectObjects().filter(([, o]) => String((o as { dict?: { get: (k: unknown) => unknown } }).dict?.get?.(PDFName.of("Subtype"))) === "/Image").length;
+    expect(await images(withLogo)).toBe(1);
+    expect(await images(without)).toBe(0);
   });
 });
 

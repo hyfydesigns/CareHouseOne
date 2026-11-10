@@ -3,6 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { getDb, withTenant } from "@/db/client";
 import { requireUser } from "@/lib/session";
 import { canManageOnboarding, getForm } from "@/server/onboarding-forms";
+import { printHomes } from "@/server/onboarding";
+import { PrintBlankLink, PrintHomeProvider, PrintHomeSelect } from "../print-home";
 import { saveFormAction } from "../../actions";
 import { FormEditor } from "./editor";
 
@@ -10,7 +12,8 @@ export default async function EditOnboardingForm({ params }: { params: Promise<{
   const me = await requireUser();
   if (!canManageOnboarding(me)) redirect("/dashboard");
   const { id } = await params;
-  const form = await withTenant(await getDb(), me.orgId, (tx) => getForm(tx, { id: me.id, role: me.role, facilityIds: me.facilityIds }, id));
+  const actor = { id: me.id, role: me.role, facilityIds: me.facilityIds };
+  const { form, homes } = await withTenant(await getDb(), me.orgId, async (tx) => ({ form: await getForm(tx, actor, id), homes: await printHomes(tx, actor, me.orgId) }));
   if (!form) notFound();
   return (
     <>
@@ -19,7 +22,14 @@ export default async function EditOnboardingForm({ params }: { params: Promise<{
         <div className="row">
           <h1>{form.title}</h1>
           <span className="spacer" />
-          {form.kind === "form" && <a className="btn small" href={`/api/onboarding/forms/${form.id}/paper`} target="_blank" rel="noreferrer">Print a blank copy</a>}
+          {form.kind === "form" && (
+            <PrintHomeProvider homes={homes}>
+              <div className="row" style={{ gap: 8 }}>
+                <PrintHomeSelect />
+                <PrintBlankLink formId={form.id} label="Print a blank copy" />
+              </div>
+            </PrintHomeProvider>
+          )}
         </div>
         {form.kind === "form" && <p className="small muted" style={{ margin: 0 }}>Print uses the last saved version. Save your changes first.</p>}
       </div>

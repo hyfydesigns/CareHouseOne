@@ -441,13 +441,27 @@ export async function paperCopyOf(tx: Tx, actor: Actor, packetId: string, itemId
  * A form from the list, blank, to print. The organization's details are filled in, and the home's
  * when there is only one to choose; everything else is a line to write on.
  */
-export async function blankFormOf(tx: Tx, actor: Actor, formId: string): Promise<{ form: PaperForm; head: Letterhead } | null> {
+/** The homes an owner or admin can print blank forms for, by name. */
+export async function printHomes(tx: Tx, actor: Actor, orgId: string): Promise<Array<{ id: string; name: string }>> {
+  const rows = await tx.select({ id: facilities.id, name: facilities.name }).from(facilities).where(eq(facilities.orgId, orgId)).orderBy(facilities.name);
+  return rows.filter((h) => canSeeFacility(actor, h.id));
+}
+
+/**
+ * A form, blank, to print with the organization's logo and name. `homeId` picks the home whose
+ * details go on it (null for none); left out, a person who can see only one home gets that one.
+ */
+export async function blankFormOf(tx: Tx, actor: Actor, formId: string, homeId?: string | null): Promise<{ form: PaperForm; head: Letterhead } | null> {
   const f = await getForm(tx, actor, formId);
   if (!f || f.kind !== "form") return null;
   const [{ orgId }] = await tx.select({ orgId: onboardingForms.orgId }).from(onboardingForms).where(eq(onboardingForms.id, f.id));
   const [org] = await tx.select({ name: organizations.name, logo: organizations.logo }).from(organizations).where(eq(organizations.id, orgId));
   const homes = (await tx.select().from(facilities).where(eq(facilities.orgId, orgId))).filter((h) => canSeeFacility(actor, h.id));
-  const home = homes.length === 1 ? homes[0] : null;
+  let home = homes.length === 1 ? homes[0] : null;
+  if (homeId !== undefined) {
+    home = homeId === null ? null : (homes.find((h) => h.id === homeId) ?? null);
+    if (homeId !== null && !home) return null;
+  }
   const ctx = {
     Organization: org.name,
     "Home name": home?.name ?? "",
