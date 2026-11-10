@@ -173,13 +173,13 @@ export function residentialAgreement(): FormDef {
       p("All disputes and other matters in question between the Resident and the Community shall be decided by arbitration administered by the American Arbitration Association (or other mutually acceptable arbitrators) in accordance with the AAA Commercial Arbitration Rules (or other mutually acceptable rules). The foregoing agreement to arbitrate shall be enforceable under the prevailing arbitration law. The award rendered by the arbitrators shall be final, and judgment may be entered upon it in accordance with applicable law in any court having jurisdiction thereof. Arbitration shall be the exclusive method of receiving disputes and other matters in question between the Resident and the Community, unless the parties shall otherwise agree in writing. Said arbitration shall take place in the city wherein the Community is located, and shall be in accordance with, subject to, and governed by the laws of the State of Texas."),
       p("The arbitrator shall, in the Award, allocate all of the costs of the arbitration, including the fees of the arbitrator and the reasonable attorneys' fees of the prevailing party, against the party who did not prevail."),
 
-      h("Legal Representative or Responsible Party"),
+      h("Patient or Responsible Party"),
       f("Your title or relationship to the resident", "text", { help: "For example: Daughter, health care power of attorney" }),
       f("Your address", "text"),
       f("City, State, ZIP", "text"),
       f("Telephone number", "text"),
       f("Second resident (if two people share this agreement)", "text", { required: false }),
-      sign("Legal representative or responsible party", "poa"),
+      sign("Patient or responsible party", "poa"),
       sign("For the Community", "staff"),
 
       h("Appendix B: Personal Service Care Levels"),

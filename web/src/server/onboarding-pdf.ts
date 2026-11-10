@@ -5,7 +5,7 @@ import { E_SIGN_CONSENT, type Evidence, type ItemView, type Letterhead } from ".
 
 type Packet = typeof onboardingPackets.$inferSelect;
 
-/** The standard PDF fonts only know Latin-1: straighten quotes and replace anything else. */
+/** The standard PDF fonts only know Latin-1 (and the bullet): straighten quotes and replace anything else. */
 const latin = (s: string) =>
   s
     .replace(/[‘’]/g, "'")
@@ -13,7 +13,7 @@ const latin = (s: string) =>
     .replace(/[–—]/g, "-")
     .replace(/…/g, "...")
     .replace(/✓/g, "")
-    .replace(/[^\n\x20-\x7e\xa0-\xff]/g, "?");
+    .replace(/[^\n\x20-\x7e\xa0-\xff•]/g, "?");
 
 const W = 612;
 const H = 792;
