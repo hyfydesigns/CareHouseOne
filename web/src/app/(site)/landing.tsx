@@ -327,7 +327,7 @@ export function Landing() {
             </details>
             <details>
               <summary>Can we cancel?</summary>
-              <p>Anytime, from your PayPal account. There&apos;s no contract. Care records and the medication record are never locked because of a missed payment.</p>
+              <p>Anytime, from your PayPal account. There&apos;s no contract. Cancel by the end of your free trial and you pay nothing. After that, the billing cycle you&apos;re in is your last: everything keeps working until it ends, and its invoice comes as a PayPal invoice. Care records and the medication record are never locked because of a missed payment.</p>
             </details>
           </div>
         </div>

@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { createTestDb, withTenant, type DB } from "@/db/client";
 import { auditLog, billingEvents, billingInvoices, leads, organizations, outbox, subscriptions } from "@/db/schema";
 import { describeToken } from "@/server/auth";
-import { cents, cycleEnding, cycleOn, dayIn, dueDay, invoiceDay, paypalTerms, scheduleFor } from "@/lib/billing-cycle";
+import { cents, cycleEnding, cycleOn, dayIn, dueDay, finalCycleEnd, invoiceDay, paypalTerms, scheduleFor } from "@/lib/billing-cycle";
 import { monthlyBill } from "@/lib/pricing";
 import {
   adminLockedMessage,
@@ -33,6 +33,8 @@ let s: Seeded;
 const paypal = new Map<string, Record<string, unknown>>();
 const revised: Array<{ id: string; quantity: string }> = [];
 const feeInvoices: Array<{ email: string; value: string }> = [];
+const sentInvoices: Array<{ id: string; email: string; item: string; quantity: string; value: string; number?: string; dueOn?: string }> = [];
+const invoiceStatus = new Map<string, string>();
 let reviseNeedsApproval = true;
 
 function stubPaypal() {
@@ -47,10 +49,21 @@ function stubPaypal() {
     }
     if (u.endsWith("/v2/invoicing/invoices")) {
       const b = JSON.parse(String(init?.body));
-      feeInvoices.push({ email: b.primary_recipients[0].billing_info.email_address, value: b.items[0].unit_amount.value });
-      return json({ href: "https://api-m.sandbox.paypal.com/v2/invoicing/invoices/INV2-TEST-0001" }, 201);
+      const id = `INV2-TEST-${String(sentInvoices.length + 1).padStart(4, "0")}`;
+      const email = b.primary_recipients[0].billing_info.email_address;
+      const item = b.items[0];
+      if (item.name.includes("late fee")) feeInvoices.push({ email, value: item.unit_amount.value });
+      sentInvoices.push({ id, email, item: item.name, quantity: item.quantity, value: item.unit_amount.value, number: b.detail.invoice_number, dueOn: b.detail.payment_term.due_date });
+      invoiceStatus.set(id, "DRAFT");
+      return json({ href: `https://api-m.sandbox.paypal.com/v2/invoicing/invoices/${id}` }, 201);
     }
-    if (u.endsWith("/v2/invoicing/invoices/INV2-TEST-0001/send")) return json({}, 202);
+    const send = u.match(/\/v2\/invoicing\/invoices\/(INV2-[A-Z0-9-]+)\/send$/);
+    if (send && invoiceStatus.has(send[1])) {
+      invoiceStatus.set(send[1], "SENT");
+      return json({}, 202);
+    }
+    const inv = u.match(/\/v2\/invoicing\/invoices\/(INV2-[A-Z0-9-]+)$/);
+    if (inv) return invoiceStatus.has(inv[1]) ? json({ id: inv[1], status: invoiceStatus.get(inv[1]) }) : json({}, 404);
     const get = u.match(/\/v1\/billing\/subscriptions\/([^/?]+)(\?fields=plan)?$/);
     if (get) return paypal.has(get[1]) ? json(paypal.get(get[1])) : json({ name: "RESOURCE_NOT_FOUND" }, 404);
     return json({}, 404);
@@ -287,9 +300,80 @@ describe("billing status", () => {
     );
     expect(write).toBe("refused");
   });
+
+  it("after a cancellation, bills the last cycle and anything unpaid as PayPal invoices", async () => {
+    // Continues the demo organization's subscription from the test above (paid up through February).
+    const at = (iso: string) => new Date(iso);
+    const [row] = await db.select().from(subscriptions).where(eq(subscriptions.paypalSubscriptionId, "I-DEMO000001"));
+    const invoices = () => db.select().from(billingInvoices).where(eq(billingInvoices.subscriptionId, row.id)).orderBy(billingInvoices.periodEnd);
+    const mail = async (subject: string) => db.select().from(outbox).where(and(eq(outbox.to, "billing@demo.test"), like(outbox.subject, subject)));
+    const paid = { failed_payments_count: 0, outstanding_balance: { value: "0" }, last_payment: { time: "2027-02-11T09:00:00Z" } };
+
+    // March 1: the invoice for January 28 to February 28 goes out as usual, due March 5.
+    await runBillingCalendar(db, at("2027-03-01T15:00:00Z"));
+    expect((await invoices())[2]).toMatchObject({ periodEnd: "2027-02-28", amountCents: 9800, dueOn: "2027-03-05", paypalInvoiceId: null });
+
+    // March 3: the client cancels in PayPal. PayPal won't take March 5th's payment, so that invoice
+    // goes out as a PayPal invoice; the cycle running now (to March 28) is the last one.
+    sub("I-DEMO000001", { quantity: "2", status: "CANCELLED", status_update_time: "2027-03-03T16:00:00Z", billing_info: paid });
+    await handleWebhook(db, { id: "WH-CANCEL-1", event_type: "BILLING.SUBSCRIPTION.CANCELLED", resource: { id: "I-DEMO000001" } }, at("2027-03-03T16:01:00Z"));
+    let [state] = await db.select().from(subscriptions).where(eq(subscriptions.id, row.id));
+    expect(state.cancelledOn).toBe("2027-03-03");
+    let third = (await invoices())[2];
+    expect(third.paypalInvoiceId).toMatch(/^INV2-TEST-/);
+    expect(sentInvoices.at(-1)).toMatchObject({ id: third.paypalInvoiceId, email: "billing@demo.test", quantity: "2", value: "49.00", dueOn: "2027-03-05" });
+    const [cancelled] = await mail("Your CareHouse One subscription is cancelled");
+    expect(cancelled.body).toContain("until the current billing cycle ends on Sunday, March 28");
+    expect(cancelled.body).toContain("on Monday, March 29 PayPal will email you an invoice for it, due Monday, April 5");
+    expect(cancelled.body).toContain("$98, due Mar 5, 2027");
+    // Everything keeps working until the cycle ends, then admin features pause.
+    expect(billingState(state, at("2027-03-10T15:00:00Z"))).toMatchObject({ label: "Cancelled", adminLocked: false });
+    expect(billingState(state, at("2027-03-28T15:00:00Z"))).toMatchObject({ label: "Cancelled", adminLocked: true });
+
+    // March 5: the reminder says to pay the PayPal invoice; then the client pays it.
+    await runBillingCalendar(db, at("2027-03-05T13:00:00Z"));
+    expect((await mail("%$98 is due today")).at(-1)?.body).toContain("please pay the invoice PayPal emailed you");
+    invoiceStatus.set(third.paypalInvoiceId!, "PAID");
+    await handleWebhook(db, { id: "WH-INV-PAID-1", event_type: "INVOICING.INVOICE.PAID", resource: { invoice: { id: third.paypalInvoiceId! } } }, at("2027-03-06T10:00:00Z"));
+    third = (await invoices())[2];
+    expect(third.paidAt?.toISOString()).toBe("2027-03-06T10:00:00.000Z");
+
+    // March 29: the final invoice, for the homes there are now, as a PayPal invoice. PayPal's
+    // subscription isn't touched.
+    const revisions = revised.length;
+    expect(await runBillingCalendar(db, at("2027-03-29T15:00:00Z"))).toMatchObject({ invoiced: 1 });
+    expect(revised).toHaveLength(revisions);
+    const final = (await invoices())[3];
+    expect(final).toMatchObject({ periodStart: "2027-02-28", periodEnd: "2027-03-28", homes: 2, amountCents: 9800, dueOn: "2027-04-05", lateOn: "2027-04-10" });
+    expect(sentInvoices.at(-1)).toMatchObject({ id: final.paypalInvoiceId, quantity: "2", value: "49.00", dueOn: "2027-04-05" });
+    expect((await mail("Your final CareHouse One invoice: $98 due Apr 5"))[0].body).toContain("This is your final invoice");
+
+    // Unpaid on April 10: late, with a late fee. Paid later: settled.
+    expect(await runBillingCalendar(db, at("2027-04-10T15:00:00Z"))).toMatchObject({ late: 1 });
+    expect((await mail("Your CareHouse One payment is late")).at(-1)?.body).toContain("please pay the PayPal invoice we sent");
+    invoiceStatus.set(final.paypalInvoiceId!, "MARKED_AS_PAID");
+    await handleWebhook(db, { id: "WH-INV-PAID-2", event_type: "INVOICING.INVOICE.PAID", resource: { id: final.paypalInvoiceId! } }, at("2027-04-12T10:00:00Z"));
+    expect((await invoices())[3].paidAt).not.toBeNull();
+    [state] = await db.select().from(subscriptions).where(eq(subscriptions.id, row.id));
+    expect(state.lateSince).toBeNull();
+    // Nothing after that.
+    expect(await runBillingCalendar(db, at("2027-04-29T15:00:00Z"))).toMatchObject({ invoiced: 0 });
+    expect(await invoices()).toHaveLength(4);
+    // An invoice ID PayPal sends that isn't ours is ignored.
+    expect(await handleWebhook(db, { id: "WH-INV-OTHER", event_type: "INVOICING.INVOICE.PAID", resource: { id: "INV2-NOT-OURS" } })).toBe("ignored");
+  });
 });
 
 describe("billing calendar", () => {
+  it("bills a cancelled subscription to the end of the cycle it was cancelled in, and nothing in the trial", () => {
+    const sched = scheduleFor(new Date("2026-11-10T15:00:00Z"));
+    expect(finalCycleEnd(sched, "2026-11-20")).toBeNull();
+    expect(finalCycleEnd(sched, sched.trialEndsOn)).toBeNull();
+    expect(finalCycleEnd(sched, "2026-12-11")).toBe("2026-12-28");
+    expect(finalCycleEnd(sched, "2027-01-28")).toBe("2027-01-28");
+    expect(finalCycleEnd(sched, "2027-01-29")).toBe("2027-02-28");
+  });
+
   it("is free for 30 days, then $49 per home for 3 months, then $99 per home", () => {
     expect(monthlyBill(1, "trial").total).toBe(0);
     expect(monthlyBill(3, "intro")).toEqual({ homes: 3, stage: "intro", perHome: 49, total: 147 });

@@ -8,6 +8,7 @@ import {
   cycleEnding,
   dayIn,
   daysBetween,
+  finalCycleEnd,
   LATE_FEE,
   lastCycleEndBefore,
   paypalTerms,
@@ -22,7 +23,7 @@ import { randomToken, sha256 } from "@/lib/crypto";
 import { appBaseUrl } from "@/lib/hosts";
 import { INTRO_PRICE_PER_HOME, monthlyBill, PRICE_PER_HOME, usd, type MonthlyBill, type PriceStage } from "@/lib/pricing";
 import { audit, sendMail } from "./audit";
-import { getSubscription, paypalConfigured, reviseQuantity, sendLateFeeInvoice, TRIAL_DAYS, type PaypalSubscription } from "./paypal";
+import { getSubscription, paypalConfigured, paypalInvoicePaid, reviseQuantity, sendLateFeeInvoice, sendPaypalInvoice, TRIAL_DAYS, type PaypalSubscription } from "./paypal";
 import { provisionOrganization, provisionSchema } from "./provision";
 
 export const SETUP_DAYS = 7;
@@ -44,6 +45,8 @@ function fromPaypal(p: PaypalSubscription, now: Date) {
     payerName: [p.subscriber?.name?.given_name, p.subscriber?.name?.surname].filter(Boolean).join(" ") || null,
     nextBillingAt: p.billing_info?.next_billing_time ? new Date(p.billing_info.next_billing_time) : null,
     lastPaymentAt: paidAt ? new Date(paidAt) : null,
+    ended: p.status === "CANCELLED" || p.status === "EXPIRED",
+    statusChangedAt: p.status_update_time ? new Date(p.status_update_time) : null,
     failedPayments: failed,
     syncedAt: now,
     behind: p.status === "SUSPENDED" || failed > 0,
@@ -189,11 +192,16 @@ export const invoiceNumber = (i: Pick<BillingInvoice, "id" | "periodEnd">) => `I
 async function applyPaypal(db: DB, row: Subscription, p: PaypalSubscription, now: Date): Promise<void> {
   const v = fromPaypal(p, now);
   const pastDueSince = v.behind ? (row.pastDueSince ?? now) : null;
+  const cancelledOn = row.cancelledOn ?? (v.ended ? dayIn(v.statusChangedAt ?? now) : null);
   await db
     .update(subscriptions)
-    .set({ status: v.status, quantity: v.quantity, nextBillingAt: v.nextBillingAt, lastPaymentAt: v.lastPaymentAt ?? row.lastPaymentAt, failedPayments: v.failedPayments, pastDueSince, syncedAt: now })
+    .set({ status: v.status, quantity: v.quantity, nextBillingAt: v.nextBillingAt, lastPaymentAt: v.lastPaymentAt ?? row.lastPaymentAt, failedPayments: v.failedPayments, pastDueSince, cancelledOn, syncedAt: now })
     .where(eq(subscriptions.id, row.id));
   if (!v.behind && v.owed === 0 && v.lastPaymentAt) await settleInvoices(db, row, v.lastPaymentAt);
+  if (cancelledOn && !row.cancelledOn) {
+    await handleCancellation(db, { ...row, status: v.status, cancelledOn, payerEmail: row.payerEmail ?? v.payerEmail }, now);
+    return;
+  }
   if (row.orgId && v.behind && !row.pastDueSince) {
     const [open] = await db.select().from(billingInvoices).where(and(eq(billingInvoices.subscriptionId, row.id), isNull(billingInvoices.paidAt))).orderBy(asc(billingInvoices.dueOn)).limit(1);
     const by = open ? longDay(open.lateOn) : "the 10th";
@@ -219,14 +227,125 @@ async function settleInvoices(db: DB, row: Subscription, paidAt: Date): Promise<
   const settled = await db
     .update(billingInvoices)
     .set({ paidAt })
-    .where(and(eq(billingInvoices.subscriptionId, row.id), isNull(billingInvoices.paidAt), lte(billingInvoices.dueOn, paidThrough)))
+    // Invoices sent as PayPal invoices are paid there, not by the subscription.
+    .where(and(eq(billingInvoices.subscriptionId, row.id), isNull(billingInvoices.paidAt), isNull(billingInvoices.paypalInvoiceId), lte(billingInvoices.dueOn, paidThrough)))
     .returning();
-  if (!settled.length) return;
-  const [stillLate] = await db.select({ id: billingInvoices.id }).from(billingInvoices).where(and(eq(billingInvoices.subscriptionId, row.id), isNull(billingInvoices.paidAt), isNotNull(billingInvoices.lateAt))).limit(1);
-  if (!stillLate) await db.update(subscriptions).set({ lateSince: null }).where(eq(subscriptions.id, row.id));
-  for (const i of settled) {
-    await audit(db, { orgId: i.orgId, actorId: null, action: "billing_invoice_paid", entity: "billing_invoice", entityId: i.id, details: { number: invoiceNumber(i), amountCents: i.amountCents } });
+  await afterPaid(db, row.id, settled);
+}
+
+/** Audits invoices just marked paid and, when no late invoice is left, brings admin features back. */
+async function afterPaid(db: DB, subscriptionId: string, paid: BillingInvoice[]): Promise<void> {
+  if (!paid.length) return;
+  const [stillLate] = await db.select({ id: billingInvoices.id }).from(billingInvoices).where(and(eq(billingInvoices.subscriptionId, subscriptionId), isNull(billingInvoices.paidAt), isNotNull(billingInvoices.lateAt))).limit(1);
+  if (!stillLate) await db.update(subscriptions).set({ lateSince: null }).where(eq(subscriptions.id, subscriptionId));
+  for (const i of paid) {
+    await audit(db, { orgId: i.orgId, actorId: null, action: "billing_invoice_paid", entity: "billing_invoice", entityId: i.id, details: { number: invoiceNumber(i), amountCents: i.amountCents, paypalInvoiceId: i.paypalInvoiceId } });
   }
+}
+
+/** Asks PayPal whether this subscription's unpaid PayPal invoices have been paid. */
+async function refreshPaypalInvoices(db: DB, subscriptionId: string, now: Date, only?: string): Promise<void> {
+  const open = await db
+    .select()
+    .from(billingInvoices)
+    .where(and(eq(billingInvoices.subscriptionId, subscriptionId), isNull(billingInvoices.paidAt), only ? eq(billingInvoices.paypalInvoiceId, only) : isNotNull(billingInvoices.paypalInvoiceId)));
+  const paid: BillingInvoice[] = [];
+  for (const inv of open) {
+    try {
+      if (!(await paypalInvoicePaid(inv.paypalInvoiceId!))) continue;
+    } catch (e) {
+      console.error(`[billing] couldn't check PayPal invoice for ${inv.id}: ${(e as Error).message}`);
+      continue;
+    }
+    const [done] = await db.update(billingInvoices).set({ paidAt: now }).where(and(eq(billingInvoices.id, inv.id), isNull(billingInvoices.paidAt))).returning();
+    if (done) paid.push(done);
+  }
+  await afterPaid(db, subscriptionId, paid);
+}
+
+/**
+ * A cancelled subscription can't collect anything more, so an invoice it still owes goes out as a
+ * PayPal invoice, due on its usual due date (or now, if that's passed). Returns PayPal's ID, or null
+ * if PayPal couldn't take it (the calendar tries again).
+ */
+async function invoiceThroughPaypal(db: DB, row: Subscription, inv: BillingInvoice, today: Day): Promise<string | null> {
+  if (inv.paypalInvoiceId) return inv.paypalInvoiceId;
+  if (!row.payerEmail) return null;
+  try {
+    const id = await sendPaypalInvoice({
+      email: row.payerEmail,
+      number: invoiceNumber(inv),
+      item: `CareHouse One, ${showPeriod({ start: inv.periodStart, end: inv.periodEnd })} (per home)`,
+      quantity: inv.homes,
+      unitCents: inv.perHomeCents,
+      dueOn: inv.dueOn > today ? inv.dueOn : today,
+      note: `CareHouse One invoice ${invoiceNumber(inv)}. Your subscription was cancelled, so this is billed by invoice instead of automatically.`,
+    });
+    await db.update(billingInvoices).set({ paypalInvoiceId: id }).where(eq(billingInvoices.id, inv.id));
+    return id;
+  } catch (e) {
+    console.error(`[billing] PayPal invoice failed for ${inv.id}: ${(e as Error).message}`);
+    return null;
+  }
+}
+
+/** Every unpaid invoice of a cancelled subscription that hasn't gone out as a PayPal invoice yet. */
+async function invoiceUnsent(db: DB, row: Subscription, today: Day): Promise<BillingInvoice[]> {
+  const unsent = await db
+    .select()
+    .from(billingInvoices)
+    .where(and(eq(billingInvoices.subscriptionId, row.id), isNull(billingInvoices.paidAt), isNull(billingInvoices.paypalInvoiceId)))
+    .orderBy(asc(billingInvoices.dueOn));
+  const sent: BillingInvoice[] = [];
+  for (const inv of unsent) {
+    const id = await invoiceThroughPaypal(db, row, inv, today);
+    if (id) sent.push({ ...inv, paypalInvoiceId: id });
+  }
+  return sent;
+}
+
+/** The last cycle a cancelled subscription is billed for (null: nothing more is owed). */
+export function finalCycleOf(row: Pick<Subscription, "cancelledOn" | "trialEndsOn" | "firstCycleEnd" | "firstPerHomeCents" | "introCycles" | "startsOn">): Cycle | null {
+  const schedule = scheduleOf(row);
+  const end = schedule && row.cancelledOn ? finalCycleEnd(schedule, row.cancelledOn) : null;
+  return end ? cycleEnding(schedule!, end) : null;
+}
+
+/**
+ * PayPal cancelled the subscription (the client cancelled in PayPal, or we did). The billing cycle
+ * running that day is the last one: everything keeps working until it ends, and its invoice goes
+ * out on the usual day as a PayPal invoice. Invoices already out and unpaid go out as PayPal
+ * invoices now. Cancelling by the end of the free trial costs nothing.
+ */
+async function handleCancellation(db: DB, row: Subscription, now: Date): Promise<void> {
+  if (!row.orgId || !row.cancelledOn) return;
+  const today = dayIn(now);
+  const sent = await invoiceUnsent(db, row, today);
+  const final = finalCycleOf(row);
+  const [finalIssued] = final ? await db.select({ id: billingInvoices.id }).from(billingInvoices).where(and(eq(billingInvoices.subscriptionId, row.id), eq(billingInvoices.periodEnd, final.end))) : [];
+  const lines = [`Your CareHouse One subscription was cancelled on ${longDay(row.cancelledOn)}.`];
+  if (!final) {
+    lines.push("It was cancelled during the free trial, so nothing is owed. Adding staff, tablets and settings changes are now paused. Care records stay available to you.");
+  } else {
+    lines.push(
+      final.end > today
+        ? `CareHouse One keeps working as usual until the current billing cycle ends on ${longDay(final.end)}. After that, care records stay available to you, but adding staff, tablets and settings changes pause.`
+        : "Care records stay available to you; adding staff, tablets and settings changes are paused.",
+    );
+    if (!finalIssued)
+      lines.push(
+        `Because billing is in arrears, that last cycle (${showPeriod(final)}) is still billed. PayPal no longer takes payments automatically for this subscription, so on ${longDay(final.invoiceOn)} PayPal will email you an invoice for it, due ${longDay(final.dueOn)}.`,
+      );
+  }
+  if (sent.length)
+    lines.push(
+      `PayPal is emailing you ${sent.length === 1 ? "an invoice" : "invoices"} for what was already billed and not yet paid: ${sent.map((i) => `${invoiceNumber(i)} (${cents(i.amountCents)}, due ${showDay(i.dueOn > today ? i.dueOn : today, true)})`).join(", ")}.`,
+    );
+  lines.push("Changed your mind? Email us and we'll help you subscribe again; your records are still here.");
+  for (const to of await billingContacts(db, row)) {
+    await sendMail(db, { orgId: row.orgId, to, subject: "Your CareHouse One subscription is cancelled", body: lines.join("\n\n") });
+  }
+  await audit(db, { orgId: row.orgId, actorId: null, action: "subscription_cancelled", entity: "subscription", entityId: row.id, details: { cancelledOn: row.cancelledOn, finalCycleEnd: final?.end ?? null, invoicedNow: sent.map(invoiceNumber) } });
 }
 
 async function billingContacts(db: DB, row: Subscription): Promise<string[]> {
@@ -236,15 +355,25 @@ async function billingContacts(db: DB, row: Subscription): Promise<string[]> {
   return [...new Set([row.payerEmail, ...owners.map((o) => o.email)].filter((e): e is string => !!e))];
 }
 
-type PaypalEvent = { id?: string; event_type?: string; resource?: { id?: string; billing_agreement_id?: string } };
+type PaypalEvent = { id?: string; event_type?: string; resource?: { id?: string; billing_agreement_id?: string; invoice?: { id?: string } } };
 
-/** A verified PayPal webhook: log it once, then refresh the subscription from PayPal (the source of truth). */
+/**
+ * A verified PayPal webhook: log it once, then refresh from PayPal (the source of truth): the
+ * subscription, or for INVOICING.INVOICE.* events, whether the PayPal invoice is paid.
+ */
 export async function handleWebhook(db: DB, event: PaypalEvent, now = new Date()): Promise<"duplicate" | "ignored" | "applied"> {
   if (!event.id || !event.event_type) return "ignored";
-  const resourceId = event.event_type.startsWith("PAYMENT.SALE") ? event.resource?.billing_agreement_id : event.resource?.id;
+  const invoiceEvent = event.event_type.startsWith("INVOICING.INVOICE");
+  const resourceId = event.event_type.startsWith("PAYMENT.SALE") ? event.resource?.billing_agreement_id : invoiceEvent ? (event.resource?.invoice?.id ?? event.resource?.id) : event.resource?.id;
   const inserted = await db.insert(billingEvents).values({ paypalEventId: event.id, eventType: event.event_type, resourceId: resourceId ?? null }).onConflictDoNothing().returning();
   if (!inserted.length) return "duplicate";
   if (!resourceId) return "ignored";
+  if (invoiceEvent) {
+    const [inv] = await db.select().from(billingInvoices).where(eq(billingInvoices.paypalInvoiceId, resourceId));
+    if (!inv) return "ignored";
+    await refreshPaypalInvoices(db, inv.subscriptionId, now, resourceId);
+    return "applied";
+  }
   const [row] = await db.select().from(subscriptions).where(eq(subscriptions.paypalSubscriptionId, resourceId));
   if (!row) return "ignored";
   await applyPaypal(db, row, await getSubscription(resourceId), now);
@@ -295,19 +424,32 @@ export async function runBillingCalendar(db: DB, now = new Date()): Promise<{ in
   const rows = await db
     .select()
     .from(subscriptions)
-    .where(and(isNotNull(subscriptions.orgId), isNotNull(subscriptions.firstCycleEnd), inArray(subscriptions.status, ["APPROVED", "ACTIVE", "SUSPENDED"])));
+    .where(
+      and(
+        isNotNull(subscriptions.orgId),
+        isNotNull(subscriptions.firstCycleEnd),
+        // A cancelled subscription stays on the calendar for its final invoice and anything unpaid.
+        or(inArray(subscriptions.status, ["APPROVED", "ACTIVE", "SUSPENDED"]), isNotNull(subscriptions.cancelledOn)),
+      ),
+    );
   let invoiced = 0;
   let late = 0;
   for (const row of rows) {
     const schedule = scheduleOf(row);
     if (!schedule) continue;
     try {
+      const final = row.cancelledOn ? finalCycleOf(row) : null;
+      const finalEnd = final?.end ?? null;
+      // Cancelled, the final invoice is out (or none is owed) and everything's paid: done.
+      if (row.cancelledOn && (!final || today > final.dueOn) && !(await hasUnpaid(db, row.id))) continue;
       const cycle = cycleEnding(schedule, lastCycleEndBefore(today));
       // Never issue an invoice after its due date (say, after an outage): those are sorted out by hand.
-      if (cycle && today <= cycle.dueOn) {
+      if (cycle && today <= cycle.dueOn && (!row.cancelledOn || (finalEnd && cycle.end <= finalEnd))) {
         const [existing] = await db.select({ id: billingInvoices.id }).from(billingInvoices).where(and(eq(billingInvoices.subscriptionId, row.id), eq(billingInvoices.periodEnd, cycle.end)));
         if (!existing && (await issueInvoice(db, row, cycle))) invoiced++;
       }
+      // PayPal couldn't take one before (Invoicing off, an outage): try again.
+      if (row.cancelledOn) await invoiceUnsent(db, row, today);
       await remindDueToday(db, row, today, now);
       late += await markLate(db, row, today, now);
     } catch (e) {
@@ -317,13 +459,20 @@ export async function runBillingCalendar(db: DB, now = new Date()): Promise<{ in
   return { invoiced, late };
 }
 
+async function hasUnpaid(db: DB, subscriptionId: string): Promise<boolean> {
+  const [open] = await db.select({ id: billingInvoices.id }).from(billingInvoices).where(and(eq(billingInvoices.subscriptionId, subscriptionId), isNull(billingInvoices.paidAt))).limit(1);
+  return !!open;
+}
+
 async function issueInvoice(db: DB, row: Subscription, cycle: Cycle): Promise<boolean> {
   const { homes: count } = await orgBill(db, row.orgId!);
+  const cancelled = !!row.cancelledOn;
   // PayPal charges the quantity it has. When a higher amount needs the payer's approval first,
   // the invoice shows what PayPal will actually take, and the approval link is on the billing screen.
+  // A cancelled subscription's final invoice is a PayPal invoice for the homes there are now.
   let homes = count;
-  let approvalUrl = row.approvalUrl;
-  if (count !== row.quantity) {
+  let approvalUrl = cancelled ? null : row.approvalUrl;
+  if (!cancelled && count !== row.quantity) {
     try {
       approvalUrl = (await reviseQuantity(row.paypalSubscriptionId, count)).approvalUrl;
       if (approvalUrl) homes = row.quantity;
@@ -351,25 +500,31 @@ async function issueInvoice(db: DB, row: Subscription, cycle: Cycle): Promise<bo
     .onConflictDoNothing()
     .returning();
   if (!inv) return false;
+  const paypalInvoiceId = cancelled ? await invoiceThroughPaypal(db, row, inv, cycle.invoiceOn) : null;
   const priceNote = cycle.stage === "first" ? "introductory price, part of a month" : cycle.stage === "intro" ? "introductory price" : "per home";
+  const howToPay = cancelled
+    ? `This is your final invoice: the subscription was cancelled on ${longDay(row.cancelledOn!)}, and this is the last billing cycle. PayPal no longer takes payments automatically for it, so ${paypalInvoiceId ? "PayPal is emailing you an invoice for this amount" : "PayPal will email you an invoice for this amount shortly"}. Please pay it by ${longDay(inv.dueOn)}.\n\n`
+    : `PayPal takes this payment automatically on ${longDay(inv.dueOn)}; you don't need to do anything.\n\n`;
   for (const to of await billingContacts(db, row)) {
     await sendMail(db, {
       orgId: row.orgId,
       to,
-      subject: `Your CareHouse One invoice: ${cents(inv.amountCents)} due ${showDay(inv.dueOn)}`,
+      subject: `Your ${cancelled ? "final " : ""}CareHouse One invoice: ${cents(inv.amountCents)} due ${showDay(inv.dueOn)}`,
       body:
         `Invoice ${invoiceNumber(inv)}\n` +
         `Billing period: ${showPeriod(cycle)}\n` +
         `Homes: ${homes} × ${cents(cycle.perHomeCents)} (${priceNote})\n` +
         `Amount due: ${cents(inv.amountCents)}\n` +
         `Due: ${longDay(inv.dueOn)}\n\n` +
-        `PayPal takes this payment automatically on ${longDay(inv.dueOn)}; you don't need to do anything.\n\n` +
+        howToPay +
         (approvalUrl && count !== homes ? `You now have ${count} homes. Approve the new amount in PayPal (Settings > Billing in CareHouse One) so the next invoice includes them.\n\n` : "") +
-        `If the payment hasn't gone through by ${longDay(inv.lateOn)}, it's late: a ${usd(LATE_FEE)} late fee is added, and adding staff, tablets and settings changes pause until it's paid. Care records are never affected.\n\n` +
+        (cancelled
+          ? `If it isn't paid by ${longDay(inv.lateOn)}, it's late and a ${usd(LATE_FEE)} late fee is added.\n\n`
+          : `If the payment hasn't gone through by ${longDay(inv.lateOn)}, it's late: a ${usd(LATE_FEE)} late fee is added, and adding staff, tablets and settings changes pause until it's paid. Care records are never affected.\n\n`) +
         `Your invoices are in CareHouse One under Settings > Billing.`,
     });
   }
-  await audit(db, { orgId: row.orgId!, actorId: null, action: "billing_invoice_issued", entity: "billing_invoice", entityId: inv.id, details: { number: invoiceNumber(inv), homes, amountCents: inv.amountCents, dueOn: inv.dueOn, needsApproval: !!approvalUrl && count !== homes } });
+  await audit(db, { orgId: row.orgId!, actorId: null, action: "billing_invoice_issued", entity: "billing_invoice", entityId: inv.id, details: { number: invoiceNumber(inv), homes, amountCents: inv.amountCents, dueOn: inv.dueOn, needsApproval: !!approvalUrl && count !== homes, final: cancelled, paypalInvoiceId } });
   return true;
 }
 
@@ -381,14 +536,17 @@ async function remindDueToday(db: DB, row: Subscription, today: Day, now: Date):
     .where(and(eq(billingInvoices.subscriptionId, row.id), eq(billingInvoices.dueOn, today), isNull(billingInvoices.paidAt), isNull(billingInvoices.remindedAt)))
     .returning();
   for (const inv of due) {
+    const period = showPeriod({ start: inv.periodStart, end: inv.periodEnd });
     for (const to of await billingContacts(db, row)) {
       await sendMail(db, {
         orgId: row.orgId,
         to,
         subject: `Your CareHouse One payment of ${cents(inv.amountCents)} is due today`,
-        body:
-          `PayPal takes the payment for invoice ${invoiceNumber(inv)} (${showPeriod({ start: inv.periodStart, end: inv.periodEnd })}) today: ${cents(inv.amountCents)}. You don't need to do anything if your PayPal payment method is up to date.\n\n` +
-          `If it hasn't gone through by ${longDay(inv.lateOn)}, a ${usd(LATE_FEE)} late fee is added and admin features pause until it's paid.`,
+        body: row.cancelledOn
+          ? `Invoice ${invoiceNumber(inv)} (${period}) is due today: ${cents(inv.amountCents)}. Your subscription is cancelled, so PayPal doesn't take this automatically: please pay the invoice PayPal emailed you. You'll also find it in your PayPal account.\n\n` +
+            `If it isn't paid by ${longDay(inv.lateOn)}, a ${usd(LATE_FEE)} late fee is added.`
+          : `PayPal takes the payment for invoice ${invoiceNumber(inv)} (${period}) today: ${cents(inv.amountCents)}. You don't need to do anything if your PayPal payment method is up to date.\n\n` +
+            `If it hasn't gone through by ${longDay(inv.lateOn)}, a ${usd(LATE_FEE)} late fee is added and admin features pause until it's paid.`,
       });
     }
   }
@@ -398,7 +556,8 @@ async function remindDueToday(db: DB, row: Subscription, today: Day, now: Date):
 async function markLate(db: DB, row: Subscription, today: Day, now: Date): Promise<number> {
   const unpaid = () => db.select().from(billingInvoices).where(and(eq(billingInvoices.subscriptionId, row.id), isNull(billingInvoices.paidAt), isNull(billingInvoices.lateAt), lte(billingInvoices.lateOn, today)));
   if (!(await unpaid()).length) return 0;
-  await applyPaypal(db, row, await getSubscription(row.paypalSubscriptionId), now);
+  await refreshPaypalInvoices(db, row.id, now);
+  if (!row.cancelledOn) await applyPaypal(db, row, await getSubscription(row.paypalSubscriptionId), now);
   const overdue = await unpaid();
   for (const inv of overdue) {
     const feeCents = LATE_FEE * 100;
@@ -420,8 +579,10 @@ async function markLate(db: DB, row: Subscription, today: Day, now: Date): Promi
         body:
           `The payment for invoice ${invoiceNumber(inv)} (${cents(inv.amountCents)}, due ${longDay(inv.dueOn)}) hasn't gone through, so it's now late.\n\n` +
           `A ${usd(LATE_FEE)} late fee has been added. ${feeInvoiceId ? "PayPal is emailing you a separate invoice for it." : "We'll send you an invoice for it."}\n\n` +
-          `Until the payment goes through, adding staff, tablets and settings changes are paused. Care records and the medication record keep working.\n\n` +
-          `To fix it, update the payment method in your PayPal account under Payments > Automatic payments; PayPal will try the payment again.`,
+          (row.cancelledOn
+            ? `Your subscription is cancelled, so PayPal doesn't take this automatically: please pay the PayPal invoice${inv.paypalInvoiceId ? " we sent" : " we're sending"} for ${invoiceNumber(inv)}. You'll find it in your PayPal account.`
+            : `Until the payment goes through, adding staff, tablets and settings changes are paused. Care records and the medication record keep working.\n\n` +
+              `To fix it, update the payment method in your PayPal account under Payments > Automatic payments; PayPal will try the payment again.`),
       });
     }
     await audit(db, { orgId: row.orgId!, actorId: null, action: "billing_invoice_late", entity: "billing_invoice", entityId: inv.id, details: { number: invoiceNumber(inv), lateFeeCents: feeCents, lateFeeInvoiceId: feeInvoiceId } });
@@ -468,7 +629,8 @@ async function remindTrialEnding(db: DB, now: Date): Promise<number> {
           `Your first invoice, on ${longDay(first.invoiceOn)}, covers ${showPeriod(first)}: ${homes} home${homes === 1 ? "" : "s"} × ${cents(first.perHomeCents)} = ${cents(homes * first.perHomeCents)} (the introductory price for part of a month). PayPal takes it on ${longDay(first.dueOn)}.\n\n` +
           `After that it's ${usd(INTRO_PRICE_PER_HOME)} per home a month for ${schedule.introCycles} more month${schedule.introCycles === 1 ? "" : "s"}, then ${usd(PRICE_PER_HOME)} per home a month.\n\n` +
           `To keep using CareHouse One you don't need to do anything. If you add or remove a home, the next invoice uses the new number of homes.\n\n` +
-          `To cancel before you're charged, sign in to PayPal and go to Settings > Payments > Automatic payments, then cancel CareHouse One.` +
+          `To cancel without paying anything, cancel by ${longDay(schedule.trialEndsOn)}: sign in to PayPal and go to Settings > Payments > Automatic payments, then cancel CareHouse One. ` +
+          `If you cancel later, the billing cycle you're in is your last one, and its invoice is still due.` +
           setupNote,
       });
     }
@@ -491,6 +653,17 @@ export interface BillingState {
 export function billingState(s: Subscription | null | undefined, now = new Date()): BillingState {
   if (!s) return { managed: true, label: "Billed by invoice", tone: "mute", adminLocked: false, warning: null };
   if (s.status === "CANCELLED" || s.status === "EXPIRED") {
+    // The cycle running when it was cancelled is paid for, so everything works until it ends.
+    const final = finalCycleOf(s);
+    if (final && dayIn(now) < final.end && !s.lateSince) {
+      return {
+        managed: false,
+        label: "Cancelled",
+        tone: "warn",
+        adminLocked: false,
+        warning: `The subscription is cancelled. Everything keeps working until ${showDay(final.end, true)}, the end of this billing cycle; its final invoice comes as a PayPal invoice on ${showDay(final.invoiceOn, true)}. After that, care records stay available, but adding staff, tablets and settings changes pause.`,
+      };
+    }
     return { managed: false, label: "Cancelled", tone: "crit", adminLocked: true, warning: "The subscription is cancelled. Care records stay available; adding staff, tablets and settings changes are paused." };
   }
   if (s.lateSince) {

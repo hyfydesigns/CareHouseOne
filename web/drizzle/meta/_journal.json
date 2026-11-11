@@ -302,6 +302,13 @@
       "when": 1794344890994,
       "tag": "0042_drop_quantity_synced_month",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1794367406121,
+      "tag": "0043_final_invoice",
+      "breakpoints": true
     }
   ]
 }

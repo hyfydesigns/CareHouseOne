@@ -5,7 +5,7 @@ import { canViewAudit } from "@/lib/permissions";
 import { currentDevice, requireUser } from "@/lib/session";
 import { asc } from "drizzle-orm";
 import { facilities } from "@/db/schema";
-import { billingState, invoiceNumber, orgInvoices, orgSubscription, scheduleOf } from "@/server/billing";
+import { billingState, finalCycleOf, invoiceNumber, orgInvoices, orgSubscription, scheduleOf } from "@/server/billing";
 import { cents, cycleOn, CYCLE_DAY, dayIn, DUE_DAY, LATE_DAY, LATE_FEE, showDay, showPeriod } from "@/lib/billing-cycle";
 import { describeBill, INTRO_PRICE_PER_HOME, PRICE_PER_HOME, PRICE_SUMMARY, usd } from "@/lib/pricing";
 import { paypalLive } from "@/server/paypal";
@@ -41,7 +41,9 @@ export default async function SettingsPage() {
   // payment (an invoice that's out and unpaid, or else an estimate for this cycle's homes).
   const today = dayIn(new Date());
   const schedule = data.sub ? scheduleOf(data.sub) : null;
-  const cycle = schedule ? cycleOn(schedule, today) : null;
+  // Cancelled: only the final cycle is left, until its invoice is out.
+  const final = data.sub?.cancelledOn ? finalCycleOf(data.sub) : null;
+  const cycle = !schedule ? null : data.sub!.cancelledOn ? (final && today < final.invoiceOn ? final : null) : cycleOn(schedule, today);
   const inTrial = !!schedule && today < schedule.trialEndsOn;
   const unpaid = data.invoices.filter((i) => !i.paidAt).sort((a, b) => a.dueOn.localeCompare(b.dueOn))[0] ?? null;
   const homesNow = Math.max(1, data.homes.length);
@@ -160,7 +162,7 @@ export default async function SettingsPage() {
                   <div>
                     <span className="small muted">Next payment, as of today</span><br />
                     <b>{cents(homesNow * cycle.perHomeCents)}</b><br />
-                    <span className="small muted">{describeBill({ homes: homesNow })} × {cents(cycle.perHomeCents)}, charged {showDay(cycle.dueOn, true)}</span>
+                    <span className="small muted">{describeBill({ homes: homesNow })} × {cents(cycle.perHomeCents)}, {final ? "final invoice, due" : "charged"} {showDay(cycle.dueOn, true)}</span>
                   </div>
                 )
               )}
@@ -188,7 +190,7 @@ export default async function SettingsPage() {
                           ) : i.lateAt ? (
                             <span className="pill crit">Late</span>
                           ) : (
-                            <span className="pill mute">Due</span>
+                            <span className="pill mute">Due{i.paypalInvoiceId ? " · PayPal invoice" : ""}</span>
                           )}
                         </td>
                       </tr>
@@ -201,7 +203,8 @@ export default async function SettingsPage() {
               Priced per home, with any number of residents. Every billing cycle runs from the {CYCLE_DAY}th of one month to the {CYCLE_DAY}th of the next. The
               invoice goes out the day after, uses the number of homes you have then, and PayPal takes the payment automatically on the {DUE_DAY}th. A payment
               still missing on the {LATE_DAY}th is late: a {usd(LATE_FEE)} late fee is added and admin features pause until it&apos;s paid. Change the payment method or cancel in your PayPal account
-              {data.sub.payerEmail ? ` (${data.sub.payerEmail})` : ""}: <a href={paypalAccount} target="_blank" rel="noreferrer">PayPal automatic payments</a>. Care
+              {data.sub.payerEmail ? ` (${data.sub.payerEmail})` : ""}: <a href={paypalAccount} target="_blank" rel="noreferrer">PayPal automatic payments</a>. If you cancel after the free trial, the billing
+              cycle you&apos;re in is the last one: everything keeps working until it ends, and its invoice comes as a PayPal invoice. Care
               records are never locked for a missed payment. CareHouse One never sees or stores card details.
             </p>
           </>

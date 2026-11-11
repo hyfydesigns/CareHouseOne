@@ -6,6 +6,7 @@
  *   - a payment still missing on the 10th is late: a late fee is added and admin features pause.
  * Billing is in arrears: the payment on the 5th is for the cycle that just ended. The free trial
  * ends on any day, so the first invoice covers only the days from then to the 28th (prorated).
+ * Cancelling ends the subscription at the end of the cycle it's in, and that cycle is still billed.
  * Calendar days are "YYYY-MM-DD" strings so nothing shifts with time zones.
  */
 import { INTRO_MONTHS, INTRO_PRICE_PER_HOME, PRICE_PER_HOME, TRIAL_DAYS } from "./pricing";
@@ -128,6 +129,15 @@ export function cycleEnding(s: BillingSchedule, end: Day): Cycle | null {
 export function cycleOn(s: BillingSchedule, d: Day): Cycle {
   const end = d < s.firstCycleEnd ? s.firstCycleEnd : cycleEndOnOrAfter(addDays(d, 1));
   return cycleEnding(s, end)!;
+}
+
+/**
+ * The last cycle a cancelled subscription pays for: the one running on the day it was cancelled
+ * (cancelling on the 28th ends the cycle that ends that day). Null when it was cancelled by the
+ * end of the free trial: nothing is owed.
+ */
+export function finalCycleEnd(s: BillingSchedule, cancelledOn: Day): Day | null {
+  return cancelledOn <= s.trialEndsOn ? null : cycleEndOnOrAfter(cancelledOn);
 }
 
 /** What to tell PayPal when the subscription is created: when to start charging and the first two price steps. */

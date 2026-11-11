@@ -30,7 +30,7 @@ export default async function SignupPage() {
           <h1>Start your {TRIAL_DAYS}-day free trial</h1>
           <p className="muted">
             After the trial, {PRICE_SUMMARY} per home per month, for any number of residents, billed monthly in arrears. No contract: pay by card or
-            PayPal and cancel anytime. Cancel in PayPal before your first payment and you won&apos;t be charged.
+            PayPal and cancel anytime. Cancel in PayPal by the end of your free trial and you won&apos;t be charged.
           </p>
         </div>
         <Subscribe

@@ -64,6 +64,7 @@ export interface PaypalSubscription {
   subscriber?: { email_address?: string; name?: { given_name?: string; surname?: string } };
   start_time?: string;
   create_time?: string;
+  status_update_time?: string;
   billing_info?: {
     next_billing_time?: string;
     failed_payments_count?: number;
@@ -81,19 +82,38 @@ export function getSubscription(id: string, withPlan = false): Promise<PaypalSub
 }
 
 /**
- * A late fee can't be added to a subscription payment, so it goes out as a separate PayPal
- * invoice that PayPal emails to the payer. Returns PayPal's invoice ID.
+ * A PayPal invoice that PayPal emails to the payer, for what a subscription can't collect: a late
+ * fee (which can't be added to a subscription payment) or, after the subscription is cancelled,
+ * the invoices still owed. Due on receipt, or on `dueOn` ("YYYY-MM-DD"). Returns PayPal's invoice ID.
  */
-export async function sendLateFeeInvoice(email: string, amountCents: number, note: string): Promise<string> {
+export async function sendPaypalInvoice(i: { email: string; item: string; quantity?: number; unitCents: number; note: string; number?: string; dueOn?: string }): Promise<string> {
   const created = await call<{ id?: string; href?: string; links?: Array<{ rel: string; href: string }> }>("POST", "/v2/invoicing/invoices", {
-    detail: { currency_code: "USD", note, payment_term: { term_type: "DUE_ON_RECEIPT" } },
-    primary_recipients: [{ billing_info: { email_address: email } }],
-    items: [{ name: "CareHouse One late fee", quantity: "1", unit_amount: { currency_code: "USD", value: (amountCents / 100).toFixed(2) } }],
+    detail: {
+      currency_code: "USD",
+      ...(i.number ? { invoice_number: i.number } : {}),
+      note: i.note,
+      payment_term: i.dueOn ? { term_type: "DUE_ON_DATE_SPECIFIED", due_date: i.dueOn } : { term_type: "DUE_ON_RECEIPT" },
+    },
+    primary_recipients: [{ billing_info: { email_address: i.email } }],
+    items: [{ name: i.item, quantity: String(i.quantity ?? 1), unit_amount: { currency_code: "USD", value: (i.unitCents / 100).toFixed(2) } }],
   });
   const id = created.id ?? (created.href ?? created.links?.find((l) => l.rel === "self")?.href ?? "").split("/").pop();
-  if (!id || !/^INV2-[A-Z0-9-]{4,40}$/.test(id)) throw new Error("PayPal didn't return an invoice ID");
+  if (!id || !PAYPAL_INVOICE_ID.test(id)) throw new Error("PayPal didn't return an invoice ID");
   await call("POST", `/v2/invoicing/invoices/${id}/send`, { send_to_recipient: true, send_to_invoicer: false });
   return id;
+}
+
+export const PAYPAL_INVOICE_ID = /^INV2-[A-Z0-9-]{4,40}$/;
+
+export function sendLateFeeInvoice(email: string, amountCents: number, note: string): Promise<string> {
+  return sendPaypalInvoice({ email, item: "CareHouse One late fee", unitCents: amountCents, note });
+}
+
+/** Whether the payer has paid a PayPal invoice (or it was marked paid in PayPal). */
+export async function paypalInvoicePaid(id: string): Promise<boolean> {
+  if (!PAYPAL_INVOICE_ID.test(id)) throw new Error("Not a PayPal invoice ID");
+  const r = await call<{ status?: string }>("GET", `/v2/invoicing/invoices/${id}`);
+  return r.status === "PAID" || r.status === "MARKED_AS_PAID";
 }
 
 /**

@@ -536,6 +536,8 @@ export const subscriptions = pgTable("subscriptions", {
   firstPerHomeCents: integer("first_per_home_cents"),
   introCycles: integer("intro_cycles"),
   startsOn: text("starts_on"),
+  /** The day PayPal cancelled the subscription. The billing cycle running then is the last one billed. */
+  cancelledOn: text("cancelled_on"),
   /** Single-use link to the organization setup page, emailed to the payer. */
   setupTokenHash: text("setup_token_hash").unique(),
   setupExpiresAt: timestamp("setup_expires_at", { withTimezone: true }),
@@ -550,7 +552,8 @@ export const subscriptions = pgTable("subscriptions", {
 
 /**
  * One invoice per billing cycle, issued the day after the cycle ends. PayPal charges it on the
- * 5th; still unpaid on the 10th, it's late and a late fee is invoiced through PayPal.
+ * 5th; still unpaid on the 10th, it's late and a late fee is invoiced through PayPal. Once the
+ * subscription is cancelled, anything still owed goes out as a PayPal invoice instead.
  * Written only by server code; an organization can read its own.
  */
 export const billingInvoices = pgTable(
@@ -577,6 +580,8 @@ export const billingInvoices = pgTable(
     lateFeeCents: integer("late_fee_cents").notNull().default(0),
     /** PayPal's invoice for the late fee, when one was sent. */
     lateFeeInvoiceId: text("late_fee_invoice_id"),
+    /** PayPal's invoice for this amount, when the subscription can't collect it (it was cancelled). */
+    paypalInvoiceId: text("paypal_invoice_id"),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("billing_invoices_cycle_uq").on(t.subscriptionId, t.periodEnd), index("billing_invoices_org_idx").on(t.orgId)],
