@@ -23,7 +23,7 @@ import { randomToken, sha256 } from "@/lib/crypto";
 import { appBaseUrl } from "@/lib/hosts";
 import { INTRO_PRICE_PER_HOME, monthlyBill, PRICE_PER_HOME, usd, type MonthlyBill, type PriceStage } from "@/lib/pricing";
 import { audit, sendMail } from "./audit";
-import { getSubscription, paypalConfigured, paypalInvoicePaid, reviseQuantity, sendLateFeeInvoice, sendPaypalInvoice, TRIAL_DAYS, type PaypalSubscription } from "./paypal";
+import { createSubscription, getSubscription, paypalConfigured, paypalInvoicePaid, reviseQuantity, sendLateFeeInvoice, sendPaypalInvoice, TRIAL_DAYS, type PaypalSubscription } from "./paypal";
 import { provisionOrganization, provisionSchema } from "./provision";
 
 export const SETUP_DAYS = 7;
@@ -57,6 +57,22 @@ function fromPaypal(p: PaypalSubscription, now: Date) {
 /** The terms the sign-up page asks PayPal for, worked out on the server at the moment of sign-up. */
 export function subscriptionTerms(now = new Date()) {
   return paypalTerms(scheduleFor(now));
+}
+
+/**
+ * Called by the sign-up page's PayPal button: creates the subscription on PayPal with today's
+ * terms, for the buyer to approve in the PayPal window.
+ */
+export async function startSubscription(homes: unknown, now = new Date()): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  if (!signupOpen()) return { ok: false, error: "Sign-up isn't open yet." };
+  const n = Number(homes);
+  if (!Number.isInteger(n) || n < 1 || n > 100) return { ok: false, error: "Enter a number of homes from 1 to 100." };
+  try {
+    return { ok: true, id: await createSubscription(n, subscriptionTerms(now)) };
+  } catch (e) {
+    console.error(`[billing] couldn't create a PayPal subscription: ${(e as Error).message}`);
+    return { ok: false, error: "PayPal couldn't start the subscription. Try again in a minute, or email us." };
+  }
 }
 
 /**

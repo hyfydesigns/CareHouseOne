@@ -82,6 +82,24 @@ export function getSubscription(id: string, withPlan = false): Promise<PaypalSub
 }
 
 /**
+ * Creates a subscription (awaiting the buyer's approval in the PayPal window) with this
+ * subscriber's start date and prorated first cycle. Done here, not by the browser button: PayPal
+ * only lets the app's own credentials override the plan's prices. Returns PayPal's subscription ID.
+ */
+export async function createSubscription(quantity: number, terms: { start_time: string; plan: unknown }): Promise<string> {
+  const planId = process.env.PAYPAL_PLAN_ID;
+  if (!planId) throw new Error("PayPal isn't configured");
+  const r = await call<{ id?: string }>("POST", "/v1/billing/subscriptions", {
+    plan_id: planId,
+    quantity: String(quantity),
+    ...terms,
+    application_context: { brand_name: "CareHouse One", shipping_preference: "NO_SHIPPING", user_action: "SUBSCRIBE_NOW" },
+  });
+  if (!r.id || !/^I-[A-Z0-9]{6,32}$/.test(r.id)) throw new Error("PayPal didn't return a subscription ID");
+  return r.id;
+}
+
+/**
  * A PayPal invoice that PayPal emails to the payer, for what a subscription can't collect: a late
  * fee (which can't be added to a subscription payment) or, after the subscription is cancelled,
  * the invoices still owed. Due on receipt, or on `dueOn` ("YYYY-MM-DD"). Returns PayPal's invoice ID.

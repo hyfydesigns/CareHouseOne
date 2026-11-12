@@ -16,6 +16,7 @@ import {
   orgInvoices,
   registerSubscription,
   resendSetupLink,
+  startSubscription,
   runBillingCalendar,
   subscriptionTerms,
   syncSubscriptions,
@@ -35,6 +36,7 @@ const revised: Array<{ id: string; quantity: string }> = [];
 const feeInvoices: Array<{ email: string; value: string }> = [];
 const sentInvoices: Array<{ id: string; email: string; item: string; quantity: string; value: string; number?: string; dueOn?: string }> = [];
 const invoiceStatus = new Map<string, string>();
+const created: Array<Record<string, unknown>> = [];
 let reviseNeedsApproval = true;
 
 function stubPaypal() {
@@ -64,6 +66,10 @@ function stubPaypal() {
     }
     const inv = u.match(/\/v2\/invoicing\/invoices\/(INV2-[A-Z0-9-]+)$/);
     if (inv) return invoiceStatus.has(inv[1]) ? json({ id: inv[1], status: invoiceStatus.get(inv[1]) }) : json({}, 404);
+    if (u.endsWith("/v1/billing/subscriptions") && init?.method === "POST") {
+      created.push(JSON.parse(String(init.body)));
+      return json({ id: `I-NEW${String(created.length).padStart(7, "0")}`, status: "APPROVAL_PENDING" }, 201);
+    }
     const get = u.match(/\/v1\/billing\/subscriptions\/([^/?]+)(\?fields=plan)?$/);
     if (get) return paypal.has(get[1]) ? json(paypal.get(get[1])) : json({ name: "RESOURCE_NOT_FOUND" }, 404);
     return json({}, 404);
@@ -115,6 +121,18 @@ beforeEach(() => {
 });
 
 describe("sign-up", () => {
+  it("creates the subscription on PayPal with today's start date and prorated first cycle", async () => {
+    const now = new Date("2026-11-11T15:00:00Z");
+    expect(await startSubscription(3, now)).toEqual({ ok: true, id: "I-NEW0000001" });
+    expect(created.at(-1)).toMatchObject({ plan_id: PLAN, quantity: "3", ...subscriptionTerms(now), application_context: { shipping_preference: "NO_SHIPPING" } });
+    expect(await startSubscription(0, now)).toMatchObject({ ok: false });
+    expect(await startSubscription(2.5, now)).toMatchObject({ ok: false });
+    expect(await startSubscription("x", now)).toMatchObject({ ok: false });
+    vi.stubEnv("SIGNUP_OPEN", "false");
+    expect(await startSubscription(1, now)).toMatchObject({ ok: false, error: expect.stringMatching(/isn't open/) });
+    expect(created).toHaveLength(1);
+  });
+
   it("stays closed until SIGNUP_OPEN is on", async () => {
     vi.stubEnv("SIGNUP_OPEN", "false");
     sub("I-CLOSED0001");

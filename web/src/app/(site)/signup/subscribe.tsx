@@ -5,12 +5,10 @@ import { useEffect, useRef, useState } from "react";
 import { cents, CYCLE_DAY, DUE_DAY, LATE_DAY, LATE_FEE, showDay, showPeriod, type BillingSchedule } from "@/lib/billing-cycle";
 import { INTRO_PRICE_PER_HOME, PRICE_PER_HOME, usd } from "@/lib/pricing";
 
-type Terms = { start_time: string; plan: unknown };
-
 type PaypalButtons = {
   Buttons: (o: {
     style?: Record<string, string>;
-    createSubscription: (data: unknown, actions: { subscription: { create: (o: { plan_id: string; quantity: string } & Terms) => Promise<string> } }) => Promise<string>;
+    createSubscription: () => Promise<string>;
     onApprove: (data: { subscriptionID?: string }) => Promise<void>;
     onError?: (e: unknown) => void;
   }) => { render: (el: HTMLElement) => Promise<void>; close?: () => Promise<void> };
@@ -27,10 +25,11 @@ export function Subscribe(props: {
   trialDays: number;
   /** The schedule for someone signing up today, for the summary; the button asks the server again. */
   schedule: BillingSchedule;
-  terms: () => Promise<Terms>;
+  /** Creates the subscription on the server (PayPal only allows our prices from there). */
+  start: (homes: number) => Promise<{ id?: string; error?: string }>;
   onSubscribed: (subscriptionId: string) => Promise<{ setupUrl?: string; error?: string }>;
 }) {
-  const { planId, onSubscribed, terms, schedule } = props;
+  const { planId, onSubscribed, start, schedule } = props;
   const [homes, setHomes] = useState(1);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +47,15 @@ export function Subscribe(props: {
     box.current.innerHTML = "";
     const buttons = pp.Buttons({
       style: { shape: "rect", label: "subscribe", layout: "vertical" },
-      createSubscription: async (_d, actions) => actions.subscription.create({ plan_id: planId, quantity: String(quantity.current), ...(await terms()) }),
+      createSubscription: async () => {
+        setError(null);
+        const r = await start(quantity.current);
+        if (!r.id) {
+          setError(r.error ?? "PayPal couldn't start the subscription. Try again, or email us.");
+          throw new Error(r.error ?? "No subscription");
+        }
+        return r.id;
+      },
       onApprove: async (data) => {
         setBusy(true);
         const r = await onSubscribed(data.subscriptionID ?? "");
@@ -58,13 +65,16 @@ export function Subscribe(props: {
           setError(r.error ?? "Something went wrong. Your trial may have started; check your email for the setup link.");
         }
       },
-      onError: () => setError("PayPal couldn't start the subscription. Try again, or email us."),
+      onError: (e) => {
+        console.error("[paypal]", e);
+        setError((current) => current ?? "PayPal couldn't start the subscription. Try again, or email us.");
+      },
     });
     buttons.render(box.current).catch(() => setError("PayPal couldn't load. Refresh the page to try again."));
     return () => {
       buttons.close?.().catch(() => {});
     };
-  }, [ready, planId, onSubscribed, terms]);
+  }, [ready, planId, onSubscribed, start]);
 
 
   return (

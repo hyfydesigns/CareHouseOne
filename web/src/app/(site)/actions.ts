@@ -4,7 +4,7 @@ import type { FormState } from "@/components/status";
 import { getDb } from "@/db/client";
 import { appBaseUrl } from "@/lib/hosts";
 import { clientIp } from "@/lib/session";
-import { registerSubscription, signupOpen, subscriptionTerms } from "@/server/billing";
+import { registerSubscription, startSubscription } from "@/server/billing";
 import { createLead } from "@/server/leads";
 import { deliverNow } from "@/server/mailer";
 import { hit, tooMany } from "@/server/rate-limit";
@@ -22,13 +22,15 @@ export async function demoAction(_: FormState, fd: FormData): Promise<FormState>
 }
 
 /**
- * Called by the PayPal button just before it creates the subscription: when PayPal starts charging
- * (the first 5th after the first cycle) and the prorated first cycle. The server checks them again
- * when the buyer comes back.
+ * Called by the PayPal button: the server creates the subscription with when PayPal starts charging
+ * (the first 5th after the first cycle) and the prorated first cycle, and the button opens PayPal's
+ * window to approve it. The server checks the terms again when the buyer comes back.
  */
-export async function subscriptionTermsAction() {
-  if (!signupOpen()) throw new Error("Sign-up isn't open yet.");
-  return subscriptionTerms();
+export async function startSubscriptionAction(homes: number): Promise<{ id?: string; error?: string }> {
+  const limit = await hit(await getDb(), "subscribe", await clientIp());
+  if (!limit.ok) return { error: tooMany(limit) };
+  const r = await startSubscription(homes);
+  return r.ok ? { id: r.id } : { error: r.error };
 }
 
 /** Called by the PayPal button once the buyer approves the subscription. Returns where to go next. */

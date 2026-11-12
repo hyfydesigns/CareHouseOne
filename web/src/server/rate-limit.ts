@@ -10,6 +10,7 @@ export const LIMITS = {
   reset: { limit: 5, windowSeconds: 15 * 60 },
   link: { limit: 30, windowSeconds: 15 * 60 },
   lead: { limit: 5, windowSeconds: 60 * 60 },
+  subscribe: { limit: 10, windowSeconds: 15 * 60 },
 } as const;
 
 export type LimitName = keyof typeof LIMITS;

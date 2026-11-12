@@ -5,7 +5,7 @@ import { signupOpen } from "@/server/billing";
 import { scheduleFor } from "@/lib/billing-cycle";
 import { PRICE_SUMMARY } from "@/lib/pricing";
 import { TRIAL_DAYS } from "@/server/paypal";
-import { subscribedAction, subscriptionTermsAction } from "../actions";
+import { startSubscriptionAction, subscribedAction } from "../actions";
 import { Subscribe } from "./subscribe";
 
 export const metadata: Metadata = { title: "Start your free trial · CareHouse One" };
@@ -39,7 +39,7 @@ export default async function SignupPage() {
           nonce={nonce}
           trialDays={TRIAL_DAYS}
           schedule={scheduleFor(new Date())}
-          terms={subscriptionTermsAction}
+          start={startSubscriptionAction}
           onSubscribed={subscribedAction}
         />
         <p className="small muted" style={{ margin: 0 }}>
