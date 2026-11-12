@@ -22,7 +22,9 @@ function dataKey(): Buffer {
   if (!raw) {
     // The public demo's in-memory data only lives as long as the instance: a throwaway key will do.
     if (process.env.DEMO_MODE === "true") return (demoKey ??= randomBytes(32));
-    if (process.env.NODE_ENV === "production") throw new Error("DATA_ENCRYPTION_KEY is required in production");
+    // A script run against the real database (DATABASE_URL) must use the real key too, or the app
+    // can't read what it wrote.
+    if (process.env.NODE_ENV === "production" || process.env.DATABASE_URL) throw new Error("DATA_ENCRYPTION_KEY is required with a real database (production or DATABASE_URL)");
     // Development and tests only: a fixed key so local data survives restarts.
     return createHash("sha256").update("carehouse-one-local-development-key").digest();
   }

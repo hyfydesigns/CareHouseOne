@@ -246,6 +246,7 @@ gcloud beta run domain-mappings create --service carehouse-one --domain admin.ca
 
 ```bash
 export ADMIN_URL="https://admin.carehouseone.com"
+export DATA_ENCRYPTION_KEY="$(gcloud secrets versions access latest --secret=data-encryption-key)"
 npm run admin:create -- you@yourdomain.com "Your Name"
 ```
 

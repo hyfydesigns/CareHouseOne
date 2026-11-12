@@ -7,8 +7,9 @@
  * Prints a single-use setup link (valid 2 days) where you set a password and scan a QR code with an
  * authenticator app. The link is a secret: open it yourself, don't send it around.
  *
- * Production: needs DATABASE_URL (through the Cloud SQL Auth Proxy, see deploy/README.md) and
- * ADMIN_URL. Locally (no DATABASE_URL) it uses the local database; stop `npm run dev` first, since
+ * Production: needs DATABASE_URL (through the Cloud SQL Auth Proxy, see deploy/README.md),
+ * DATA_ENCRYPTION_KEY (the app's key, from Secret Manager; the authenticator secret is encrypted
+ * with it) and ADMIN_URL. Locally (no DATABASE_URL) it uses the local database; stop `npm run dev` first, since
  * only one process can open it.
  */
 import { getDb } from "../src/db/client";
@@ -20,6 +21,7 @@ async function main() {
   const name = nameParts.join(" ").trim();
   if (!email || !email.includes("@") || name.length < 2) throw new Error('Usage: npm run admin:create -- you@example.com "Your Name"');
   if (process.env.DATABASE_URL && !process.env.ADMIN_URL?.startsWith("https://")) throw new Error("Set ADMIN_URL to the admin site's https address (https://admin.carehouseone.com).");
+  if (process.env.DATABASE_URL && !process.env.DATA_ENCRYPTION_KEY) throw new Error("Set DATA_ENCRYPTION_KEY to the app's key (see deploy/README.md, step 9c), or the admin site can't read your authenticator secret.");
   const db = await getDb();
   const token = await createAdmin(db, email, name);
   console.log(`Setup link for ${email} (works once, expires in 2 days):\n${adminBaseUrl()}/admin/setup/${token}`);
