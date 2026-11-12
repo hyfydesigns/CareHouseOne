@@ -12,10 +12,10 @@ export default async function NewClientPage({ searchParams }: { searchParams: Pr
     <>
       <div>
         <h1>Add a client</h1>
-        <p className="muted">Creates the organization and its homes, and emails the owner an invitation to set their password. They add their own staff and tablets.</p>
+        <p className="muted">Creates the organization and its homes, and an account for the owner. The owner gets an email to set their password, by default once they sign their contract. They add their own staff and tablets.</p>
       </div>
       <section className="card">
-        <ActionForm action={createClientAction} submit="Create client and invite the owner">
+        <ActionForm action={createClientAction} submit="Create client">
           {lead && <input type="hidden" name="leadId" value={lead.id} />}
           {lead && <p className="notice" style={{ margin: 0 }}>From the demo request by {lead.name} ({lead.organization}). The lead will be marked won.</p>}
           <div className="field">
@@ -43,6 +43,12 @@ export default async function NewClientPage({ searchParams }: { searchParams: Pr
             <label htmlFor="ownerEmail">Owner&apos;s email</label>
             <input id="ownerEmail" name="ownerEmail" type="email" required defaultValue={lead?.email ?? ""} />
           </div>
+          <fieldset className="field">
+            <legend>Email the owner their invitation</legend>
+            <label className="row" style={{ gap: 8 }}><input type="radio" name="invite" value="after_contract" defaultChecked /> After they sign their contract</label>
+            <label className="row" style={{ gap: 8 }}><input type="radio" name="invite" value="now" /> Now</label>
+            <span className="small muted">Held invitations go out automatically when the contract is signed. You can also send one from the client&apos;s page at any time.</span>
+          </fieldset>
         </ActionForm>
       </section>
     </>

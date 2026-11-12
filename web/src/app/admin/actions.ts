@@ -81,6 +81,7 @@ export async function createClientAction(_: FormState, fd: FormData): Promise<Fo
     { orgName: str(fd, "orgName"), homes, owner: { name: str(fd, "ownerName"), email: str(fd, "ownerEmail") } },
     appBaseUrl(),
     str(fd, "leadId") || null,
+    { holdInvite: str(fd, "invite") !== "now" },
   );
   if (!r.ok) return { error: r.error };
   await deliverNow(db);
@@ -93,7 +94,7 @@ export async function resendOwnerInviteAction(orgId: string, userId: string): Pr
   const r = await resendOwnerInvite(db, admin.id, orgId, userId, appBaseUrl());
   if (!r.ok) return { error: r.error };
   await deliverNow(db);
-  return { message: `New invitation sent to ${r.email}.` };
+  return { message: `Invitation sent to ${r.email}.` };
 }
 
 // ---------------------------------------------------------------- billing

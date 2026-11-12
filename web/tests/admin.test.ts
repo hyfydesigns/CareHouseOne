@@ -84,7 +84,7 @@ describe("clients", () => {
   it("creates a client from a lead and shows its setup", async () => {
     await createLead(db, { name: "Pat Rivera", email: "pat@riverside.test", organization: "Riverside Homes", homes: "2" });
     const [lead] = await db.select().from(leads);
-    const r = await createClient(db, adminId, { orgName: "Riverside Homes", homes: [{ name: "Oak House", timeZone: "America/Chicago" }, { name: "Elm House", timeZone: "America/Chicago" }], owner: { name: "Pat Rivera", email: "pat@riverside.test" } }, APP, lead.id);
+    const r = await createClient(db, adminId, { orgName: "Riverside Homes", homes: [{ name: "Oak House", timeZone: "America/Chicago" }, { name: "Elm House", timeZone: "America/Chicago" }], owner: { name: "Pat Rivera", email: "pat@riverside.test" } }, APP, lead.id, { holdInvite: true });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     orgId = r.orgId;
@@ -92,8 +92,10 @@ describe("clients", () => {
     expect(won).toMatchObject({ status: "won", orgId });
     const [row] = (await listClients(db)).filter((c) => c.id === orgId);
     expect(row).toMatchObject({ homes: 2, ownerStatus: "invited", method: null, contract: "none" });
+    // The owner's invitation is held until the contract is signed.
     const [owner] = await db.select().from(users).where(eq(users.orgId, orgId));
-    expect(await resendOwnerInvite(db, adminId, orgId, owner.id, APP)).toMatchObject({ ok: true });
+    expect((await db.select().from(outbox).where(eq(outbox.to, "pat@riverside.test"))).length).toBe(0);
+    expect((await clientDetail(db, orgId))?.held).toEqual([owner.id]);
     expect(await updateLead(db, adminId, lead.id, { status: "nope", notes: "" })).toMatchObject({ ok: false });
   });
 });
@@ -137,7 +139,17 @@ describe("contracts", () => {
     const [sub] = await db.select().from(subscriptions).where(eq(subscriptions.orgId, orgId));
     expect(sub).toMatchObject({ billingMethod: "invoice", paypalSubscriptionId: null, payerEmail: "pat@riverside.test", trialEndsOn: "2026-12-01", firstCycleEnd: "2026-12-28", introCycles: 3 });
     expect(billingState(sub, now).label).toBe("Billing starts Dec 1, 2026");
-    expect((await db.select().from(outbox).where(like(outbox.subject, "Contract signed: Riverside Homes"))).map((m) => m.to)).toEqual(["me@carehouse.test"]);
+    const [notice] = await db.select().from(outbox).where(like(outbox.subject, "Contract signed: Riverside Homes"));
+    expect(notice.to).toBe("me@carehouse.test");
+    expect(notice.body).toContain("Pat Rivera (pat@riverside.test) was emailed an invitation");
+    // Signing sent the held invitation, once.
+    const invites = await db.select().from(outbox).where(like(outbox.subject, "Your CareHouse One account is ready"));
+    expect(invites.map((m) => m.to)).toEqual(["pat@riverside.test"]);
+    expect(invites[0].body).toContain(`${APP}/invite/`);
+    expect((await clientDetail(db, orgId))?.held).toEqual([]);
+    // A replacement link from the admin site still works.
+    const [owner] = await db.select().from(users).where(eq(users.orgId, orgId));
+    expect(await resendOwnerInvite(db, adminId, orgId, owner.id, APP)).toMatchObject({ ok: true });
 
     // A second order form would set up billing twice.
     const other = await sendContract(db, adminId, orgId, { signerName: "Pat Rivera", signerEmail: "pat@riverside.test", homes: 2, startsOn: "2026-12-01" }, APP, now);

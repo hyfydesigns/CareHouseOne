@@ -102,7 +102,7 @@ describe("provisioning a customer", () => {
       { orgName: "Lakeside Homes", homes: [{ name: "North House", timeZone: "America/Chicago", beds: 6 }, { name: "South House", timeZone: "America/Chicago" }], owner: { name: "Sam Rivera", email: "Sam@Lakeside.test" } },
       "https://app.example.test",
     );
-    const token = r.inviteLink.split("/invite/")[1];
+    const token = r.inviteLink!.split("/invite/")[1];
     expect(await describeToken(db, token, ["invite"])).toMatchObject({ name: "Sam Rivera", email: "sam@lakeside.test" });
     const [mail] = await db.select().from(outbox).where(eq(outbox.to, "sam@lakeside.test"));
     expect(mail.body).toContain(r.inviteLink);

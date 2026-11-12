@@ -1,6 +1,6 @@
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
-import type { DB } from "@/db/client";
+import type { DB, Tx } from "@/db/client";
 import { accountTokens, facilities, organizations, subscriptions, userFacilities, users } from "@/db/schema";
 import { randomToken, sha256 } from "@/lib/crypto";
 import { validZone } from "@/lib/time-zones";
@@ -34,8 +34,8 @@ export async function provisionOrganization(
   db: DB,
   raw: ProvisionInput,
   appUrl: string,
-  opts: { setupTokenHash?: string } = {},
-): Promise<{ orgId: string; inviteLink: string }> {
+  opts: { setupTokenHash?: string; holdInvite?: boolean } = {},
+): Promise<{ orgId: string; inviteLink: string | null }> {
   const input = provisionSchema.parse(raw);
   return db.transaction(async (tx) => {
     const [dup] = await tx.select({ id: users.id }).from(users).where(sql`lower(${users.email}) = ${input.owner.email}`);
@@ -57,16 +57,49 @@ export async function provisionOrganization(
       .returning();
     const [owner] = await tx.insert(users).values({ orgId: org.id, email: input.owner.email, name: input.owner.name, role: "owner", status: "invited" }).returning();
     await tx.insert(userFacilities).values(homes.map((h) => ({ orgId: org.id, userId: owner.id, facilityId: h.id })));
-    const token = randomToken();
-    await tx.insert(accountTokens).values({ orgId: org.id, userId: owner.id, purpose: "invite", tokenHash: sha256(token), expiresAt: new Date(Date.now() + INVITE_DAYS * 86_400_000) });
-    const inviteLink = `${appUrl}/invite/${token}`;
-    await sendMail(tx, {
-      orgId: org.id,
-      to: owner.email,
-      subject: "Your CareHouse One account is ready",
-      body: `Hi ${owner.name},\n\nCareHouse One is set up for ${org.name}. Use this link to set your password. It works once and expires in ${INVITE_DAYS} days.\n\n${inviteLink}\n\nThen add your staff from the Staff page and register each home's tablet in Settings.`,
-    });
+    // Held: the owner gets no email (and no link) until their contract is signed, see contracts.ts.
+    const inviteLink = opts.holdInvite ? null : await inviteOwner(tx, { orgId: org.id, orgName: org.name, user: owner }, appUrl);
     await audit(tx, { orgId: org.id, actorId: null, action: "organization_created", entity: "organization", entityId: org.id, details: { homes: homes.map((h) => h.name) } });
     return { orgId: org.id, inviteLink };
   });
+}
+
+/**
+ * Emails an owner a single-use link to set their password. Any earlier link stops working.
+ * `again` changes the wording for a replacement link.
+ */
+export async function inviteOwner(
+  db: DB | Tx,
+  o: { orgId: string; orgName: string; user: { id: string; name: string; email: string } },
+  appUrl: string,
+  again = false,
+): Promise<string> {
+  await db.update(accountTokens).set({ cancelledAt: new Date() }).where(and(eq(accountTokens.userId, o.user.id), isNull(accountTokens.usedAt), isNull(accountTokens.cancelledAt)));
+  const token = randomToken();
+  await db.insert(accountTokens).values({ orgId: o.orgId, userId: o.user.id, purpose: "invite", tokenHash: sha256(token), expiresAt: new Date(Date.now() + INVITE_DAYS * 86_400_000) });
+  const link = `${appUrl}/invite/${token}`;
+  await sendMail(db, {
+    orgId: o.orgId,
+    to: o.user.email,
+    subject: "Your CareHouse One account is ready",
+    body: `Hi ${o.user.name},
+
+${again ? "Here's a new link to set your CareHouse One password." : `CareHouse One is set up for ${o.orgName}. Use this link to set your password.`} It works once and expires in ${INVITE_DAYS} days.
+
+${link}
+
+Then add your staff from the Staff page and register each home's tablet in Settings.`,
+  });
+  return link;
+}
+
+/** Owners still waiting for their first invitation (it was held until the contract is signed). */
+export async function heldOwners(db: DB | Tx, orgId: string): Promise<Array<{ id: string; name: string; email: string }>> {
+  const owners = await db.select({ id: users.id, name: users.name, email: users.email }).from(users).where(and(eq(users.orgId, orgId), eq(users.role, "owner"), eq(users.status, "invited")));
+  const out = [];
+  for (const u of owners) {
+    const [t] = await db.select({ id: accountTokens.id }).from(accountTokens).where(eq(accountTokens.userId, u.id)).limit(1);
+    if (!t) out.push(u);
+  }
+  return out;
 }

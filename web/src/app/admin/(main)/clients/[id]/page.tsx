@@ -49,7 +49,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         </div>
         <p className="muted small" style={{ margin: 0 }}>Client since {when(c.org.createdAt)}</p>
       </div>
-      {created && <p className="notice" role="status">Client created. The owner has an email with a link to set their password.</p>}
+      {created && <p className="notice" role="status">{c.held.length ? "Client created. The owner's invitation is held until they sign their contract. Send the contract from Contracts below." : "Client created. The owner has an email with a link to set their password."}</p>}
 
       <section className="card" aria-labelledby="setup-h">
         <h2 id="setup-h">Setup</h2>
@@ -68,9 +68,18 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                   <td>{p.name}<br /><span className="small muted">{p.email}</span></td>
                   <td>{ROLE[p.role] ?? p.role}</td>
                   <td>
-                    <span className={`pill ${p.status === "active" ? "ok" : p.status === "invited" ? "warn" : "mute"}`}>{p.status === "active" ? "Active" : p.status === "invited" ? "Invited" : "Deactivated"}</span>
-                    {p.role === "owner" && p.status === "invited" && (
-                      <div><ActionButton action={resendOwnerInviteAction.bind(null, id, p.id)} label="Send a new invitation" confirmText={`Email ${p.email} a new link? The old one stops working.`} /></div>
+                    {c.held.includes(p.id) ? (
+                      <>
+                        <span className="pill mute">Waiting for contract</span>
+                        <div><ActionButton action={resendOwnerInviteAction.bind(null, id, p.id)} label="Send the invitation now" confirmText={`Email ${p.email} their invitation now, before the contract is signed?`} /></div>
+                      </>
+                    ) : (
+                      <>
+                        <span className={`pill ${p.status === "active" ? "ok" : p.status === "invited" ? "warn" : "mute"}`}>{p.status === "active" ? "Active" : p.status === "invited" ? "Invited" : "Deactivated"}</span>
+                        {p.role === "owner" && p.status === "invited" && (
+                          <div><ActionButton action={resendOwnerInviteAction.bind(null, id, p.id)} label="Send a new invitation" confirmText={`Email ${p.email} a new link? The old one stops working.`} /></div>
+                        )}
+                      </>
                     )}
                   </td>
                   <td className="small">{when(p.lastSignInAt)}</td>
@@ -79,7 +88,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
             </tbody>
           </table>
         </div>
-        {!owners.some((o) => o.status === "active") && <p className="small muted" style={{ margin: 0 }}>Nothing else happens until the owner sets a password and signs in; then they invite their staff and register tablets.</p>}
+        {!owners.some((o) => o.status === "active") && <p className="small muted" style={{ margin: 0 }}>{c.held.length ? "The owner's invitation goes out when they sign their contract. " : ""}Nothing else happens until the owner sets a password and signs in; then they invite their staff and register tablets.</p>}
         <p className="small" style={{ margin: 0 }}><b>Homes:</b> {c.homes.map((h) => h.name).join(", ") || "none"}</p>
       </section>
 

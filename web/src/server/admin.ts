@@ -2,7 +2,6 @@ import { and, count, desc, eq, inArray, isNull, max, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { DB } from "@/db/client";
 import {
-  accountTokens,
   adminAudit,
   billingInvoices,
   contracts,
@@ -19,12 +18,10 @@ import {
   type Subscription,
 } from "@/db/schema";
 import { cycleOn, dayIn } from "@/lib/billing-cycle";
-import { randomToken, sha256 } from "@/lib/crypto";
 import { adminLog } from "./admin-auth";
-import { audit, sendMail } from "./audit";
-import { INVITE_DAYS } from "./auth";
+import { audit } from "./audit";
 import { billingState, scheduleOf, type BillingState } from "./billing";
-import { provisionOrganization } from "./provision";
+import { heldOwners, inviteOwner, provisionOrganization } from "./provision";
 
 /**
  * What the admin site shows about clients. Organization-level only: homes, staff accounts,
@@ -131,6 +128,8 @@ export interface ClientDetail {
   invoices: BillingInvoice[];
   contracts: Contract[];
   log: Array<typeof adminAudit.$inferSelect>;
+  /** Owners whose invitation is held until the contract is signed. */
+  held: string[];
 }
 
 export async function clientDetail(db: DB, orgId: string, now = new Date()): Promise<ClientDetail | null> {
@@ -148,15 +147,22 @@ export async function clientDetail(db: DB, orgId: string, now = new Date()): Pro
   const invoices = await db.select().from(billingInvoices).where(eq(billingInvoices.orgId, orgId)).orderBy(desc(billingInvoices.periodEnd)).limit(36);
   const cs = await db.select().from(contracts).where(eq(contracts.orgId, orgId)).orderBy(desc(contracts.sentAt));
   const log = await db.select().from(adminAudit).where(eq(adminAudit.orgId, orgId)).orderBy(desc(adminAudit.at)).limit(30);
-  return { org, homes, people, residents: residentCount, tablets, sub: sub ?? null, billing: billingState(sub ?? null, now), invoices, contracts: cs, log };
+  return { org, homes, people, residents: residentCount, tablets, sub: sub ?? null, billing: billingState(sub ?? null, now), invoices, contracts: cs, log, held: (await heldOwners(db, orgId)).map((h) => h.id) };
 }
 
 /** Creates a client (organization, homes, owner invitation), optionally from a demo request. */
-export async function createClient(db: DB, adminId: string, raw: unknown, appUrl: string, leadId?: string | null): Promise<{ ok: true; orgId: string } | { ok: false; error: string }> {
+export async function createClient(
+  db: DB,
+  adminId: string,
+  raw: unknown,
+  appUrl: string,
+  leadId?: string | null,
+  opts: { holdInvite?: boolean } = {},
+): Promise<{ ok: true; orgId: string } | { ok: false; error: string }> {
   try {
-    const { orgId } = await provisionOrganization(db, raw as Parameters<typeof provisionOrganization>[1], appUrl);
+    const { orgId } = await provisionOrganization(db, raw as Parameters<typeof provisionOrganization>[1], appUrl, { holdInvite: !!opts.holdInvite });
     if (leadId) await db.update(leads).set({ status: "won", orgId, updatedAt: new Date() }).where(eq(leads.id, leadId));
-    await adminLog(db, { adminId, orgId, action: "client_created", entity: "organization", entityId: orgId, details: { fromLead: leadId ?? null } });
+    await adminLog(db, { adminId, orgId, action: "client_created", entity: "organization", entityId: orgId, details: { fromLead: leadId ?? null, inviteHeld: !!opts.holdInvite } });
     return { ok: true, orgId };
   } catch (e) {
     const msg = e instanceof z.ZodError ? e.issues[0].message : (e as Error).message;
@@ -164,21 +170,15 @@ export async function createClient(db: DB, adminId: string, raw: unknown, appUrl
   }
 }
 
-/** A fresh invitation link for an owner who hasn't set a password yet (the old link stops working). */
+/** An invitation for an owner who hasn't set a password yet: the held first one, or a fresh link (the old one stops working). */
 export async function resendOwnerInvite(db: DB, adminId: string, orgId: string, userId: string, appUrl: string): Promise<{ ok: true; email: string } | { ok: false; error: string }> {
   const [u] = await db.select().from(users).where(and(eq(users.id, userId), eq(users.orgId, orgId)));
   if (!u || u.status !== "invited" || u.role !== "owner") return { ok: false, error: "Only an owner who hasn't accepted their invitation can get a new link here." };
-  await db.update(accountTokens).set({ cancelledAt: new Date() }).where(and(eq(accountTokens.userId, u.id), isNull(accountTokens.usedAt), isNull(accountTokens.cancelledAt)));
-  const token = randomToken();
-  await db.insert(accountTokens).values({ orgId, userId: u.id, purpose: "invite", tokenHash: sha256(token), expiresAt: new Date(Date.now() + INVITE_DAYS * 86_400_000) });
-  await sendMail(db, {
-    orgId,
-    to: u.email,
-    subject: "Your CareHouse One account is ready",
-    body: `Hi ${u.name},\n\nHere's a new link to set your CareHouse One password. It works once and expires in ${INVITE_DAYS} days.\n\n${appUrl}/invite/${token}\n\nThen add your staff from the Staff page and register each home's tablet in Settings.`,
-  });
-  await audit(db, { orgId, actorId: null, action: "invitation_resent", entity: "user", entityId: u.id, details: { by: "CareHouse One" } });
-  await adminLog(db, { adminId, orgId, action: "owner_invite_resent", entity: "user", entityId: u.id, details: { email: u.email } });
+  const [org] = await db.select({ name: organizations.name }).from(organizations).where(eq(organizations.id, orgId));
+  const first = (await heldOwners(db, orgId)).some((h) => h.id === u.id);
+  await inviteOwner(db, { orgId, orgName: org.name, user: u }, appUrl, !first);
+  await audit(db, { orgId, actorId: null, action: first ? "invitation_sent" : "invitation_resent", entity: "user", entityId: u.id, details: { by: "CareHouse One" } });
+  await adminLog(db, { adminId, orgId, action: first ? "owner_invite_sent" : "owner_invite_resent", entity: "user", entityId: u.id, details: { email: u.email } });
   return { ok: true, email: u.email };
 }
 

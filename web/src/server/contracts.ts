@@ -10,6 +10,7 @@ import { adminLog } from "./admin-auth";
 import { audit, sendMail } from "./audit";
 import { orgBill, scheduleOf, startInvoiceBilling } from "./billing";
 import { writer } from "./onboarding-pdf";
+import { heldOwners, inviteOwner } from "./provision";
 
 /** Days a client has to sign; a reminder gives them the same again. */
 export const SIGN_DAYS = 30;
@@ -227,8 +228,16 @@ export async function signContract(
     const r = await startInvoiceBilling(db, c.orgId, { billingEmail: c.signerEmail, startsOn: d.startsOn!, introMonths: d.introMonths }, now);
     billingNote = r.ok ? ` Billing by PayPal invoice starts ${showDay(d.startsOn!, true)}.` : ` Billing wasn't started automatically: ${r.error}`;
   }
+  // An owner whose invitation was held until now gets it.
+  let inviteNote = "";
+  const held = await heldOwners(db, c.orgId);
+  for (const o of held) {
+    await inviteOwner(db, { orgId: c.orgId, orgName: d.client.orgName, user: o }, meta.appUrl);
+    await audit(db, { orgId: c.orgId, actorId: null, action: "invitation_sent", entity: "user", entityId: o.id, details: { by: "CareHouse One", after: "contract_signed" } });
+    inviteNote += ` ${o.name} (${o.email}) was emailed an invitation to set up the account.`;
+  }
   await audit(db, { orgId: c.orgId, actorId: null, action: "contract_signed", entity: "contract", entityId: c.id, details: { by: p.data.name, title: p.data.title, method: p.data.method, documentHash: signed.documentHash } });
-  await adminLog(db, { adminId: null, orgId: c.orgId, action: "contract_signed", entity: "contract", entityId: c.id, details: { by: p.data.name, billingNote: billingNote.trim() || null } });
+  await adminLog(db, { adminId: null, orgId: c.orgId, action: "contract_signed", entity: "contract", entityId: c.id, details: { by: p.data.name, billingNote: billingNote.trim() || null, invited: inviteNote.trim() || null } });
   await sendMail(db, {
     orgId: c.orgId,
     to: c.signerEmail,
@@ -237,7 +246,7 @@ export async function signContract(
   });
   const admins = await db.select({ email: platformAdmins.email }).from(platformAdmins).where(isNull(platformAdmins.disabledAt));
   for (const a of admins) {
-    await sendMail(db, { orgId: null, to: a.email, subject: `Contract signed: ${d.client.orgName}`, body: `${p.data.name} (${p.data.title}) signed the CareHouse One agreement for ${d.client.orgName}.${billingNote}` });
+    await sendMail(db, { orgId: null, to: a.email, subject: `Contract signed: ${d.client.orgName}`, body: `${p.data.name} (${p.data.title}) signed the CareHouse One agreement for ${d.client.orgName}.${billingNote}${inviteNote}` });
   }
   return { ok: true };
 }
