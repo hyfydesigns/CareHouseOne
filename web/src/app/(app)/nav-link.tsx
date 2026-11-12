@@ -21,9 +21,9 @@ const COLORS: Partial<Record<IconName, string>> = {
   settings: "#6b6890",
 };
 
-export function NavLink({ href, icon, children }: { href: string; icon: IconName; children: React.ReactNode }) {
+export function NavLink({ href, icon, children, exact }: { href: string; icon: IconName; children: React.ReactNode; exact?: boolean }) {
   const path = usePathname();
-  const active = path === href || path.startsWith(`${href}/`);
+  const active = path === href || (!exact && path.startsWith(`${href}/`));
   return (
     <Link href={href} aria-current={active ? "page" : undefined}>
       <span className="ico" style={{ "--ic": COLORS[icon] } as React.CSSProperties}>

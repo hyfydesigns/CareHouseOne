@@ -28,6 +28,8 @@ import {
   sessions,
   shiftPunches,
   subscriptions,
+  billingInvoices,
+  contracts,
   userFacilities,
   users,
   vitalReviews,
@@ -90,7 +92,7 @@ export async function removeTestOrganization(db: DB, orgId: string, confirmName:
   }
   const removed: Record<string, number> = {};
   await db.transaction(async (tx: Tx) => {
-    const del = async (name: string, table: typeof shiftPunches | typeof devicePins | typeof staffCertifications | typeof adlActivities | typeof onboardingForms | typeof sessions | typeof deviceFacilities | typeof devices | typeof accountTokens | typeof userFacilities | typeof outbox | typeof subscriptions | typeof auditLog | typeof users | typeof facilities) => {
+    const del = async (name: string, table: typeof shiftPunches | typeof devicePins | typeof staffCertifications | typeof adlActivities | typeof onboardingForms | typeof sessions | typeof deviceFacilities | typeof devices | typeof accountTokens | typeof userFacilities | typeof outbox | typeof billingInvoices | typeof contracts | typeof subscriptions | typeof auditLog | typeof users | typeof facilities) => {
       const rows = await tx.delete(table).where(eq(table.orgId, orgId)).returning();
       removed[name] = rows.length;
     };
@@ -105,6 +107,8 @@ export async function removeTestOrganization(db: DB, orgId: string, confirmName:
     await del("invitation and reset links", accountTokens);
     await del("home assignments", userFacilities);
     await del("emails", outbox);
+    await del("invoices", billingInvoices);
+    await del("contracts", contracts);
     await del("subscriptions", subscriptions);
     await tx.execute(sql`alter table audit_log disable trigger audit_log_no_change`);
     await del("audit log entries", auditLog);

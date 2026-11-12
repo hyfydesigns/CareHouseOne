@@ -25,7 +25,7 @@ const rule = rgb(0.8, 0.8, 0.85);
 type WriteOpts = { font?: PDFFont; size?: number; color?: ReturnType<typeof rgb>; indent?: number; gap?: number };
 
 /** A Letter-size document written top to bottom, with a new page whenever the current one fills up. */
-async function writer(title: string) {
+export async function writer(title: string) {
   const doc = await PDFDocument.create();
   doc.setTitle(latin(title));
   doc.setProducer("CareHouse One");

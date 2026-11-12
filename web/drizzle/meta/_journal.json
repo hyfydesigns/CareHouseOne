@@ -309,6 +309,13 @@
       "when": 1794367406121,
       "tag": "0043_final_invoice",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1794451530892,
+      "tag": "0044_admin_site",
+      "breakpoints": true
     }
   ]
 }

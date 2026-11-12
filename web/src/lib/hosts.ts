@@ -19,6 +19,19 @@ export function siteUrl(): string {
   return (process.env.SITE_URL || (dev ? "http://www.localhost:3000" : "https://www.carehouseone.com")).replace(/\/$/, "");
 }
 
+/**
+ * The admin site (admin.carehouseone.com, locally http://admin.localhost:3000) serves only the
+ * pages under /admin; nothing under /admin is served on any other address.
+ */
+export function adminBaseUrl(): string {
+  return (process.env.ADMIN_URL || (dev ? "http://admin.localhost:3000" : "https://admin.carehouseone.com")).replace(/\/$/, "");
+}
+
+export function isAdminHost(host: string | null | undefined): boolean {
+  const name = (host ?? "").split(":")[0].toLowerCase();
+  return name === new URL(adminBaseUrl()).hostname || name.startsWith("admin.");
+}
+
 export function appBaseUrl(): string {
   return (process.env.APP_URL || (dev ? "http://app.localhost:3000" : "https://app.carehouseone.com")).replace(/\/$/, "");
 }

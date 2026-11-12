@@ -5,7 +5,7 @@ import { canViewAudit } from "@/lib/permissions";
 import { currentDevice, requireUser } from "@/lib/session";
 import { asc } from "drizzle-orm";
 import { facilities } from "@/db/schema";
-import { billingState, finalCycleOf, invoiceNumber, orgInvoices, orgSubscription, scheduleOf } from "@/server/billing";
+import { billingState, finalCycleOf, invoiceBilled, invoiceNumber, orgInvoices, orgSubscription, scheduleOf } from "@/server/billing";
 import { cents, cycleOn, CYCLE_DAY, dayIn, DUE_DAY, LATE_DAY, LATE_FEE, showDay, showPeriod } from "@/lib/billing-cycle";
 import { describeBill, INTRO_PRICE_PER_HOME, PRICE_PER_HOME, PRICE_SUMMARY, usd } from "@/lib/pricing";
 import { paypalLive } from "@/server/paypal";
@@ -162,7 +162,7 @@ export default async function SettingsPage() {
                   <div>
                     <span className="small muted">Next payment, as of today</span><br />
                     <b>{cents(homesNow * cycle.perHomeCents)}</b><br />
-                    <span className="small muted">{describeBill({ homes: homesNow })} × {cents(cycle.perHomeCents)}, {final ? "final invoice, due" : "charged"} {showDay(cycle.dueOn, true)}</span>
+                    <span className="small muted">{describeBill({ homes: homesNow })} × {cents(cycle.perHomeCents)}, {final ? "final invoice, due" : invoiceBilled(data.sub) ? "due" : "charged"} {showDay(cycle.dueOn, true)}</span>
                   </div>
                 )
               )}
@@ -199,7 +199,16 @@ export default async function SettingsPage() {
                 </table>
               </div>
             )}
-            <p className="small muted" style={{ margin: 0 }}>
+            {invoiceBilled(data.sub) ? (
+              <p className="small muted" style={{ margin: 0 }}>
+                Priced per home, with any number of residents. Every billing cycle runs from the {CYCLE_DAY}th of one month to the {CYCLE_DAY}th of the next. The
+                invoice goes out the day after as a PayPal invoice to {data.sub.payerEmail ?? "your billing contact"}, uses the number of homes you have then, and is due on
+                the {DUE_DAY}th; pay it by card or with PayPal. A payment still missing on the {LATE_DAY}th is late: a {usd(LATE_FEE)} late fee is added and admin
+                features pause until it&apos;s paid. To change the billing contact or cancel, email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>. Care records
+                are never locked for a missed payment.
+              </p>
+            ) : (
+              <p className="small muted" style={{ margin: 0 }}>
               Priced per home, with any number of residents. Every billing cycle runs from the {CYCLE_DAY}th of one month to the {CYCLE_DAY}th of the next. The
               invoice goes out the day after, uses the number of homes you have then, and PayPal takes the payment automatically on the {DUE_DAY}th. A payment
               still missing on the {LATE_DAY}th is late: a {usd(LATE_FEE)} late fee is added and admin features pause until it&apos;s paid. Change the payment method or cancel in your PayPal account
@@ -207,6 +216,7 @@ export default async function SettingsPage() {
               cycle you&apos;re in is the last one: everything keeps working until it ends, and its invoice comes as a PayPal invoice. Care
               records are never locked for a missed payment. CareHouse One never sees or stores card details.
             </p>
+            )}
           </>
         ) : (
           <p className="small muted" style={{ margin: 0 }}>Your organization is billed by invoice. Questions: <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.</p>

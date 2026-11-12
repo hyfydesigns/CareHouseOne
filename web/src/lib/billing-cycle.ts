@@ -92,16 +92,26 @@ export interface BillingSchedule {
 }
 
 export function scheduleFor(signedUpAt: Date): BillingSchedule {
-  const trialEndsOn = addDays(dayIn(signedUpAt), TRIAL_DAYS);
-  let end = cycleEndOnOrAfter(trialEndsOn);
-  let introCycles = INTRO_MONTHS;
-  // A trial that ends on the 28th starts a whole cycle: that's the first of the introductory months.
-  if (end === trialEndsOn) {
+  return scheduleStarting(addDays(dayIn(signedUpAt), TRIAL_DAYS));
+}
+
+/**
+ * A schedule whose first paid day is `firstPaidDay` (the day after a free trial, or the billing
+ * start an invoice-billed client agreed to). The first, partial cycle and then `introMonths` whole
+ * cycles are at the introductory price (a start on the 28th has no partial cycle, so that's
+ * `introMonths` cycles in all). With none, everything is at the regular price.
+ */
+export function scheduleStarting(firstPaidDay: Day, introMonths = INTRO_MONTHS): BillingSchedule {
+  let end = cycleEndOnOrAfter(firstPaidDay);
+  let introCycles = introMonths;
+  // Starting on the 28th starts a whole cycle: that's the first of the introductory months.
+  if (end === firstPaidDay) {
     end = nextCycleEnd(end);
-    introCycles -= 1;
+    introCycles = Math.max(0, introCycles - 1);
   }
-  const firstPerHomeCents = Math.round((INTRO_PRICE_PER_HOME * 100 * daysBetween(trialEndsOn, end)) / daysBetween(cycleStartOf(end), end));
-  return { trialEndsOn, firstCycleEnd: end, firstPerHomeCents, introCycles, startsOn: dueDay(end) };
+  const price = introMonths > 0 ? INTRO_PRICE_PER_HOME : PRICE_PER_HOME;
+  const firstPerHomeCents = Math.round((price * 100 * daysBetween(firstPaidDay, end)) / daysBetween(cycleStartOf(end), end));
+  return { trialEndsOn: firstPaidDay, firstCycleEnd: end, firstPerHomeCents, introCycles, startsOn: dueDay(end) };
 }
 
 /** A billed cycle: its days (end is the 28th it runs to), the price per home, and the dates that follow. */

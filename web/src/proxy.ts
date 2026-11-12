@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { appBaseUrl, isSiteHost, SITE_PATHS, siteUrl } from "@/lib/hosts";
+import { appBaseUrl, isAdminHost, isSiteHost, SITE_PATHS, siteUrl } from "@/lib/hosts";
 
 /** Pages that need a session cookie at all; requireUser() on the server does the real check. */
 const SIGNED_IN = ["/dashboard", "/pin", "/locked", "/staff", "/timesheets", "/audit", "/residents", "/meds", "/settings", "/vitals", "/notes", "/shift", "/account", "/incidents", "/print", "/safety", "/adl", "/onboarding", "/reports"];
@@ -36,9 +36,25 @@ function csp(nonce: string, paypal: boolean): string {
 /** A redirect to the other hostname. Set by hand: NextResponse.redirect shortens it to a path when it thinks both hosts are the same origin. */
 const elsewhere = (url: string) => new NextResponse(null, { status: 307, headers: { Location: url } });
 
+/** Admin pages anyone can open: signing in and the one-time setup link. */
+const ADMIN_PUBLIC = ["/admin/sign-in", "/admin/setup"];
+
 export function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
-  const site = isSiteHost(request.headers.get("host"));
+  const host = request.headers.get("host");
+  const isAdminPath = path === "/admin" || path.startsWith("/admin/");
+  // The admin site has its own address and only its own pages; they don't exist anywhere else.
+  if (isAdminHost(host)) {
+    // The public demo never has an admin site.
+    if (process.env.DEMO_MODE === "true") return new NextResponse("Not found", { status: 404 });
+    if (!isAdminPath) return NextResponse.redirect(new URL("/admin", request.url));
+    if (!ADMIN_PUBLIC.some((p) => path === p || path.startsWith(`${p}/`)) && !request.cookies.has("ch1_admin")) {
+      return NextResponse.redirect(new URL("/admin/sign-in", request.url));
+    }
+  } else if (isAdminPath) {
+    return new NextResponse("Not found", { status: 404 });
+  }
+  const site = isSiteHost(host);
   // The public site only has its own pages; anything else belongs to the app, and vice versa.
   if (site && !SITE_PATHS.has(path)) return elsewhere(`${appBaseUrl()}${path}${request.nextUrl.search}`);
   if (!site && SITE_PATHS.has(path) && path !== "/") return elsewhere(`${siteUrl()}${path}${request.nextUrl.search}`);

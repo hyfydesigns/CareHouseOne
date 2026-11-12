@@ -127,6 +127,24 @@ export function sendLateFeeInvoice(email: string, amountCents: number, note: str
   return sendPaypalInvoice({ email, item: "CareHouse One late fee", unitCents: amountCents, note });
 }
 
+/** Cancels a subscription in PayPal (the admin site's "Cancel billing"). */
+export async function cancelSubscription(id: string, reason: string): Promise<void> {
+  if (!/^I-[A-Z0-9]{6,32}$/.test(id)) throw new Error("Not a PayPal subscription ID");
+  await call("POST", `/v1/billing/subscriptions/${id}/cancel`, { reason });
+}
+
+/** Cancels a PayPal invoice that hasn't been paid (a waived late fee), telling the payer. */
+export async function cancelPaypalInvoice(id: string, note: string): Promise<void> {
+  if (!PAYPAL_INVOICE_ID.test(id)) throw new Error("Not a PayPal invoice ID");
+  await call("POST", `/v2/invoicing/invoices/${id}/cancel`, { subject: "Invoice cancelled", note, send_to_recipient: true, send_to_invoicer: false });
+}
+
+/** Has PayPal email the payer a reminder for an unpaid invoice. */
+export async function remindPaypalInvoice(id: string, note: string): Promise<void> {
+  if (!PAYPAL_INVOICE_ID.test(id)) throw new Error("Not a PayPal invoice ID");
+  await call("POST", `/v2/invoicing/invoices/${id}/remind`, { subject: "Reminder: CareHouse One invoice", note, send_to_recipient: true, send_to_invoicer: false });
+}
+
 /** Whether the payer has paid a PayPal invoice (or it was marked paid in PayPal). */
 export async function paypalInvoicePaid(id: string): Promise<boolean> {
   if (!PAYPAL_INVOICE_ID.test(id)) throw new Error("Not a PayPal invoice ID");

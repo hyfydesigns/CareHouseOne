@@ -515,8 +515,15 @@ export type Facility = typeof facilities.$inferSelect;
 export const subscriptions = pgTable("subscriptions", {
   id: id(),
   orgId: uuid("org_id").unique().references(() => organizations.id),
-  paypalSubscriptionId: text("paypal_subscription_id").notNull().unique(),
+  /** None for a client billed by PayPal invoice (set up on the admin site). */
+  paypalSubscriptionId: text("paypal_subscription_id").unique(),
+  /** "invoice" for those clients. */
   planId: text("plan_id").notNull(),
+  /**
+   * paypal: a PayPal subscription the client signed up for, charged automatically on the 5th.
+   * invoice: the same calendar, but each invoice is sent as a PayPal invoice for the client to pay.
+   */
+  billingMethod: text("billing_method").notNull().default("paypal"),
   /** PayPal's status: APPROVAL_PENDING, APPROVED, ACTIVE, SUSPENDED, CANCELLED or EXPIRED. */
   status: text("status").notNull(),
   quantity: integer("quantity").notNull(),
@@ -605,6 +612,12 @@ export const leads = pgTable("leads", {
   homes: integer("homes"),
   residents: integer("residents"),
   message: text("message"),
+  /** new, contacted, won or lost (admin site). */
+  status: text("status").notNull().default("new"),
+  notes: text("notes"),
+  /** The client created from this lead. */
+  orgId: uuid("org_id"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }),
   createdAt: createdAt(),
 });
 export type Subscription = typeof subscriptions.$inferSelect;
@@ -1030,3 +1043,95 @@ export const onboardingAccess = pgTable(
   },
   (t) => [index("onboarding_access_packet_idx").on(t.packetId, t.kind), uniqueIndex("onboarding_access_secret_uq").on(t.secretHash)],
 );
+
+// ---------------------------------------------------------------- admin site (admin.carehouseone.com)
+
+/**
+ * The people who run CareHouse One (the developer), not anyone at a client. Separate from users:
+ * they belong to no organization, can't sign in to the app, and always use an authenticator app.
+ * Created with scripts/admin-create.ts, which prints a single-use setup link.
+ */
+export const platformAdmins = pgTable("platform_admins", {
+  id: id(),
+  email: text("email").notNull().unique(),
+  name: text("name").notNull(),
+  passwordHash: text("password_hash"),
+  mfaSecretEnc: text("mfa_secret_enc").notNull(),
+  failedLogins: integer("failed_logins").notNull().default(0),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  setupTokenHash: text("setup_token_hash").unique(),
+  setupExpiresAt: timestamp("setup_expires_at", { withTimezone: true }),
+  lastSignInAt: timestamp("last_sign_in_at", { withTimezone: true }),
+  disabledAt: timestamp("disabled_at", { withTimezone: true }),
+  createdAt: createdAt(),
+});
+
+export const adminSessions = pgTable("admin_sessions", {
+  id: id(),
+  adminId: uuid("admin_id").notNull().references(() => platformAdmins.id),
+  tokenHash: text("token_hash").notNull().unique(),
+  /** False until the authenticator code is entered. */
+  mfaPassed: boolean("mfa_passed").notNull().default(false),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  userAgent: text("user_agent"),
+  createdAt: createdAt(),
+});
+
+/** Everything done on the admin site, including sign-ins. Kept when an organization is removed. */
+export const adminAudit = pgTable(
+  "admin_audit",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    adminId: uuid("admin_id"),
+    orgId: uuid("org_id"),
+    action: text("action").notNull(),
+    entity: text("entity").notNull(),
+    entityId: text("entity_id"),
+    details: jsonb("details").$type<Record<string, unknown>>().notNull().default({}),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("admin_audit_org_at_idx").on(t.orgId, t.at)],
+);
+
+/**
+ * A contract sent to a client to sign online: the order form (homes, price, billing) and the Terms
+ * of Service and BAA, exactly as sent (`document`). The signer opens it with a single-use link;
+ * the signature, the time, their IP and a fingerprint of the document are kept with it.
+ */
+export const contracts = pgTable(
+  "contracts",
+  {
+    id: id(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id),
+    /** sent, signed or void. */
+    status: text("status").notNull().default("sent"),
+    signerName: text("signer_name").notNull(),
+    signerEmail: text("signer_email").notNull(),
+    /** The order form and terms as sent (see ContractDocument in server/contracts.ts). */
+    document: jsonb("document").$type<Record<string, unknown>>().notNull(),
+    version: text("version").notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+    viewedAt: timestamp("viewed_at", { withTimezone: true }),
+    remindedAt: timestamp("reminded_at", { withTimezone: true }),
+    signedAt: timestamp("signed_at", { withTimezone: true }),
+    signedName: text("signed_name"),
+    signedTitle: text("signed_title"),
+    signMethod: text("sign_method"),
+    signatureImage: text("signature_image"),
+    signerIp: text("signer_ip"),
+    signerUserAgent: text("signer_user_agent"),
+    documentHash: text("document_hash"),
+    voidedAt: timestamp("voided_at", { withTimezone: true }),
+    createdBy: uuid("created_by").references(() => platformAdmins.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index("contracts_org_idx").on(t.orgId)],
+);
+
+export type PlatformAdmin = typeof platformAdmins.$inferSelect;
+export type Contract = typeof contracts.$inferSelect;
+export type Lead = typeof leads.$inferSelect;

@@ -15,6 +15,7 @@
     "icd:import": "tsx scripts/icd-import.ts",
     "org:create": "tsx scripts/create-org.ts",
     "paypal:setup": "tsx scripts/paypal-setup.ts",
+    "admin:create": "tsx scripts/admin-create.ts",
     "org:remove": "tsx scripts/org-remove.ts",
     "rx:import": "tsx scripts/rx-import.ts"
   },

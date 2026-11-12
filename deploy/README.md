@@ -231,6 +231,30 @@ Then `npm run dev`, open `http://www.localhost:3000/signup`, subscribe with a Pa
 
 **What customers see:** a billing card in Settings with the plan and where they are in it (free trial, introductory price or regular price), the number of homes billed, the next payment's amount as of today, and its date. If a payment fails, owners and admins get an email and a banner; after 14 days inviting staff, registering tablets and settings changes pause. Care records and the medication record are never blocked. PayPal's plan runs the schedule itself (free trial, then 3 months at $49 per home, then $99 per home), so the move to the regular price needs no approval. On the first of each month the number of homes is sent to PayPal if it changed; if PayPal needs the payer to approve a higher amount, an "Approve the new amount in PayPal" button appears. Admitting a resident is never blocked.
 
+## 9c. Admin site: admin.carehouseone.com
+
+Your back office: clients and their setup, billing, contracts to sign, and demo requests. It's served by the same Cloud Run service, only at its own address (the pages don't exist at app. or www.), and it never shows resident information. Every action is recorded in the `admin_audit` table.
+
+1. Map the address and add the DNS record it shows in Cloudflare (`CNAME`, name `admin`, target `ghs.googlehosted.com`, **DNS only**):
+
+```bash
+gcloud beta run domain-mappings create --service carehouse-one --domain admin.carehouseone.com --region us-central1
+```
+
+2. GitHub variable `ADMIN_URL` = `https://admin.carehouseone.com` (that's also the default). Run Deploy.
+3. Create your admin account from Cloud Shell, through the Cloud SQL Auth Proxy (same first three lines as step 5):
+
+```bash
+export ADMIN_URL="https://admin.carehouseone.com"
+npm run admin:create -- you@yourdomain.com "Your Name"
+```
+
+It prints a setup link that works once, for 2 days. Open it yourself: choose a password and scan the QR code with an authenticator app. Every sign-in needs both. Forgot the password or lost the phone? Run the same command again; it resets both and signs you out everywhere.
+
+4. From then on, add clients on the admin site instead of `npm run org:create`. Clients who don't sign up through PayPal on the website are billed by PayPal invoice on the same calendar: either send them a contract (billing starts on its order form's terms when they sign) or start billing on their client page.
+
+Contracts use the Terms of Service and BAA text in `web/src/lib/contract-text.ts`, generated from the draft .docx in the repository root. Until the lawyer has filled in the blanks, the admin site warns that it's a draft; don't send it to real clients before then.
+
 ## 10. Public demo: demo.carehouseone.com
 
 A demo you can show prospects or link from the website: the same app with `DEMO_MODE=true`, filled with a made-up company (Harborview Community Living, two homes, four residents, three weeks of history). Visitors click **Be the owner** or **Be the caregiver**; there are no passwords. It runs as a separate Cloud Run service, `carehouse-demo`, that is walled off from the real app:
