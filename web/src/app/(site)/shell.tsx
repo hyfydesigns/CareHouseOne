@@ -32,7 +32,7 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
       <main id="main">{children}</main>
       <footer className="site-foot">
         <div className="site-wrap">
-          <span>© {new Date().getFullYear()} CareHouse One</span>
+          <span>© {new Date().getFullYear()} HyFy Interactive LLC</span>
           <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
           <nav aria-label="Legal">
             <a href={`${appBaseUrl()}/sign-in`}>Sign in</a>

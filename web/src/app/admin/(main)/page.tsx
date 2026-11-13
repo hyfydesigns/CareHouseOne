@@ -23,7 +23,7 @@ export default async function AdminHome() {
       </section>
       {contractIsDraft() && (
         <p className="notice" role="note" style={{ margin: 0 }}>
-          The contract text is still the draft Terms of Service and BAA, with blanks in [brackets] for the lawyer. Use contracts for testing until the final text is in.
+          The Terms of Service and BAA (HyFy Interactive LLC, version of November 13, 2026) haven&apos;t been reviewed by a lawyer yet. Use contracts for testing until they have.
         </p>
       )}
       <div className="row">

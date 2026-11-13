@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { CONTRACT_PARTY } from "@/lib/contract-text";
 import { getDb } from "@/db/client";
 import { dayIn, showDay } from "@/lib/billing-cycle";
 import { CONTRACT_CONSENT, contractByToken, type ContractDocument } from "@/server/contracts";
@@ -32,7 +33,7 @@ export default async function ContractPage({ params }: { params: Promise<{ token
   return wrap(
     <>
       <div>
-        <h1 style={{ marginBottom: 4 }}>Agreement with {d.client.orgName}</h1>
+        <h1 style={{ marginBottom: 4 }}>Agreement between {d.client.orgName} and {CONTRACT_PARTY}</h1>
         <p className="muted" style={{ margin: 0 }}>Order form, Terms of Service and Business Associate Agreement · issued {showDay(d.issuedOn, true)}</p>
       </div>
       {signed ? (

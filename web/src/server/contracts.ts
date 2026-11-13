@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { DB } from "@/db/client";
 import { contracts, organizations, platformAdmins, subscriptions, users, type Contract } from "@/db/schema";
 import { cents, CYCLE_DAY, dayIn, DUE_DAY, LATE_DAY, LATE_FEE, scheduleStarting, showDay, showPeriod, cycleEnding, type Day } from "@/lib/billing-cycle";
-import { CONTRACT_TERMS, CONTRACT_VERSION, type ContractPart } from "@/lib/contract-text";
+import { CONTRACT_PARTY, CONTRACT_TERMS, CONTRACT_VERSION, type ContractPart } from "@/lib/contract-text";
 import { randomToken, sha256 } from "@/lib/crypto";
 import { INTRO_PRICE_PER_HOME, PRICE_PER_HOME, TRIAL_DAYS, usd } from "@/lib/pricing";
 import { adminLog } from "./admin-auth";
@@ -50,6 +50,7 @@ export const sendSchema = z.object({
 export function orderLines(d: Omit<ContractDocument, "order" | "terms" | "version">, paypalNote?: string): ContractDocument["order"] {
   const lines: ContractDocument["order"] = [
     { label: "Customer", text: d.client.orgName },
+    { label: "Provider", text: `${CONTRACT_PARTY}, a Texas limited liability company, which owns and operates CareHouse One.` },
     { label: "Service", text: "CareHouse One care records for group homes, as described in the Terms of Service below." },
     { label: "Homes", text: `${d.homes} to start. Each invoice is for the number of homes on the account the day it's issued.` },
   ];
@@ -134,7 +135,7 @@ async function mailLink(db: DB, c: Contract, link: string, reminder: boolean) {
     subject: reminder ? "Reminder: your CareHouse One agreement is ready to sign" : "Your CareHouse One agreement is ready to sign",
     body:
       `Hello ${c.signerName},\n\n` +
-      `Here is the CareHouse One agreement for ${d.client.orgName}: the order form, the Terms of Service and the Business Associate Agreement. Please read it and sign online:\n\n${link}\n\n` +
+      `Here is the CareHouse One agreement between ${d.client.orgName} and ${CONTRACT_PARTY}, the company behind CareHouse One: the order form, the Terms of Service and the Business Associate Agreement. Please read it and sign online:\n\n${link}\n\n` +
       `The link is just for you and works for ${SIGN_DAYS} days. You can sign on a phone or computer by drawing or typing your name, and you'll get a PDF copy once it's signed.\n\n` +
       `Questions? Just reply to this email.`,
   });
@@ -268,9 +269,9 @@ export async function renderContractPdf(c: Contract): Promise<Buffer> {
   const d = c.document as unknown as ContractDocument;
   const w = await writer(`CareHouse One agreement - ${d.client.orgName}`);
   const { bold, script } = w;
-  w.write("CareHouse One", { font: bold, size: 12, gap: 0 });
+  w.write(`CareHouse One · ${CONTRACT_PARTY}`, { font: bold, size: 12, gap: 0 });
   w.write("Order form, Terms of Service and Business Associate Agreement", { size: 9, gap: 10 });
-  w.write(`Agreement with ${d.client.orgName}`, { font: bold, size: 17, gap: 2 });
+  w.write(`Agreement between ${d.client.orgName} and ${CONTRACT_PARTY}`, { font: bold, size: 17, gap: 2 });
   w.write(`Issued ${showDay(d.issuedOn, true)} · ${d.version}`, { size: 9.5, gap: 10 });
   w.divider();
   w.write("Order form", { font: bold, size: 13 });

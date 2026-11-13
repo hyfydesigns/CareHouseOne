@@ -17,7 +17,8 @@
     "paypal:setup": "tsx scripts/paypal-setup.ts",
     "admin:create": "tsx scripts/admin-create.ts",
     "org:remove": "tsx scripts/org-remove.ts",
-    "rx:import": "tsx scripts/rx-import.ts"
+    "rx:import": "tsx scripts/rx-import.ts",
+    "contract:text": "tsx scripts/contract-text.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.10",

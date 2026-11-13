@@ -207,7 +207,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         )}
         <details open={c.contracts.length === 0}>
           <summary>Send a contract to sign</summary>
-          {contractIsDraft() && <p className="notice small">The Terms and BAA are still the draft with blanks for the lawyer. Fine for testing; don&apos;t send it to a real client yet.</p>}
+          {contractIsDraft() && <p className="notice small">The Terms and BAA haven&apos;t been reviewed by a lawyer yet. Fine for testing; don&apos;t send it to a real client yet.</p>}
           <ActionForm action={sendContractAction.bind(null, id)} submit="Send contract">
             <div className="field"><label htmlFor="sc-name">Signer&apos;s name</label><input id="sc-name" name="signerName" required defaultValue={defaults.signerName} /></div>
             <div className="field"><label htmlFor="sc-email">Signer&apos;s email</label><input id="sc-email" name="signerEmail" type="email" required defaultValue={defaults.signerEmail} /></div>
