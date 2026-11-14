@@ -1,6 +1,6 @@
 # Terms of Service
 
-Version 1.3 · November 14, 2026
+Version 1.4 · November 14, 2026
 
 These Terms are a contract between HyFy Interactive LLC, a Texas limited liability company that owns and operates CareHouse One ("HyFy", "we", "us"), and the organization that signs up for CareHouse One or signs an order form for it ("Customer", "you"). They take effect for you on the day you accept them, by signing an order form or by accepting them when you set up your account. The person who accepts them confirms they are authorized to bind the Customer. If you don't agree, don't use the Service.
 
@@ -16,7 +16,7 @@ These Terms are a contract between HyFy Interactive LLC, a Texas limited liabili
 
 2.1 You choose who gets an account and what role they have (owner, admin, caregiver). You're responsible for everything done under your accounts, for removing access promptly when someone leaves, and for keeping your registered tablets physically secure.
 
-2.2 Multi-factor or two-step authentication is not currently offered for owner or admin accounts. Customer must use unique, strong credentials, restrict privileged access, promptly remove departed users, and secure and monitor authorized tablets. Where configured, caregiver tablets lock with a personal PIN. Customer will promptly report suspected compromise to hello@carehouseone.com. HyFy may introduce stronger authentication after providing relevant implementation notice; nothing here represents it as currently available.
+2.2 Two-step verification with an authenticator app is available for owner and admin accounts, and HyFy recommends that owners and admins turn it on; using it is Customer’s choice. Customer must use unique, strong credentials, restrict privileged access, promptly remove departed users, and secure and monitor authorized tablets. Where configured, caregiver tablets lock with a personal PIN. Customer will promptly report suspected compromise to hello@carehouseone.com.
 
 2.3 Each person must have their own account. Sharing passwords or PINs is not allowed.
 
@@ -58,7 +58,7 @@ You won't, and won't let anyone else: use the Service to break the law or anyone
 
 ## 6. Security and availability
 
-6.1 HyFy will maintain the administrative, physical, and technical safeguards required by applicable law and this BAA. HyFy confirms that its Google Cloud BAA and documented security controls are in place; specific deployment details and ongoing control effectiveness remain subject to periodic validation. No technical control is guaranteed to eliminate all risk. Multi-factor authentication is not currently implemented and is not represented as a safeguard.
+6.1 HyFy will maintain the administrative, physical, and technical safeguards required by applicable law and this BAA. HyFy confirms that its Google Cloud BAA and documented security controls are in place; specific deployment details and ongoing control effectiveness remain subject to periodic validation. No technical control is guaranteed to eliminate all risk. Two-step verification is available to owner and admin accounts but is optional, so it protects only the accounts on which Customer turns it on.
 
 6.2 HyFy hosts the Service on Google Cloud in the United States under its confirmed Business Associate Addendum and documented security program. HyFy aims for continuous availability but does not guarantee uninterrupted service or a specific uptime percentage. It will provide advance notice of scheduled maintenance when practicable and prompt notice of material unscheduled outages. Customer must maintain clinically appropriate downtime and record-reconciliation procedures, especially for medication administration.
 
@@ -118,7 +118,7 @@ Email support at hello@carehouseone.com, Monday to Friday, 9 AM to 5 PM US Centr
 
 # Business Associate Agreement
 
-Version 1.3 · November 14, 2026
+Version 1.4 · November 14, 2026
 
 This Business Associate Agreement (“BAA”) is between HyFy Interactive LLC (“Business Associate”) and the customer accepting the CareHouse One Terms (“Customer”). If Customer is a HIPAA covered entity, Customer is the “Covered Entity” for this BAA. If Customer acts as a business associate for another covered entity, Customer is an “Upstream Business Associate,” and HyFy is its subcontractor business associate; references below to “Covered Entity” include that Upstream Business Associate solely for purposes of the parties’ obligations under this BAA. This BAA applies only to PHI that HyFy creates, receives, maintains or transmits for Customer and is effective when the Customer accepts the Terms and this BAA.
 
@@ -144,7 +144,7 @@ Business Associate will comply with Subpart C of 45 CFR Part 164 (the Security R
 - a written security risk analysis, reviewed at least yearly, and security policies with workforce training;
 - encryption of PHI in transit (TLS) and at rest, with Google Cloud hosting in the United States and a confirmed Google Cloud Business Associate Addendum;
 - logical isolation of each Customer’s data from other Customers, including database row-level security if this has been implemented and verified;
-- unique user accounts, role-based access, session timeout, and registered caregiver tablets with personal PIN locking where configured. Multi-factor authentication is not currently implemented and is not a claimed security control;
+- unique user accounts, role-based access, session timeout, and registered caregiver tablets with personal PIN locking where configured. Two-step verification with an authenticator app is available for owner and admin accounts at Customer’s option;
 - audit logs designed to detect and deter unauthorized access or alteration and protected against ordinary users editing or deleting log entries;
 - daily backups with a stated target retention of 30 days and point-in-time recovery target of 7 days, subject to periodic restore testing and documented recovery procedures;
 - limiting Business Associate's own staff access to PHI to what is needed to provide support, at Covered Entity's request or to fix a problem.

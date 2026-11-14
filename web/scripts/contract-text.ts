@@ -11,7 +11,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const CONTRACT_VERSION = "Version 1.3 of November 14, 2026";
+const CONTRACT_VERSION = "Version 1.4 of November 14, 2026";
 /** Set to true once a lawyer has reviewed the text. Until then the admin site warns before sending. */
 const REVIEWED = true;
 

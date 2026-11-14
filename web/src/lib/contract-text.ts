@@ -15,7 +15,7 @@ export type ContractPart = { title: string; blocks: ContractBlock[] };
 /** The company clients contract with. */
 export const CONTRACT_PARTY = "HyFy Interactive LLC";
 
-export const CONTRACT_VERSION = "Version 1.3 of November 14, 2026";
+export const CONTRACT_VERSION = "Version 1.4 of November 14, 2026";
 
 /** False until a lawyer has reviewed the text (scripts/contract-text.ts). */
 export const CONTRACT_REVIEWED = true;
@@ -26,7 +26,7 @@ export const CONTRACT_TERMS: ContractPart[] = [
     blocks: [
       {
         type: "p",
-        text: "Version 1.3 · November 14, 2026",
+        text: "Version 1.4 · November 14, 2026",
       },
       {
         type: "p",
@@ -58,7 +58,7 @@ export const CONTRACT_TERMS: ContractPart[] = [
       },
       {
         type: "p",
-        text: "2.2 Multi-factor or two-step authentication is not currently offered for owner or admin accounts. Customer must use unique, strong credentials, restrict privileged access, promptly remove departed users, and secure and monitor authorized tablets. Where configured, caregiver tablets lock with a personal PIN. Customer will promptly report suspected compromise to hello@carehouseone.com. HyFy may introduce stronger authentication after providing relevant implementation notice; nothing here represents it as currently available.",
+        text: "2.2 Two-step verification with an authenticator app is available for owner and admin accounts, and HyFy recommends that owners and admins turn it on; using it is Customer’s choice. Customer must use unique, strong credentials, restrict privileged access, promptly remove departed users, and secure and monitor authorized tablets. Where configured, caregiver tablets lock with a personal PIN. Customer will promptly report suspected compromise to hello@carehouseone.com.",
       },
       {
         type: "p",
@@ -142,7 +142,7 @@ export const CONTRACT_TERMS: ContractPart[] = [
       },
       {
         type: "p",
-        text: "6.1 HyFy will maintain the administrative, physical, and technical safeguards required by applicable law and this BAA. HyFy confirms that its Google Cloud BAA and documented security controls are in place; specific deployment details and ongoing control effectiveness remain subject to periodic validation. No technical control is guaranteed to eliminate all risk. Multi-factor authentication is not currently implemented and is not represented as a safeguard.",
+        text: "6.1 HyFy will maintain the administrative, physical, and technical safeguards required by applicable law and this BAA. HyFy confirms that its Google Cloud BAA and documented security controls are in place; specific deployment details and ongoing control effectiveness remain subject to periodic validation. No technical control is guaranteed to eliminate all risk. Two-step verification is available to owner and admin accounts but is optional, so it protects only the accounts on which Customer turns it on.",
       },
       {
         type: "p",
@@ -263,7 +263,7 @@ export const CONTRACT_TERMS: ContractPart[] = [
     blocks: [
       {
         type: "p",
-        text: "Version 1.3 · November 14, 2026",
+        text: "Version 1.4 · November 14, 2026",
       },
       {
         type: "p",
@@ -327,7 +327,7 @@ export const CONTRACT_TERMS: ContractPart[] = [
       },
       {
         type: "li",
-        text: "unique user accounts, role-based access, session timeout, and registered caregiver tablets with personal PIN locking where configured. Multi-factor authentication is not currently implemented and is not a claimed security control;",
+        text: "unique user accounts, role-based access, session timeout, and registered caregiver tablets with personal PIN locking where configured. Two-step verification with an authenticator app is available for owner and admin accounts at Customer’s option;",
       },
       {
         type: "li",
