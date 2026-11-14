@@ -14,7 +14,7 @@ import { INTRO_MONTHS, INTRO_PRICE_PER_HOME, PRICE_PER_HOME, TRIAL_DAYS } from "
 export const CYCLE_DAY = 28;
 export const DUE_DAY = 5;
 export const LATE_DAY = 10;
-export const LATE_FEE = 25;
+export const LATE_FEE = 35;
 export const BILLING_TIME_ZONE = "America/Chicago";
 
 export type Day = string;

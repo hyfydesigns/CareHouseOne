@@ -94,7 +94,7 @@ export const CONTRACT_TERMS: ContractPart[] = [
       },
       {
         type: "p",
-        text: "3.7 Late payment: if a payment fails, we'll email the billing contacts and PayPal will try again. A payment not received by the 10th of the month it's due is late: we add a late fee of $25 for that invoice, sent as a separate PayPal invoice, and adding staff, registering tablets and changing settings are paused until the overdue amount is paid. Care records, the medication pass and the medication record are never locked because of non-payment.",
+        text: "3.7 Late payment: if a payment fails, we'll email the billing contacts and PayPal will try again. A payment not received by the 10th of the month it's due is late: we add a late fee of $35 for that invoice, sent as a separate PayPal invoice, and adding staff, registering tablets and changing settings are paused until the overdue amount is paid. Care records, the medication pass and the medication record are never locked because of non-payment.",
       },
       {
         type: "p",

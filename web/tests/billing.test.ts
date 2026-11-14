@@ -294,8 +294,8 @@ describe("billing status", () => {
     // Still unpaid on the 10th: late, a late fee invoiced through PayPal, admin features paused.
     expect(await runBillingCalendar(db, at("2027-02-10T15:00:00Z"))).toMatchObject({ late: 1 });
     second = (await invoices())[1];
-    expect(second).toMatchObject({ lateFeeCents: 2500, lateFeeInvoiceId: "INV2-TEST-0001" });
-    expect(feeInvoices).toEqual([{ email: "billing@demo.test", value: "25.00" }]);
+    expect(second).toMatchObject({ lateFeeCents: 3500, lateFeeInvoiceId: "INV2-TEST-0001" });
+    expect(feeInvoices).toEqual([{ email: "billing@demo.test", value: "35.00" }]);
     expect(await subjects("Your CareHouse One payment is late")).toEqual(["billing@demo.test", s.users.owner.email].sort());
     expect(await withTenant(db, s.orgId, adminLockedMessage)).toMatch(/paused/);
     expect(await runBillingCalendar(db, at("2027-02-10T20:00:00Z"))).toMatchObject({ late: 0 });

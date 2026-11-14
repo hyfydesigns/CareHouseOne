@@ -34,7 +34,7 @@ These Terms are a contract between HyFy Interactive LLC, a Texas limited liabili
 
 3.6 **Price changes:** the move from the introductory price to the regular price in 3.1 isn't a price change. For any other change, we'll give at least 30 days' notice by email before it takes effect.
 
-3.7 **Late payment:** if a payment fails, we'll email the billing contacts and PayPal will try again. A payment not received by the 10th of the month it's due is late: we add a late fee of $25 for that invoice, sent as a separate PayPal invoice, and adding staff, registering tablets and changing settings are paused until the overdue amount is paid. **Care records, the medication pass and the medication record are never locked because of non-payment.**
+3.7 **Late payment:** if a payment fails, we'll email the billing contacts and PayPal will try again. A payment not received by the 10th of the month it's due is late: we add a late fee of $35 for that invoice, sent as a separate PayPal invoice, and adding staff, registering tablets and changing settings are paused until the overdue amount is paid. **Care records, the medication pass and the medication record are never locked because of non-payment.**
 
 3.8 **Refunds:** fees already paid are non-refundable, except where the law requires otherwise or where we end the Service without cause (section 9.3).
 
