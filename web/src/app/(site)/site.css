@@ -116,3 +116,9 @@
 }
 .site a.btn { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
 .site a.btn.primary { color: #fff; }
+.site-doc h3 { font-size: 16px; margin: 10px 0 0; color: var(--ink); }
+.site-doc ol, .site-doc ul { margin: 0; padding-left: 22px; display: grid; gap: 6px; }
+.site-table { overflow-x: auto; }
+.site-table table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.site-table th, .site-table td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; color: var(--ink-2); }
+.site-table th { color: var(--ink); background: var(--surface); }

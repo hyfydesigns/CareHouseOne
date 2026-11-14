@@ -1,17 +1,20 @@
 import type { Metadata } from "next";
-import { CONTACT_EMAIL } from "../shell";
+import Link from "next/link";
+import { CONTRACT_TERMS } from "@/lib/contract-text";
+import { LegalPart } from "../legal-doc";
 
 export const metadata: Metadata = { title: "Business Associate Agreement · CareHouse One" };
 
-// Placeholder until the lawyer-reviewed document is ready. Self-service sign-up stays closed
-// (SIGNUP_OPEN) until this page holds the final text.
+// The same text clients sign with their order form (legal/terms-and-baa.md → src/lib/contract-text.ts).
 export default function BaaPage() {
+  const baa = CONTRACT_TERMS.find((p) => p.title === "Business Associate Agreement")!;
+  const exhibit = CONTRACT_TERMS.find((p) => p.title.startsWith("Exhibit"));
   return (
     <section className="site-doc">
       <div className="site-wrap">
-        <h1>Business Associate Agreement</h1>
-        <p>We&apos;re finalizing this document. It will be published here before online sign-up opens, and every customer accepts it before entering any information.</p>
-        <p>To review the current version for your organization, email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.</p>
+        <LegalPart part={baa} />
+        {exhibit && <LegalPart part={exhibit} level={2} />}
+        <p className="small">This agreement is part of the CareHouse One <Link href="/terms">Terms of Service</Link>.</p>
       </div>
     </section>
   );
