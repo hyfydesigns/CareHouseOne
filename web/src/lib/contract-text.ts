@@ -78,7 +78,7 @@ export const CONTRACT_TERMS: ContractPart[] = [
       },
       {
         type: "p",
-        text: "3.3 Home activation and proration: Each new home is billed from its activation date, not merely because it appears on an invoice date. A home activated partway through a billing cycle incurs a fee equal to the applicable monthly per-home rate multiplied by the number of chargeable days from and including activation through the end of that cycle, divided by the number of calendar days in that cycle. An existing home remains billed until its effective removal or cancellation date; any partial final period is calculated using the same daily method. A home’s rate follows the applicable Customer introductory or regular pricing phase unless an order form specifies otherwise. Resident counts do not affect fees. Invoices will identify homes, activation/removal dates, applicable rates and prorated amounts.",
+        text: "3.3 How homes are counted: Each invoice is for the number of homes on Customer’s account on the day the invoice is issued, at the per-home rate for that billing cycle. Homes added or removed during a billing cycle are not prorated by the day; the only prorated period is the first partial billing cycle described in section 3.1. A home removed before an invoice is issued is not billed on that invoice. A home’s rate follows the applicable Customer introductory or regular pricing phase unless an order form specifies otherwise. Resident counts do not affect fees, and adding a home or a resident never requires HyFy’s approval.",
       },
       {
         type: "p",
