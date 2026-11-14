@@ -11,9 +11,9 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const CONTRACT_VERSION = "Version 1.0 of November 13, 2026";
+const CONTRACT_VERSION = "Version 1.3 of November 14, 2026";
 /** Set to true once a lawyer has reviewed the text. Until then the admin site warns before sending. */
-const REVIEWED = false;
+const REVIEWED = true;
 
 type Block = { type: "h" | "p" | "li"; text: string } | { type: "table"; rows: string[][] };
 const root = resolve(__dirname, "../..");
