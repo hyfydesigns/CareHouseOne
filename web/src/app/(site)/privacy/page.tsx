@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { CONTACT_EMAIL } from "../shell";
 
 export const metadata: Metadata = { title: "Privacy · CareHouse One" };
@@ -9,7 +10,7 @@ export default function PrivacyPage() {
     <section className="site-doc">
       <div className="site-wrap">
         <h1>Privacy</h1>
-        <p>This page covers the CareHouse One website (www.carehouseone.com). Care records in the app are covered by each customer&apos;s Business Associate Agreement.</p>
+        <p>CareHouse One is owned and operated by HyFy Interactive LLC, a Texas limited liability company (&ldquo;we&rdquo;, &ldquo;us&rdquo;). This page covers the CareHouse One website (www.carehouseone.com). Care records in the app are covered by each customer&apos;s <Link href="/baa">Business Associate Agreement</Link> with HyFy Interactive LLC.</p>
         <h2>What the website collects</h2>
         <ul>
           <li>When you request a demo: your name, work email, organization, the number of homes and residents, and your message. We use them only to arrange and follow up on the demo.</li>
@@ -22,6 +23,8 @@ export default function PrivacyPage() {
         </ul>
         <h2>Questions or deletion</h2>
         <p>Email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> and we&apos;ll answer or delete your details.</p>
+        <h2>Who we are</h2>
+        <p>HyFy Interactive LLC, 9898 Bissonnet St, Suite 368, Houston, TX 77036. Email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.</p>
       </div>
     </section>
   );
